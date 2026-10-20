@@ -1,0 +1,30 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mapsleads
+      POSTGRES_USER: mapsleads
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mapsleads -d mapsleads"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://mapsleads:${POSTGRES_PASSWORD:-change-this-password}@db:5432/mapsleads
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres_data:
