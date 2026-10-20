@@ -4,3 +4,4 @@ sqlalchemy==2.0.40
 psycopg[binary]==3.2.6
 requests==2.32.3
 python-multipart==0.0.20
+psycopg2-binary==2.9.10
