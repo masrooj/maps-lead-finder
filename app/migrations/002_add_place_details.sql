@@ -1,0 +1,3 @@
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS business_status VARCHAR(80) DEFAULT '';
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS primary_type VARCHAR(200) DEFAULT '';
+ALTER TABLE businesses ADD COLUMN IF NOT EXISTS editorial_summary TEXT DEFAULT '';

@@ -19,13 +19,16 @@ This is **one codebase** for both workflows:
    ```bash
    cp .env.example .env
    ```
-3. Edit `.env` and set your API key and a strong local DB password:
+3. Edit `.env` and set your API key, a strong local DB password, and login secrets:
    ```dotenv
    GOOGLE_MAPS_API_KEY=your_google_places_api_key
    POSTGRES_PASSWORD=replace_with_a_strong_local_password
    APP_PORT=8000
    DISCOVER_SOCIAL_LINKS=true
+   LOGIN_PASSWORD=replace_with_a_strong_login_password
+   SESSION_SECRET=replace_with_a_long_random_secret
    ```
+   Sign in with username `hello@appointhive.com` and the `LOGIN_PASSWORD` value. There is no signup.
 4. Start the stack:
    ```bash
    docker compose up --build -d
@@ -62,8 +65,10 @@ To stop containers without deleting the saved PostgreSQL volume, run `docker com
    - `DATABASE_URL` = the hosted PostgreSQL URL from Neon
    - `GOOGLE_MAPS_API_KEY` = your Google Places API key
    - `DISCOVER_SOCIAL_LINKS` = `true` (optional; can be `false` to disable website scanning)
+   - `LOGIN_PASSWORD` = password for username `hello@appointhive.com`
+   - `SESSION_SECRET` = a long random string used to sign the login cookie
 4. Deploy. If you change environment variables later, redeploy.
-5. Check `https://YOUR-PROJECT.vercel.app/api/health`, then open the site's root URL and test searching, updating contact status, refreshing, and exporting CSV.
+5. Check `https://YOUR-PROJECT.vercel.app/api/health`, then open the site's root URL, sign in with `hello@appointhive.com`, and test searching, updating contact status, refreshing, and exporting CSV.
 
 ## C. Important: local and production data are separate
 
@@ -77,5 +82,5 @@ To stop containers without deleting the saved PostgreSQL volume, run `docker com
 - Places Text Search is not an unrestricted export of every listing. The app requests up to 60 results for a query, subject to Google API behavior and terms.
 - Social links are best-effort links found on the business website homepage. Review response time is not supplied by the standard Places API and is shown as unavailable.
 - Vercel serverless functions have execution limits. Searching and visiting many websites for social links can time out on larger searches.
-- This starter does not include user authentication or per-user access control. Do not expose it publicly for real lead data until you add authentication, authorization, rate limiting, and production hardening.
+- The app uses a single shared login (`hello@appointhive.com` + `LOGIN_PASSWORD`) with a signed session cookie. There is no signup and no per-user data isolation. Add stronger auth, rate limiting, and production hardening before wider exposure.
 - Restrict the Google API key, enable billing alerts/quotas, and follow Google Maps Platform terms, attribution, and retention requirements.
