@@ -380,16 +380,19 @@ def candidate_contact_urls(base_url: str, html: str) -> list[str]:
     found = [base_url]
     seen = {base_url.rstrip("/").lower()}
 
+    def same_host(host: str) -> bool:
+        base = (parsed.hostname or "").lower().removeprefix("www.")
+        other = (host or "").lower().removeprefix("www.")
+        return bool(base) and other == base
+
     def add(url: str):
         clean = url.split("#", 1)[0].split("?", 1)[0].rstrip("/")
         key = clean.lower()
         if key in seen or not is_public_web_url(clean):
             return
         host = (urlparse(clean).hostname or "").lower()
-        if host != (parsed.hostname or "").lower() and host != (parsed.hostname or "").lower().removeprefix("www."):
-            # same registrable host only
-            if not host.endswith((parsed.hostname or "").lower()) and not (parsed.hostname or "").lower().endswith(host):
-                return
+        if not same_host(host):
+            return
         seen.add(key)
         found.append(clean)
 

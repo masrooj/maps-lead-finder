@@ -6,26 +6,27 @@
 <title>Maps Lead Finder</title>
 <style>
 :root{
-  --bg:#f3f5f7;--panel:#ffffff;--panel2:#eef1f4;--line:#d7dde5;--text:#1a2332;
-  --muted:#5c6b7a;--accent:#0f766e;--accent-soft:#ccfbf1;--green:#15803d;
-  --red:#b91c1c;--amber:#b45309;--star:#ca8a04;--shadow:0 8px 28px rgba(26,35,50,.06);
+  --bg:#0b1020;--panel:#121a2d;--panel2:#18233a;--line:#293650;--text:#edf3ff;
+  --muted:#9aa9c4;--accent:#7c9cff;--accent-soft:#1a2744;--green:#3bd5a0;
+  --red:#ff7b8b;--amber:#ffd98a;--star:#ffd98a;--shadow:0 12px 40px rgba(0,0,0,.35);
+  --input:#0d1527;
 }
 *{box-sizing:border-box}
-body{margin:0;background:linear-gradient(180deg,#e8eef2 0%,var(--bg) 28%);color:var(--text);font:15px/1.5 "Source Sans 3",ui-sans-serif,system-ui,-apple-system,sans-serif}
+body{margin:0;background:radial-gradient(ellipse at 20% 0%,#1b2a4d 0,transparent 45%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}
 button,input,select,textarea{font:inherit}
-button{cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:9px 13px;background:var(--panel);color:var(--text);font-weight:600}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button{cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:9px 13px;background:var(--panel2);color:var(--text);font-weight:650}
+button.primary{background:var(--accent);border-color:var(--accent);color:#081026}
 button.ghost{background:transparent}
-button.danger{color:var(--red);border-color:#fecaca}
+button.danger{color:var(--red);border-color:#8b394b}
 button:disabled{opacity:.5;cursor:wait}
-.wrap{max-width:1180px;margin:auto;padding:22px 18px 40px}
+.wrap{max-width:1280px;margin:auto;padding:22px 18px 40px}
 .top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}
 .brand{display:flex;gap:12px;align-items:center}
-.mark{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--accent);color:#fff;font-size:18px;font-weight:800}
-.brand h1{font-size:20px;margin:0;letter-spacing:-.02em}
+.mark{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#7c9cff,#5ce0c0);color:#071026;font-size:18px;font-weight:900}
+.brand h1{font-size:20px;margin:0}
 .brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
 .pill{border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--muted);font-size:12px;background:var(--panel)}
-.card,.searchbox,.stats,.toolbar,.templates,.leads{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.card,.searchbox,.stats,.toolbar,.templates,.leads{background:rgba(18,26,45,.94);border:1px solid var(--line);border-radius:14px}
 .searchbox,.templates{padding:18px;margin-bottom:14px}
 .sectionhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .sectionhead h2{font-size:15px;margin:0}
@@ -33,86 +34,86 @@ button:disabled{opacity:.5;cursor:wait}
 .fields{display:grid;grid-template-columns:1fr 1fr 1.2fr 120px auto;gap:12px;align-items:end}
 .field label{display:block;color:var(--muted);font-size:12px;margin:0 0 5px}
 .field input,.field select,.toolbar input,.toolbar select,.drawer input,.drawer select,.drawer textarea,.modal input,.modal select,.modal textarea,.template-editor input,.template-editor textarea,.template-editor select{
-  width:100%;padding:10px 11px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text);outline:none
+  width:100%;padding:10px 11px;border-radius:10px;border:1px solid var(--line);background:var(--input);color:var(--text);outline:none
 }
-.field input:focus,.field select:focus,.toolbar input:focus,.toolbar select:focus,.drawer input:focus,.drawer textarea:focus,.modal input:focus,.modal textarea:focus,.modal select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.field input:focus,.field select:focus,.toolbar input:focus,.toolbar select:focus,.drawer input:focus,.drawer textarea:focus,.modal input:focus,.modal textarea:focus,.modal select:focus{border-color:var(--accent)}
 .hint{margin-top:10px}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;overflow:hidden;margin-bottom:14px;background:var(--line)}
-.stat{padding:14px 16px;background:var(--panel);cursor:pointer;border:0;text-align:left;border-radius:0;font-weight:500}
-.stat:hover{background:var(--panel2)}
+.stat{padding:14px 16px;background:rgba(18,26,45,.9);cursor:pointer;border:0;text-align:left;border-radius:0;font-weight:500;color:var(--text)}
+.stat:hover{background:#172139}
 .stat.active{background:var(--accent-soft)}
 .stat span{color:var(--muted);font-size:12px;display:block}
-.stat strong{display:block;font-size:22px;margin-top:4px;letter-spacing:-.02em}
-.views{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
-.views button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.stat strong{display:block;font-size:22px;margin-top:4px}
+.views{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+.views button.active{background:var(--accent);border-color:var(--accent);color:#081026}
 .toolbar{display:flex;align-items:center;gap:8px;padding:10px;margin-bottom:12px;flex-wrap:wrap}
 .toolbar input{max-width:220px}
 .toolbar select{width:auto;min-width:130px}
 .toolbar .spacer{flex:1}
-.bulkbar{display:none;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;background:var(--accent-soft);border:1px solid #99f6e4;border-radius:12px;flex-wrap:wrap}
+.bulkbar{display:none;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;background:var(--accent-soft);border:1px solid var(--line);border-radius:12px;flex-wrap:wrap}
 .bulkbar.show{display:flex}
-.leads{padding:6px;overflow:hidden}
-.lead{display:grid;grid-template-columns:36px 34px minmax(0,1.4fr) minmax(140px,.9fr) auto auto;gap:10px;align-items:center;padding:12px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.leads{padding:6px;overflow:hidden;margin-bottom:14px;min-height:220px}
+.lead{display:grid;grid-template-columns:36px 34px minmax(0,1.4fr) minmax(140px,.9fr) auto auto;gap:10px;align-items:center;padding:12px 10px;border-bottom:1px solid #26324a;cursor:pointer}
 .lead:last-child{border-bottom:0}
-.lead:hover{background:#f8fafb}
+.lead:hover{background:#172139}
 .lead.active{background:var(--accent-soft)}
 .lead .checkcol input,.flag input{accent-color:var(--accent);width:15px;height:15px}
-.starbtn{border:0;background:transparent;padding:4px;font-size:18px;color:#cbd5e1;line-height:1}
+.starbtn{border:0;background:transparent;padding:4px;font-size:18px;color:#4b5a75;line-height:1}
 .starbtn.on{color:var(--star)}
-.biz{font-weight:700;font-size:14px;letter-spacing:-.01em}
+.biz{font-weight:750;font-size:14px;color:#fff}
 .sub{font-size:12px;color:var(--muted);margin-top:2px}
 .reach{display:flex;flex-wrap:wrap;gap:5px}
-.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-size:11px;color:var(--muted);text-decoration:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chip.ok{color:var(--accent);border-color:#99f6e4;background:#f0fdfa}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:#0d1527;border:1px solid var(--line);font-size:11px;color:var(--muted);text-decoration:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip.ok{color:#bcd0ff;border-color:#334766;background:#132038}
 .meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:88px}
-.rating{font-weight:700;color:var(--amber);font-size:13px}
-.badge{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:650;border:1px solid var(--line);background:var(--panel2);color:var(--muted);white-space:nowrap}
-.badge.queue{background:#fff7ed;border-color:#fed7aa;color:var(--amber)}
-.badge.contacted{background:#ecfdf5;border-color:#a7f3d0;color:var(--green)}
-.badge.lost{background:#fef2f2;border-color:#fecaca;color:var(--red)}
-.badge.due{background:#fef3c7;border-color:#fde68a;color:#92400e}
-.badge.overdue{background:#fee2e2;border-color:#fecaca;color:var(--red)}
+.rating{font-weight:750;color:var(--amber);font-size:13px}
+.badge{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:650;border:1px solid var(--line);background:#263653;color:var(--muted);white-space:nowrap}
+.badge.queue{background:#3a2a14;border-color:#7a5a20;color:var(--amber)}
+.badge.contacted{background:#16352c;border-color:#2a6b55;color:var(--green)}
+.badge.lost{background:#3a1a22;border-color:#8b394b;color:var(--red)}
+.badge.due{background:#3a3214;border-color:#7a6a20;color:var(--amber)}
+.badge.overdue{background:#3a1a22;border-color:#8b394b;color:var(--red)}
 .actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
 .actions button{padding:6px 9px;font-size:12px}
 .empty{text-align:center;padding:48px 20px;color:var(--muted)}
-.message{display:none;margin:0 0 12px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+.message{display:none;margin:0 0 12px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:#17233b}
 .message.show{display:block}
-.message.error{border-color:#fecaca;color:var(--red);background:#fef2f2}
+.message.error{border-color:#8b394b;color:#ffb5bf;background:#17233b}
 .toast-wrap{position:fixed;top:16px;right:16px;z-index:90;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:min(360px,calc(100vw - 28px))}
-.toast{pointer-events:auto;padding:11px 13px;border-radius:12px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow);font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-.toast.error{border-color:#fecaca;color:var(--red)}
-.toast.ok{border-color:#a7f3d0;color:var(--green)}
+.toast{pointer-events:auto;padding:11px 13px;border-radius:12px;border:1px solid var(--line);background:#17233b;box-shadow:var(--shadow);font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.toast.error{border-color:#8b394b;color:#ffb5bf}
+.toast.ok{border-color:#2a6b55;color:#b8f0d8}
 .toast button{padding:5px 10px;font-size:12px}
 .toast .toast-msg{flex:1;min-width:140px}
 .templates.collapsed .template-body{display:none}
 .templates .sectionhead{cursor:pointer;user-select:none}
 .snooze{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .snooze button{padding:5px 9px;font-size:11px}
-.ig-copy{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--panel2);font-size:12px;white-space:pre-wrap;max-height:120px;overflow:auto}
+.ig-copy{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--input);font-size:12px;white-space:pre-wrap;max-height:120px;overflow:auto}
 .view-hint{font-size:12px;color:var(--muted);margin:-4px 0 10px}
 .footer{padding:16px 4px;color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:16px}
-.footer a{color:var(--accent)}
+.footer a{color:#b7caff}
 .login-card{max-width:420px;margin:56px auto;padding:26px}
 .login-card h2{margin:0 0 6px;font-size:18px}
 .login-card .sub{margin:0 0 16px}
 .login-card .field{margin-bottom:12px}
 .login-card button{width:100%;margin-top:4px}
-.login-error{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;border:1px solid #fecaca;color:var(--red);background:#fef2f2;font-size:13px}
+.login-error{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;border:1px solid #8b394b;color:#ffb5bf;background:#17233b;font-size:13px}
 .login-error.show{display:block}
 .authbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .authbar .user{color:var(--muted);font-size:12px}
 .hidden{display:none!important}
-.loading{display:inline-block;width:12px;height:12px;border:2px solid #cbd5e1;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:7px}
+.loading{display:inline-block;width:12px;height:12px;border:2px solid #34415a;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:7px}
 @keyframes spin{to{transform:rotate(360deg)}}
 .template-tabs,.template-list{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.template-tabs button.active,.template-list button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.template-tabs button.active,.template-list button.active{background:var(--accent);border-color:var(--accent);color:#081026}
 .template-layout{display:grid;grid-template-columns:220px 1fr;gap:14px}
 .template-list{flex-direction:column;margin:0}
 .template-list button{text-align:left}
 .template-list .meta{display:block;color:var(--muted);font-size:11px;font-weight:500;margin-top:2px}
 .template-editor .row-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .template-editor textarea{min-height:120px;resize:vertical}
-.modal-backdrop,.drawer-backdrop{position:fixed;inset:0;background:rgba(26,35,50,.35);display:flex;z-index:50}
+.modal-backdrop,.drawer-backdrop{position:fixed;inset:0;background:rgba(5,10,22,.72);display:flex;z-index:50}
 .modal-backdrop{align-items:center;justify-content:center;padding:18px}
 .drawer-backdrop{justify-content:flex-end}
 .modal{width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
@@ -123,8 +124,10 @@ button:disabled{opacity:.5;cursor:wait}
 .modal textarea{min-height:110px;resize:vertical}
 .modal-actions,.drawer-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .modal-actions .spacer,.drawer-actions .spacer{flex:1}
-.compose-contact{margin:0 0 12px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);font-size:13px}
+.compose-contact{margin:0 0 12px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--input);font-size:13px}
 .compose-contact .label{display:block;color:var(--muted);font-size:11px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+.compose-contact .value,.compose-contact a{color:#edf3ff;word-break:break-word}
+.compose-contact a{color:#bcd0ff}
 .channel-note{margin-top:8px;color:var(--muted);font-size:12px}
 .activity{list-style:none;margin:0;padding:0}
 .activity li{padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
@@ -191,44 +194,7 @@ button:disabled{opacity:.5;cursor:wait}
     <button type="button" data-view="queue">Global queue</button>
     <button type="button" data-view="due">Due / overdue</button>
   </section>
-  <p class="view-hint" id="viewHint">Showing leads for the selected country/city. Stats below match this city scope (except Global queue).</p>
-
-  <section class="stats" id="stats">
-    <button type="button" class="stat" data-status="all"><span id="statTotalLabel">City shown</span><strong id="statTotal">0</strong></button>
-    <button type="button" class="stat" data-status="queue"><span>City to contact</span><strong id="statQueue">0</strong></button>
-    <button type="button" class="stat" data-status="due"><span>Due (scope)</span><strong id="statDue">0</strong></button>
-    <button type="button" class="stat" data-status="uncontacted"><span>Not contacted</span><strong id="statUncontacted">0</strong></button>
-    <button type="button" class="stat" data-status="contacted"><span>Contacted</span><strong id="statContacted">0</strong></button>
-    <button type="button" class="stat" data-status="marked"><span>Marked</span><strong id="statMarked">0</strong></button>
-    <button type="button" class="stat" data-status="lost"><span>Lost</span><strong id="statLost">0</strong></button>
-    <button type="button" class="stat" data-view-jump="queue"><span>All cities · queue</span><strong id="statGlobal">0</strong></button>
-  </section>
-
-  <section class="templates collapsed" id="templatesSection">
-    <div class="sectionhead" id="templatesToggle"><h2>Message templates</h2><span id="templatesToggleLabel">Click to expand · saved on server</span></div>
-    <div class="template-body">
-      <div class="template-tabs">
-        <button type="button" class="active" data-tpl-channel="email">Email</button>
-        <button type="button" data-tpl-channel="whatsapp">WhatsApp</button>
-        <button type="button" data-tpl-channel="instagram">Instagram</button>
-      </div>
-      <div class="template-layout">
-        <div class="template-list" id="templateList"></div>
-        <div class="template-editor">
-          <div class="field"><label for="tplName">Template name</label><input id="tplName"></div>
-          <div class="field" id="tplSubjectField"><label for="tplSubject">Email subject</label><input id="tplSubject"></div>
-          <div class="field"><label for="tplBody">Message</label><textarea id="tplBody"></textarea></div>
-          <p class="hint" style="margin-top:0">Placeholders: {{name}}, {{city}}, {{category}}, {{phone}}, {{website}}</p>
-          <div class="row-actions">
-            <button type="button" class="primary" id="saveTplBtn">Save</button>
-            <button type="button" id="newTplBtn">New</button>
-            <button type="button" id="setDefaultTplBtn">Set default</button>
-            <button type="button" class="danger" id="deleteTplBtn">Delete</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
+  <p class="view-hint" id="viewHint">Showing leads for the selected country/city.</p>
 
   <section class="toolbar">
     <input id="filterText" placeholder="Search name, phone, email, notes…">
@@ -288,6 +254,43 @@ button:disabled{opacity:.5;cursor:wait}
       <div style="text-align:right">Actions</div>
     </div>
     <div id="rows"><div class="empty">Search for a country, city and business type to load leads.</div></div>
+  </section>
+
+  <section class="stats" id="stats">
+    <button type="button" class="stat" data-status="all"><span id="statTotalLabel">City shown</span><strong id="statTotal">0</strong></button>
+    <button type="button" class="stat" data-status="queue"><span>City to contact</span><strong id="statQueue">0</strong></button>
+    <button type="button" class="stat" data-status="due"><span>Due (scope)</span><strong id="statDue">0</strong></button>
+    <button type="button" class="stat" data-status="uncontacted"><span>Not contacted</span><strong id="statUncontacted">0</strong></button>
+    <button type="button" class="stat" data-status="contacted"><span>Contacted</span><strong id="statContacted">0</strong></button>
+    <button type="button" class="stat" data-status="marked"><span>Marked</span><strong id="statMarked">0</strong></button>
+    <button type="button" class="stat" data-status="lost"><span>Lost</span><strong id="statLost">0</strong></button>
+    <button type="button" class="stat" data-view-jump="queue"><span>All cities · queue</span><strong id="statGlobal">0</strong></button>
+  </section>
+
+  <section class="templates" id="templatesSection">
+    <div class="sectionhead" id="templatesToggle"><h2>Message templates</h2><span id="templatesToggleLabel">Click to collapse · edit email / WhatsApp / Instagram copy</span></div>
+    <div class="template-body">
+      <div class="template-tabs">
+        <button type="button" class="active" data-tpl-channel="email">Email</button>
+        <button type="button" data-tpl-channel="whatsapp">WhatsApp</button>
+        <button type="button" data-tpl-channel="instagram">Instagram</button>
+      </div>
+      <div class="template-layout">
+        <div class="template-list" id="templateList"></div>
+        <div class="template-editor">
+          <div class="field"><label for="tplName">Template name</label><input id="tplName"></div>
+          <div class="field" id="tplSubjectField"><label for="tplSubject">Email subject</label><input id="tplSubject"></div>
+          <div class="field"><label for="tplBody">Message</label><textarea id="tplBody"></textarea></div>
+          <p class="hint" style="margin-top:0">Placeholders: {{name}}, {{city}}, {{category}}, {{phone}}, {{website}}</p>
+          <div class="row-actions">
+            <button type="button" class="primary" id="saveTplBtn">Save</button>
+            <button type="button" id="newTplBtn">New</button>
+            <button type="button" id="setDefaultTplBtn">Set default</button>
+            <button type="button" class="danger" id="deleteTplBtn">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <div class="footer">
@@ -370,6 +373,7 @@ let viewMode='city'; // city | queue | due
 let openedChannel=null;
 let enriching=false;
 let lastUndo=null; // {type:'unarchive'|'restore', id, snapshot?}
+let loadSeq=0; // ignore stale responses when views/filters change quickly
 
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function toast(text,error=false,action){
@@ -509,7 +513,8 @@ async function loadCategories(){
 async function loadStats(){
   try{
     const s=await api('/api/stats?'+statsParams());
-    $('statTotal').textContent=s.total??0;
+    // Queue/Due labels say "Shown" — use filtered list length, not unfiltered scope total
+    $('statTotal').textContent=(viewMode==='queue'||viewMode==='due')?rowsData.length:(s.total??0);
     $('statQueue').textContent=s.queue??0;
     $('statDue').textContent=s.due??0;
     $('statUncontacted').textContent=s.uncontacted??0;
@@ -539,14 +544,20 @@ function actionButtons(b){
   if(c.whatsapp)parts.push(`<button type="button" data-compose="${b.id}" data-channel="whatsapp">WA</button>`);
   if(c.instagram)parts.push(`<button type="button" data-compose="${b.id}" data-channel="instagram">IG</button>`);
   parts.push(`<button type="button" data-open="${b.id}">Details</button>`);
-  return `<div class="actions" onclick="event.stopPropagation()">${parts.join('')}</div>`;
+  // Do not stopPropagation here — Email/WA/IG/Details are handled by the #rows click listener
+  return `<div class="actions">${parts.join('')}</div>`;
 }
 
 function paint(){
   const body=$('rows');
+  if(viewMode==='queue'||viewMode==='due')$('statTotal').textContent=String(rowsData.length);
   if(!rowsData.length){
     const waiting=viewMode==='city'&&(!$('country').value.trim()||!$('city').value.trim());
-    body.innerHTML=`<div class="empty">${waiting?'Select a country and city to see leads.':'No leads match this view or filter.'}</div>`;
+    let msg='No leads match this view or filter.';
+    if(waiting)msg='Select a country and city to see leads.';
+    else if(viewMode==='queue')msg='Global queue is empty. Star (★) leads in City leads first, then come back here.';
+    else if(viewMode==='due')msg='No due / overdue follow-ups yet. Set a follow-up date when you confirm sent.';
+    body.innerHTML=`<div class="empty">${msg}</div>`;
     updateSelectedCount();
     return;
   }
@@ -556,8 +567,8 @@ function paint(){
     const follow=b.next_follow_up_at?`<div class="sub">Follow up · ${esc(dateOnly(b.next_follow_up_at))}</div>`:'';
     const labels=b.search_labels&&b.search_labels!==b.category?`<div class="sub">${esc(b.search_labels)}</div>`:'';
     return `<div class="lead ${drawerLead&&drawerLead.id===b.id?'active':''}" data-row="${b.id}">
-      <div class="checkcol" onclick="event.stopPropagation()"><input type="checkbox" data-select="${b.id}" ${checked} aria-label="Select ${esc(b.name)}"></div>
-      <div onclick="event.stopPropagation()"><button type="button" class="starbtn ${starred}" data-mark="${b.id}" title="Mark for contact">${b.marked_for_contact?'★':'☆'}</button></div>
+      <div class="checkcol"><input type="checkbox" data-select="${b.id}" ${checked} aria-label="Select ${esc(b.name)}"></div>
+      <div><button type="button" class="starbtn ${starred}" data-mark="${b.id}" title="Mark for contact">${b.marked_for_contact?'★':'☆'}</button></div>
       <div><div class="biz">${esc(b.name)}</div><div class="sub">${esc(b.category||'—')} · ${esc(b.city)}, ${esc(b.country)}</div>${labels}${follow}</div>
       <div>${reachCell(b)}</div>
       <div class="meta">${b.rating!=null?`<div class="rating">★ ${esc(b.rating)}</div>`:'<div class="sub">—</div>'}${statusBadge(b)}</div>
@@ -568,15 +579,23 @@ function paint(){
 }
 
 async function load(){
+  const seq=++loadSeq;
   if(viewMode==='city'&&(!$('country').value.trim()||!$('city').value.trim())){
-    rowsData=[];paint();await loadStats();return;
+    if(seq!==loadSeq)return;
+    rowsData=[];paint();
+    if(seq===loadSeq)await loadStats();
+    return;
   }
   try{
     const data=await api('/api/businesses?'+queryParams());
+    if(seq!==loadSeq)return; // a newer load() won the race
     rowsData=data.results||[];
     paint();
     await Promise.all([loadStats(),loadCategories()]);
-  }catch(e){showMessage('Could not load leads: '+e.message,true)}
+  }catch(e){
+    if(seq!==loadSeq)return;
+    showMessage('Could not load leads: '+e.message,true);
+  }
 }
 
 function fillCities(country){
@@ -599,12 +618,21 @@ async function loadLocations(){
   await load();
 }
 
-function setView(mode){
+function setView(mode,opts={}){
+  const prev=viewMode;
   viewMode=mode;
   document.querySelectorAll('[data-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.view===mode));
-  if(mode==='queue')$('statusFilter').value='queue';
-  if(mode==='due')$('statusFilter').value='due';
+  // Queue/Due force a status. Leaving those views must reset so City leads aren't stuck empty.
+  // opts.status wins when jumping from a stat chip (e.g. Contacted) so we don't load twice with the wrong filter.
+  if(opts.status!=null)$('statusFilter').value=opts.status;
+  else if(mode==='queue')$('statusFilter').value='queue';
+  else if(mode==='due')$('statusFilter').value='due';
+  else if(mode==='city'&&(prev==='queue'||prev==='due'||['queue','due','overdue'].includes($('statusFilter').value))){
+    $('statusFilter').value='all';
+  }
   updateViewHint();
+  // Clear immediately so we never flash the previous view's leads under the new filter label
+  if(prev!==mode){rowsData=[];selectedIds.clear();paint()}
   load();
 }
 
@@ -643,7 +671,11 @@ async function patchLead(id,body){
   const updated=await api('/api/businesses/'+id,{method:'PATCH',body});
   const idx=rowsData.findIndex(x=>String(x.id)===String(id));
   if(idx>=0)rowsData[idx]=updated;
-  if(drawerLead&&String(drawerLead.id)===String(id)){drawerLead=updated;renderDrawer()}
+  if(drawerLead&&String(drawerLead.id)===String(id)){
+    drawerLead=updated;
+    renderDrawer();
+    loadActivity(id); // renderDrawer resets Activity to Loading — refill it
+  }
   paint();
   loadStats();
   return updated;
@@ -740,7 +772,13 @@ async function deleteTemplate(){
 function fillComposeTemplates(channel){
   const list=templatesFor(channel);
   const def=defaultTemplate(channel);
-  $('composeTemplate').innerHTML=list.map(t=>`<option value="${esc(t.id)}" ${String(t.id)===String(def&&def.id)?'selected':''}>${esc(t.name)}${t.isDefault?' (default)':''}</option>`).join('');
+  if(!list.length){
+    $('composeTemplate').innerHTML='<option value="">No templates — expand Message templates below and save one</option>';
+    $('composeSubject').value='';
+    $('composeBody').value='';
+  }else{
+    $('composeTemplate').innerHTML=list.map(t=>`<option value="${esc(t.id)}" ${String(t.id)===String(def&&def.id)?'selected':''}>${esc(t.name)}${t.isDefault?' (default)':''}</option>`).join('');
+  }
   applyComposeTemplate();
 }
 function applyComposeTemplate(){
@@ -748,8 +786,15 @@ function applyComposeTemplate(){
   const channel=$('composeChannel').value;
   const tpl=getTemplate(channel,$('composeTemplate').value);
   $('composeSubjectField').classList.toggle('hidden',channel!=='email');
-  $('composeSubject').value=fillTemplate(tpl?.subject||'',composeLead);
-  $('composeBody').value=fillTemplate(tpl?.body||'',composeLead);
+  const subject=fillTemplate((tpl&&tpl.subject)||'',composeLead);
+  const body=fillTemplate((tpl&&tpl.body)||'',composeLead);
+  $('composeSubject').value=subject;
+  $('composeBody').value=body;
+  if(!body){
+    // Fallback so Email/WA never open empty if templates failed to load
+    $('composeBody').value=fillTemplate('Hi {{name}},\n\nI came across your {{category}} business in {{city}} and wanted to reach out.\n\nThanks!',composeLead);
+    if(channel==='email'&&!$('composeSubject').value)$('composeSubject').value=fillTemplate('Quick idea for {{name}}',composeLead);
+  }
   const info=composeContactInfo(composeLead,channel);
   $('composeContactLabel').textContent='Sending via '+channelLabel(channel);
   $('composeContactValue').innerHTML=info.html;
@@ -760,20 +805,22 @@ function applyComposeTemplate(){
       :'Copies the message and opens Instagram Web DM. Paste (⌘/Ctrl+V) into the compose box, then send.';
   $('openComposeBtn').textContent=channel==='email'?'Open Zoho Mail':channel==='whatsapp'?'Open WhatsApp Web':'Open Instagram Web';
 }
-function openCompose(b,preferred){
+async function openCompose(b,preferred){
   composeLead=b;openedChannel=null;
   const channels=availableComposeChannels(b);
   if(!channels.length){showMessage('No email, WhatsApp, or Instagram on this lead. Edit contacts in Details or run Enrich.',true);return}
+  if(!templatesStore){try{await loadTemplates()}catch(e){}}
   composePreferred=channels.includes(preferred)?preferred:channels[0];
   $('composeLead').textContent=`${b.name} · ${b.city}, ${b.country}`;
   $('composeChannel').innerHTML=channels.map(ch=>`<option value="${ch}" ${ch===composePreferred?'selected':''}>${channelLabel(ch)}</option>`).join('');
   $('composeOutcome').value=b.outcome||'';
   $('composeNotes').value='';
-  // Leave follow-up empty unless this lead already has one — avoids accidental +3 day schedules
   $('composeFollowUp').value=dateOnly(b.next_follow_up_at)||'';
+  $('composeFollowUp').dataset.touched='0';
   $('igCopyBox').classList.add('hidden');
   fillComposeTemplates(composePreferred);
   $('composeModal').classList.remove('hidden');
+  $('composeBody').focus();
 }
 function closeCompose(){$('composeModal').classList.add('hidden');composeLead=null;openedChannel=null;$('igCopyBox').classList.add('hidden')}
 function nextWorkLead(afterId){
@@ -846,9 +893,12 @@ async function confirmSent(opts={}){
   const currentId=composeLead.id;
   try{
     const body={channel};
+    // Only change follow-up when the user set/cleared the date field intentionally via snooze or typing.
+    // Empty field = leave existing follow-up unchanged (avoids wiping Due dates by accident).
     const follow=$('composeFollowUp').value;
+    const followTouched=$('composeFollowUp').dataset.touched==='1';
     if(follow)body.next_follow_up_at=follow;
-    else body.next_follow_up_at=null;
+    else if(followTouched)body.next_follow_up_at=null;
     const outcome=$('composeOutcome').value;
     const notes=$('composeNotes').value.trim();
     if(outcome)body.outcome=outcome;
@@ -862,6 +912,19 @@ async function confirmSent(opts={}){
   }catch(e){toast(e.message,true)}
 }
 
+async function loadActivity(id){
+  const list=$('activityList');
+  if(!list)return;
+  list.innerHTML='<li class="sub">Loading…</li>';
+  try{
+    const act=await api('/api/businesses/'+id+'/activity');
+    if(String(drawerLead&&drawerLead.id)!==String(id))return; // drawer switched
+    list.innerHTML=(act.results||[]).length?(act.results||[]).map(a=>`<li><strong>${esc(a.kind)}</strong>${a.channel?' · '+esc(a.channel):''}${a.note?' · '+esc(a.note):''}<div class="sub">${esc(dateOnly(a.created_at)||a.created_at||'')}</div></li>`).join(''):'<li class="sub">No activity yet</li>';
+  }catch(e){
+    if(String(drawerLead&&drawerLead.id)===String(id))list.innerHTML='<li class="sub">Could not load activity</li>';
+  }
+}
+
 async function openDrawer(id){
   const b=rowsData.find(x=>String(x.id)===String(id));
   if(!b)return;
@@ -869,11 +932,7 @@ async function openDrawer(id){
   $('drawer').classList.remove('hidden');
   renderDrawer();
   paint();
-  try{
-    const act=await api('/api/businesses/'+id+'/activity');
-    const list=$('activityList');
-    if(list)list.innerHTML=(act.results||[]).length?(act.results||[]).map(a=>`<li><strong>${esc(a.kind)}</strong>${a.channel?' · '+esc(a.channel):''}${a.note?' · '+esc(a.note):''}<div class="sub">${esc(dateOnly(a.created_at)||a.created_at||'')}</div></li>`).join(''):'<li class="sub">No activity yet</li>';
-  }catch(e){}
+  await loadActivity(id);
 }
 function closeDrawer(){$('drawer').classList.add('hidden');drawerLead=null;paint()}
 
@@ -982,10 +1041,10 @@ document.querySelectorAll('#stats .stat').forEach(btn=>btn.addEventListener('cli
   const status=btn.dataset.status;
   if(status==='queue'){setView('queue');return}
   if(status==='due'){setView('due');return}
-  if(viewMode!=='city')setView('city');
-  $('statusFilter').value=status;
   document.querySelectorAll('#stats .stat').forEach(s=>s.classList.toggle('active',s===btn));
-  load();
+  // One load only: pass status into setView so we don't race (reset→all then overwrite→contacted)
+  if(viewMode!=='city')setView('city',{status:status||'all'});
+  else{$('statusFilter').value=status||'all';load()}
 }));
 $('country').addEventListener('change',()=>{fillCities($('country').value);if(viewMode==='city')load()});
 $('city').addEventListener('change',()=>{if(viewMode==='city')load()});
@@ -1028,12 +1087,17 @@ $('enrichBtn').addEventListener('click',()=>{
 $('templatesToggle').addEventListener('click',()=>{
   const sec=$('templatesSection');
   sec.classList.toggle('collapsed');
-  $('templatesToggleLabel').textContent=sec.classList.contains('collapsed')?'Click to expand · saved on server':'Click to collapse · saved on server';
+  $('templatesToggleLabel').textContent=sec.classList.contains('collapsed')
+    ?'Click to expand · edit email / WhatsApp / Instagram copy'
+    :'Click to collapse · edit email / WhatsApp / Instagram copy';
 });
 document.querySelectorAll('[data-snooze]').forEach(btn=>btn.addEventListener('click',()=>{
   const v=btn.dataset.snooze;
   $('composeFollowUp').value=v==='clear'?'':plusDays(Number(v));
+  $('composeFollowUp').dataset.touched='1';
 }));
+$('composeFollowUp').addEventListener('change',()=>{$('composeFollowUp').dataset.touched='1'});
+$('composeFollowUp').addEventListener('input',()=>{$('composeFollowUp').dataset.touched='1'});
 $('importFile').addEventListener('change',async e=>{
   const file=e.target.files&&e.target.files[0];
   if(!file)return;
@@ -1053,6 +1117,7 @@ $('searchForm').addEventListener('submit',async e=>{
   if(!country||!city||!category)return;
   viewMode='city';
   document.querySelectorAll('[data-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.view==='city'));
+  $('statusFilter').value='all';
   updateViewHint();
   $('searchBtn').disabled=true;$('searchBtn').innerHTML='<span class="loading"></span>Searching';
   showMessage('Searching Google Places (contacts enrich runs after)…');
@@ -1106,9 +1171,10 @@ $('drawerPanel').addEventListener('click',async e=>{
   if(e.target.id==='saveDrawerBtn'){await saveDrawer();return}
   if(e.target.id==='enrichDrawerBtn'){
     if(!drawerLead)return;
-    await enrichIds([drawerLead.id],{force:true});
-    const refreshed=rowsData.find(x=>String(x.id)===String(drawerLead.id));
-    if(refreshed){drawerLead=refreshed;renderDrawer()}
+    const id=drawerLead.id;
+    await enrichIds([id],{force:true});
+    const refreshed=rowsData.find(x=>String(x.id)===String(id));
+    if(refreshed){drawerLead=refreshed;renderDrawer();loadActivity(id)}
     return;
   }
   if(e.target.id==='archiveDrawerBtn'){
