@@ -550,22 +550,24 @@ def places_text_search_pages(
     page_token = None
     pages = 0
     while len(all_places) < limit and pages < 5:
+        page_size = min(PLACES_PAGE_SIZE, limit - len(all_places))
+        if page_size <= 0:
+            break
         body: dict[str, Any] = {
             "textQuery": query,
-            "pageSize": min(PLACES_PAGE_SIZE, limit - len(all_places)),
+            "pageSize": page_size,
         }
         if page_token:
             body["pageToken"] = page_token
-            # nextPageToken is often not valid for a couple of seconds
-            time.sleep(2)
         if location_restriction:
             body["locationRestriction"] = {"rectangle": location_restriction}
         try:
             response = requests.post(url, headers=headers, json=body, timeout=45)
         except requests.RequestException as e:
             raise HTTPException(502, f"Google Places API request failed: {e}") from e
+        # nextPageToken can be briefly invalid — retry once after a short wait
         if not response.ok and page_token and response.status_code in (400, 429):
-            time.sleep(2.5)
+            time.sleep(2)
             try:
                 response = requests.post(url, headers=headers, json=body, timeout=45)
             except requests.RequestException as e:
@@ -576,9 +578,7 @@ def places_text_search_pages(
             except Exception:
                 detail = response.text
             # A bad tile shouldn't kill the whole city scan
-            if location_restriction and pages > 0:
-                break
-            if location_restriction and pages == 0:
+            if location_restriction:
                 break
             raise HTTPException(response.status_code, f"Google Places API: {detail}")
         data = response.json()
@@ -611,7 +611,9 @@ def google_search(country: str, city: str, category: str, max_results: int):
         return query, places, {"tiles": 1, "mode": "single_fallback", "note": "Could not geocode city for full scan"}
 
     tiles = city_grid_rectangles(viewport, want)
-    # Also run one unrestricted city query first (often highest-quality hits)
+    # Unrestricted city query first (best ranking), then tile the viewport.
+    # Tile queries use category-only text — city is already enforced by locationRestriction.
+    # (Keeping "in City" in the tile query over-filters and often returns empty tiles.)
     seen: dict[str, dict] = {}
     for p in places_text_search_pages(query, PLACES_QUERY_CAP):
         pid = p.get("id")
@@ -619,24 +621,37 @@ def google_search(country: str, city: str, category: str, max_results: int):
             seen[pid] = p
 
     tiles_used = 1
+    tiles_with_hits = 1 if seen else 0
+    tile_query = category.strip() or query
     for rect in tiles:
         if len(seen) >= want:
             break
+        remaining = want - len(seen)
+        if remaining <= 0:
+            break
         batch = places_text_search_pages(
-            query,
-            min(PLACES_QUERY_CAP, want - len(seen)),
+            tile_query,
+            min(PLACES_QUERY_CAP, remaining),
             location_restriction=rect,
         )
         tiles_used += 1
+        before = len(seen)
         for p in batch:
             pid = p.get("id")
             if pid and pid not in seen:
                 seen[pid] = p
+        if len(seen) > before:
+            tiles_with_hits += 1
         if len(seen) >= want:
             break
 
     places = list(seen.values())[:want]
-    return query, places, {"tiles": tiles_used, "mode": "city_scan", "unique": len(places)}
+    return query, places, {
+        "tiles": tiles_used,
+        "tiles_with_hits": tiles_with_hits,
+        "mode": "city_scan",
+        "unique": len(places),
+    }
 
 
 def iso_or_empty(dt: Optional[datetime]) -> str:

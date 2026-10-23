@@ -1225,7 +1225,13 @@ $('searchForm').addEventListener('submit',async e=>{
   try{
     const d=await api('/api/search',{method:'POST',body:{country,city,category,max_results:fetchAll?0:maxResults}});
     const meta=d.search_meta||{};
-    const tileNote=meta.mode==='city_scan'?` · ${meta.tiles||'?'} map tiles`:meta.note?` · ${meta.note}`:'';
+    let tileNote='';
+    if(meta.mode==='city_scan'){
+      tileNote=` · ${meta.tiles||'?'} map tiles`;
+      if(meta.tiles_with_hits!=null)tileNote+=` (${meta.tiles_with_hits} with hits)`;
+    }else if(meta.note){
+      tileNote=` · ${meta.note}`;
+    }
     showMessage(`Search complete: ${d.found} found, ${d.inserted} new, ${d.updated} refreshed${tileNote}. Query: ${d.query}`);
     $('categoryFilter').value=category;
     await load();
