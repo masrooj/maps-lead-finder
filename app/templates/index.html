@@ -234,11 +234,17 @@ body.templates-mode .template-editor .row-actions{margin-top:4px}
           <div class="field"><label for="country">Country</label><select id="country" required><option value="">Loading…</option></select></div>
           <div class="field"><label for="city">City</label><select id="city" required disabled><option value="">Select a country first</option></select></div>
           <div class="field"><label for="category">Business type</label><input id="category" required placeholder="e.g. barbers" value="barbers"></div>
-          <div class="field"><label for="maxResults">Max</label><select id="maxResults"><option>20</option><option>40</option><option selected>60</option></select></div>
+          <div class="field"><label for="maxResults">Fetch</label><select id="maxResults">
+            <option value="0" selected>All (scan city)</option>
+            <option value="60">Up to 60</option>
+            <option value="120">Up to 120</option>
+            <option value="200">Up to 200</option>
+            <option value="300">Up to 300</option>
+          </select></div>
           <button class="primary" id="searchBtn" type="submit">Search Maps</button>
         </div>
       </form>
-      <div class="hint">Re-search keeps pipeline status and accumulates search labels instead of overwriting category.</div>
+      <div class="hint">Google returns ≤60 per map area — “All” tiles the city and keeps fetching until coverage is done (or the limit). Re-search keeps pipeline status.</div>
     </section>
 
     <section class="stats" id="stats" aria-label="Lead counts">
@@ -1210,10 +1216,17 @@ $('searchForm').addEventListener('submit',async e=>{
   $('statusFilter').value='all';
   updateViewHint();
   $('searchBtn').disabled=true;$('searchBtn').innerHTML='<span class="loading"></span>Searching';
-  showMessage('Searching Google Places (contacts enrich runs after)…');
+  const maxRaw=$('maxResults').value;
+  const maxResults=Number(maxRaw);
+  const fetchAll=!maxRaw||maxResults===0;
+  showMessage(fetchAll
+    ?'Scanning city map tiles until all Places results are collected (can take a minute)…'
+    :`Searching Google Places (up to ${maxResults})…`);
   try{
-    const d=await api('/api/search',{method:'POST',body:{country,city,category,max_results:Number($('maxResults').value)}});
-    showMessage(`Search complete: ${d.found} found, ${d.inserted} new, ${d.updated} refreshed. Query: ${d.query}`);
+    const d=await api('/api/search',{method:'POST',body:{country,city,category,max_results:fetchAll?0:maxResults}});
+    const meta=d.search_meta||{};
+    const tileNote=meta.mode==='city_scan'?` · ${meta.tiles||'?'} map tiles`:meta.note?` · ${meta.note}`:'';
+    showMessage(`Search complete: ${d.found} found, ${d.inserted} new, ${d.updated} refreshed${tileNote}. Query: ${d.query}`);
     $('categoryFilter').value=category;
     await load();
     if((d.enrich_ids||[]).length){

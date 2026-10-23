@@ -5,6 +5,7 @@ import io
 import json
 import os
 import re
+import time
 from pathlib import Path
 from datetime import datetime, timedelta, timezone, date
 from typing import Optional, Any
@@ -445,37 +446,197 @@ def discover_public_contacts(url: str) -> tuple[dict, str]:
     return links, ", ".join(email_list[:3])
 
 
-def google_search(country: str, city: str, category: str, max_results: int):
+# Google Text Search (New) returns at most ~60 places per query (3×20 pages).
+# To go beyond that we tile the city viewport and search each rectangle.
+PLACES_QUERY_CAP = 60
+PLACES_PAGE_SIZE = 20
+SEARCH_HARD_CEILING = 500  # safety stop for "All" city scans
+
+
+def _places_api_key() -> str:
     key = os.getenv("GOOGLE_MAPS_API_KEY", "").strip()
     if not key or key.startswith("replace_"):
         raise HTTPException(400, "Set GOOGLE_MAPS_API_KEY in your .env file first.")
+    return key
+
+
+def geocode_city_viewport(city: str, country: str) -> Optional[dict]:
+    """Return {"low": {lat,lng}, "high": {lat,lng}} city viewport, or None."""
+    try:
+        r = requests.get(
+            "https://maps.googleapis.com/maps/api/geocode/json",
+            params={"address": f"{city}, {country}", "key": _places_api_key()},
+            timeout=20,
+        )
+        r.raise_for_status()
+        data = r.json()
+    except requests.RequestException:
+        return None
+    if data.get("status") != "OK" or not data.get("results"):
+        return None
+    result = data["results"][0]
+    vp = (result.get("geometry") or {}).get("viewport") or {}
+    ne, sw = vp.get("northeast") or {}, vp.get("southwest") or {}
+    if not all(k in ne for k in ("lat", "lng")) or not all(k in sw for k in ("lat", "lng")):
+        loc = (result.get("geometry") or {}).get("location") or {}
+        if "lat" not in loc or "lng" not in loc:
+            return None
+        # ~15km box around point if no viewport
+        d = 0.12
+        return {
+            "low": {"latitude": loc["lat"] - d, "longitude": loc["lng"] - d},
+            "high": {"latitude": loc["lat"] + d, "longitude": loc["lng"] + d},
+        }
+    return {
+        "low": {"latitude": sw["lat"], "longitude": sw["lng"]},
+        "high": {"latitude": ne["lat"], "longitude": ne["lng"]},
+    }
+
+
+def city_grid_rectangles(viewport: dict, max_results: int) -> list[dict]:
+    """Split city viewport into rectangles so each tile can yield up to ~60 Places results."""
+    low, high = viewport["low"], viewport["high"]
+    lat0, lat1 = float(low["latitude"]), float(high["latitude"])
+    lng0, lng1 = float(low["longitude"]), float(high["longitude"])
+    if lat1 < lat0:
+        lat0, lat1 = lat1, lat0
+    if lng1 < lng0:
+        lng0, lng1 = lng1, lng0
+    # Aim for enough tiles that PLACES_QUERY_CAP * tiles >= max_results
+    target_tiles = max(1, min(25, (max_results + PLACES_QUERY_CAP - 1) // PLACES_QUERY_CAP))
+    cols = max(1, int(target_tiles ** 0.5 + 0.999))
+    rows = max(1, (target_tiles + cols - 1) // cols)
+    # Prefer a bit finer grid for large cities (more coverage, fewer missed denser areas)
+    if max_results >= SEARCH_HARD_CEILING:
+        cols = max(cols, 4)
+        rows = max(rows, 4)
+    lat_step = (lat1 - lat0) / rows if rows else (lat1 - lat0)
+    lng_step = (lng1 - lng0) / cols if cols else (lng1 - lng0)
+    tiles = []
+    for r in range(rows):
+        for c in range(cols):
+            tiles.append({
+                "low": {
+                    "latitude": lat0 + r * lat_step,
+                    "longitude": lng0 + c * lng_step,
+                },
+                "high": {
+                    "latitude": lat0 + (r + 1) * lat_step if r < rows - 1 else lat1,
+                    "longitude": lng0 + (c + 1) * lng_step if c < cols - 1 else lng1,
+                },
+            })
+    return tiles
+
+
+def places_text_search_pages(
+    query: str,
+    max_results: int,
+    location_restriction: Optional[dict] = None,
+) -> list[dict]:
+    """Paginate Text Search until no nextPageToken or Google's ~60/query cap."""
     url = "https://places.googleapis.com/v1/places:searchText"
     headers = {
-        "Content-Type": "application/json", "X-Goog-Api-Key": key,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.internationalPhoneNumber,places.websiteUri,places.googleMapsUri,places.rating,places.userRatingCount,places.types,places.primaryTypeDisplayName,places.businessStatus,places.editorialSummary,nextPageToken"
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": _places_api_key(),
+        "X-Goog-FieldMask": (
+            "places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,"
+            "places.internationalPhoneNumber,places.websiteUri,places.googleMapsUri,places.rating,"
+            "places.userRatingCount,places.types,places.primaryTypeDisplayName,places.businessStatus,"
+            "places.editorialSummary,nextPageToken"
+        ),
     }
-    query = f"{category} in {city}, {country}"
-    all_places, page_token = [], None
-    while len(all_places) < min(max_results, 60):
-        body = {"textQuery": query, "pageSize": min(20, max_results - len(all_places))}
+    limit = max(1, min(int(max_results), PLACES_QUERY_CAP))
+    all_places: list[dict] = []
+    page_token = None
+    pages = 0
+    while len(all_places) < limit and pages < 5:
+        body: dict[str, Any] = {
+            "textQuery": query,
+            "pageSize": min(PLACES_PAGE_SIZE, limit - len(all_places)),
+        }
         if page_token:
             body["pageToken"] = page_token
+            # nextPageToken is often not valid for a couple of seconds
+            time.sleep(2)
+        if location_restriction:
+            body["locationRestriction"] = {"rectangle": location_restriction}
         try:
-            response = requests.post(url, headers=headers, json=body, timeout=30)
+            response = requests.post(url, headers=headers, json=body, timeout=45)
         except requests.RequestException as e:
-            raise HTTPException(502, f"Google Places API request failed: {e}")
+            raise HTTPException(502, f"Google Places API request failed: {e}") from e
+        if not response.ok and page_token and response.status_code in (400, 429):
+            time.sleep(2.5)
+            try:
+                response = requests.post(url, headers=headers, json=body, timeout=45)
+            except requests.RequestException as e:
+                raise HTTPException(502, f"Google Places API request failed: {e}") from e
         if not response.ok:
             try:
                 detail = response.json().get("error", {}).get("message", response.text)
             except Exception:
                 detail = response.text
+            # A bad tile shouldn't kill the whole city scan
+            if location_restriction and pages > 0:
+                break
+            if location_restriction and pages == 0:
+                break
             raise HTTPException(response.status_code, f"Google Places API: {detail}")
         data = response.json()
-        all_places.extend(data.get("places", []))
+        batch = data.get("places") or []
+        all_places.extend(batch)
+        pages += 1
         page_token = data.get("nextPageToken")
-        if not page_token or len(all_places) >= min(max_results, 60):
+        if not page_token or not batch:
             break
-    return query, all_places[:min(max_results, 60)]
+    return all_places[:limit]
+
+
+def google_search(country: str, city: str, category: str, max_results: int):
+    """
+    Fetch Places for category+city.
+    - max_results <= 60: single query, full pagination (Google's per-query max).
+    - max_results > 60 or "all": tile the city and merge unique place_ids.
+    """
+    query = f"{category} in {city}, {country}"
+    want = max(1, min(int(max_results), SEARCH_HARD_CEILING))
+
+    if want <= PLACES_QUERY_CAP:
+        places = places_text_search_pages(query, want)
+        return query, places, {"tiles": 1, "mode": "single"}
+
+    viewport = geocode_city_viewport(city, country)
+    if not viewport:
+        # Can't tile without bounds — take Google's full 60 from one query
+        places = places_text_search_pages(query, PLACES_QUERY_CAP)
+        return query, places, {"tiles": 1, "mode": "single_fallback", "note": "Could not geocode city for full scan"}
+
+    tiles = city_grid_rectangles(viewport, want)
+    # Also run one unrestricted city query first (often highest-quality hits)
+    seen: dict[str, dict] = {}
+    for p in places_text_search_pages(query, PLACES_QUERY_CAP):
+        pid = p.get("id")
+        if pid:
+            seen[pid] = p
+
+    tiles_used = 1
+    for rect in tiles:
+        if len(seen) >= want:
+            break
+        batch = places_text_search_pages(
+            query,
+            min(PLACES_QUERY_CAP, want - len(seen)),
+            location_restriction=rect,
+        )
+        tiles_used += 1
+        for p in batch:
+            pid = p.get("id")
+            if pid and pid not in seen:
+                seen[pid] = p
+        if len(seen) >= want:
+            break
+
+    places = list(seen.values())[:want]
+    return query, places, {"tiles": tiles_used, "mode": "city_scan", "unique": len(places)}
 
 
 def iso_or_empty(dt: Optional[datetime]) -> str:
@@ -812,13 +973,22 @@ def search(payload: dict, _user: str = Depends(require_login)):
     country = str(payload.get("country", "")).strip()
     city = str(payload.get("city", "")).strip()
     category = str(payload.get("category", "")).strip()
+    raw_max = payload.get("max_results", 0)
     try:
-        max_results = max(1, min(60, int(payload.get("max_results", 60))))
+        # 0 / "all" = scan whole city (tiled) up to SEARCH_HARD_CEILING
+        if raw_max in (None, "", "all", "All"):
+            max_results = SEARCH_HARD_CEILING
+        else:
+            max_results = int(raw_max)
+            if max_results <= 0:
+                max_results = SEARCH_HARD_CEILING
+            else:
+                max_results = max(1, min(SEARCH_HARD_CEILING, max_results))
     except Exception:
-        max_results = 60
+        max_results = SEARCH_HARD_CEILING
     if not country or not city or not category:
         raise HTTPException(422, "Country, city, and business category are required.")
-    query, places = google_search(country, city, category, max_results)
+    query, places, search_meta = google_search(country, city, category, max_results)
     inserted, updated = 0, 0
     enrich_ids = []
     with SessionLocal() as db:
@@ -908,6 +1078,7 @@ def search(payload: dict, _user: str = Depends(require_login)):
             "inserted": inserted,
             "updated": updated,
             "enrich_ids": enrich_ids,
+            "search_meta": search_meta,
             "results": [business_dict(b) for b in rows],
         }
 
