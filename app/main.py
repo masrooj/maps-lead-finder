@@ -62,6 +62,9 @@ class Business(Base):
     editorial_summary: Mapped[str] = mapped_column(Text, default="")
     contacted: Mapped[bool] = mapped_column(Boolean, default=False)
     lost: Mapped[bool] = mapped_column(Boolean, default=False)
+    email_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    whatsapp_sent: Mapped[bool] = mapped_column(Boolean, default=False)
+    instagram_sent: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
@@ -72,6 +75,12 @@ MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
 def sql_statements(script: str) -> list[str]:
     lines = [line for line in script.splitlines() if not line.strip().startswith("--")]
     return [part.strip() for part in "\n".join(lines).split(";") if part.strip()]
+
+def adapt_migration_sql(statement: str) -> str:
+    """SQLite rejects ADD COLUMN IF NOT EXISTS; Postgres needs it for re-runs."""
+    if engine.dialect.name != "sqlite":
+        return statement
+    return re.sub(r"(?i)\bADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\b", "ADD COLUMN", statement)
 
 def apply_migrations():
     MIGRATIONS_DIR.mkdir(parents=True, exist_ok=True)
@@ -86,7 +95,15 @@ def apply_migrations():
             if path.name in applied:
                 continue
             for statement in sql_statements(path.read_text(encoding="utf-8")):
-                conn.execute(text(statement))
+                sql = adapt_migration_sql(statement)
+                try:
+                    conn.execute(text(sql))
+                except Exception as e:
+                    # Column already present (common when create_all ran first on SQLite).
+                    msg = str(e).lower()
+                    if "duplicate column" in msg or "already exists" in msg:
+                        continue
+                    raise
             conn.execute(text("INSERT INTO schema_migrations (version) VALUES (:version)"), {"version": path.name})
 
 apply_migrations()
@@ -263,7 +280,11 @@ def business_dict(b: Business):
         "category": b.category, "address": b.address, "phone": b.phone, "international_phone": b.international_phone,
         "website": b.website, "email": b.email, "google_maps_url": b.google_maps_url, "rating": b.rating, "reviews_count": b.reviews_count,
         "social_links": socials, "business_status": b.business_status, "primary_type": b.primary_type,
-        "editorial_summary": b.editorial_summary, "contacted": b.contacted, "lost": b.lost, "notes": b.notes,
+        "editorial_summary": b.editorial_summary, "contacted": b.contacted, "lost": b.lost,
+        "email_sent": bool(getattr(b, "email_sent", False)),
+        "whatsapp_sent": bool(getattr(b, "whatsapp_sent", False)),
+        "instagram_sent": bool(getattr(b, "instagram_sent", False)),
+        "notes": b.notes,
         "updated_at": b.updated_at.isoformat() if b.updated_at else ""}
 
 @app.get("/", response_class=HTMLResponse)
@@ -377,6 +398,9 @@ def list_businesses(q: str = "", country: str = "", city: str = "", category: st
 class UpdateBusiness(BaseModel):
     contacted: Optional[bool] = None
     lost: Optional[bool] = None
+    email_sent: Optional[bool] = None
+    whatsapp_sent: Optional[bool] = None
+    instagram_sent: Optional[bool] = None
     notes: Optional[str] = Field(default=None, max_length=5000)
 
 @app.patch("/api/businesses/{business_id}")
@@ -391,22 +415,35 @@ def update_business(business_id: int, payload: UpdateBusiness, _user: str = Depe
         return business_dict(b)
 
 @app.get("/api/export.csv")
-def export_csv(q: str = "", country: str = "", city: str = "", category: str = "", status: str = "all", _user: str = Depends(require_login)):
+def export_csv(q: str = "", country: str = "", city: str = "", category: str = "", status: str = "all", ids: str = "", _user: str = Depends(require_login)):
+    selected_ids = []
+    if ids.strip():
+        for part in ids.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            try:
+                selected_ids.append(int(part))
+            except ValueError:
+                raise HTTPException(422, "ids must be a comma-separated list of integers")
     with SessionLocal() as db:
         stmt = select(Business)
-        if q: stmt = stmt.where(or_(Business.name.ilike(f"%{q}%"), Business.address.ilike(f"%{q}%"), Business.phone.ilike(f"%{q}%"), Business.email.ilike(f"%{q}%")))
-        if country: stmt = stmt.where(Business.country == country)
-        if city: stmt = stmt.where(Business.city == city)
-        if category: stmt = stmt.where(Business.category == category)
-        if status == "contacted": stmt = stmt.where(Business.contacted.is_(True))
-        elif status == "lost": stmt = stmt.where(Business.lost.is_(True))
-        elif status == "uncontacted": stmt = stmt.where(Business.contacted.is_(False), Business.lost.is_(False))
+        if selected_ids:
+            stmt = stmt.where(Business.id.in_(selected_ids))
+        else:
+            if q: stmt = stmt.where(or_(Business.name.ilike(f"%{q}%"), Business.address.ilike(f"%{q}%"), Business.phone.ilike(f"%{q}%"), Business.email.ilike(f"%{q}%")))
+            if country: stmt = stmt.where(Business.country == country)
+            if city: stmt = stmt.where(Business.city == city)
+            if category: stmt = stmt.where(Business.category == category)
+            if status == "contacted": stmt = stmt.where(Business.contacted.is_(True))
+            elif status == "lost": stmt = stmt.where(Business.lost.is_(True))
+            elif status == "uncontacted": stmt = stmt.where(Business.contacted.is_(False), Business.lost.is_(False))
         rows = db.scalars(stmt.order_by(Business.name)).all()
     import json
     output = io.StringIO(); writer = csv.writer(output)
-    writer.writerow(["Name", "Country", "City", "Category", "Address", "Phone", "International phone", "Email", "Website", "Google Maps", "Instagram", "Facebook", "TikTok", "LinkedIn", "YouTube", "X", "Rating", "Review count", "Business status", "Primary type", "Editorial summary", "Place ID", "Updated at", "Contacted", "Lost", "Notes"])
+    writer.writerow(["Name", "Country", "City", "Category", "Address", "Phone", "International phone", "Email", "Website", "Google Maps", "Instagram", "Facebook", "TikTok", "LinkedIn", "YouTube", "X", "Rating", "Review count", "Business status", "Primary type", "Editorial summary", "Place ID", "Updated at", "Contacted", "Lost", "Email sent", "WhatsApp sent", "Instagram sent", "Notes"])
     for b in rows:
         try: s = json.loads(b.social_links_json or "{}")
         except Exception: s = {}
-        writer.writerow([b.name,b.country,b.city,b.category,b.address,b.phone,b.international_phone,b.email,b.website,b.google_maps_url,s.get("instagram",""),s.get("facebook",""),s.get("tiktok",""),s.get("linkedin",""),s.get("youtube",""),s.get("x",""),b.rating,b.reviews_count,b.business_status,b.primary_type,b.editorial_summary,b.place_id,b.updated_at.isoformat() if b.updated_at else "",b.contacted,b.lost,b.notes])
+        writer.writerow([b.name,b.country,b.city,b.category,b.address,b.phone,b.international_phone,b.email,b.website,b.google_maps_url,s.get("instagram",""),s.get("facebook",""),s.get("tiktok",""),s.get("linkedin",""),s.get("youtube",""),s.get("x",""),b.rating,b.reviews_count,b.business_status,b.primary_type,b.editorial_summary,b.place_id,b.updated_at.isoformat() if b.updated_at else "",b.contacted,b.lost,getattr(b,"email_sent",False),getattr(b,"whatsapp_sent",False),getattr(b,"instagram_sent",False),b.notes])
     return StreamingResponse(iter(["\ufeff" + output.getvalue()]), media_type="text/csv; charset=utf-8", headers={"Content-Disposition": "attachment; filename=maps-business-leads.csv"})
