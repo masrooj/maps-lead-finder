@@ -96,6 +96,30 @@ button:disabled{opacity:.5;cursor:wait}
 .footer a{color:#b7caff}
 .panel-page{display:block}
 .panel-page.hidden{display:none!important}
+/* Templates = full-viewport workspace so message body is fully readable */
+html.templates-mode,body.templates-mode{height:100%;overflow:hidden}
+body.templates-mode .wrap{max-width:none;width:100%;min-height:100dvh;height:100dvh;padding:14px 18px 10px;display:flex;flex-direction:column;box-sizing:border-box}
+body.templates-mode .top{flex:0 0 auto;margin-bottom:12px}
+body.templates-mode #app{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+body.templates-mode .footer{display:none}
+body.templates-mode #templatesPanel{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+body.templates-mode .templates{flex:1 1 auto;min-height:0;margin:0;padding:16px 18px;display:flex;flex-direction:column}
+body.templates-mode .templates > .sectionhead{flex:0 0 auto}
+body.templates-mode .template-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column}
+body.templates-mode .template-tabs{flex:0 0 auto;margin-bottom:10px}
+body.templates-mode .template-layout{flex:1 1 auto;min-height:0;grid-template-columns:minmax(200px,280px) 1fr;gap:16px;align-items:stretch}
+body.templates-mode .template-list{margin:0;overflow:auto;min-height:0;align-content:start;padding-right:4px}
+body.templates-mode .template-editor{display:flex;flex-direction:column;min-height:0;height:100%;gap:0}
+body.templates-mode .template-editor > .field{flex:0 0 auto;margin-bottom:10px}
+body.templates-mode .template-editor > .field-body{flex:1 1 auto;min-height:0;margin-bottom:10px;display:flex;flex-direction:column}
+body.templates-mode .template-editor > .field-body label{flex:0 0 auto}
+body.templates-mode .template-editor #tplBody{
+  flex:1 1 auto;min-height:0;height:100%;width:100%;resize:none;overflow:auto;
+  font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;white-space:pre-wrap;
+}
+body.templates-mode .template-editor > .hint,
+body.templates-mode .template-editor > .row-actions{flex:0 0 auto}
+body.templates-mode .template-editor .row-actions{margin-top:4px}
 .login-card{max-width:420px;margin:56px auto;padding:26px}
 .login-card h2{margin:0 0 6px;font-size:18px}
 .login-card .sub{margin:0 0 16px}
@@ -115,7 +139,7 @@ button:disabled{opacity:.5;cursor:wait}
 .template-list button{text-align:left}
 .template-list .meta{display:block;color:var(--muted);font-size:11px;font-weight:500;margin-top:2px}
 .template-editor .row-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.template-editor textarea{min-height:120px;resize:vertical}
+.template-editor textarea{min-height:160px;resize:vertical}
 .modal-backdrop,.drawer-backdrop{position:fixed;inset:0;background:rgba(5,10,22,.78);display:flex;z-index:50;-webkit-overflow-scrolling:touch}
 .modal-backdrop{
   align-items:flex-start;justify-content:center;overflow:auto;
@@ -166,6 +190,8 @@ button:disabled{opacity:.5;cursor:wait}
   .lead .reach,.lead .meta,.lead .actions{grid-column:1 / -1}
   .lead .meta,.lead .actions{align-items:flex-start;justify-content:flex-start}
   .template-layout{grid-template-columns:1fr}
+  body.templates-mode .template-layout{grid-template-rows:minmax(120px,28vh) 1fr;grid-template-columns:1fr}
+  body.templates-mode .template-list{max-height:28vh}
   .footer{display:block}
   .toolbar input{max-width:100%}
   .modal{max-height:min(94dvh,100%)}
@@ -300,7 +326,7 @@ button:disabled{opacity:.5;cursor:wait}
     <section class="templates" id="templatesSection">
       <div class="sectionhead">
         <h2>Message templates</h2>
-        <span>Email, WhatsApp, and Instagram copy used when you compose</span>
+        <span>Full-page editor · email / WhatsApp / Instagram</span>
       </div>
       <div class="template-body">
         <div class="template-tabs">
@@ -313,7 +339,7 @@ button:disabled{opacity:.5;cursor:wait}
           <div class="template-editor">
             <div class="field"><label for="tplName">Template name</label><input id="tplName"></div>
             <div class="field" id="tplSubjectField"><label for="tplSubject">Email subject</label><input id="tplSubject"></div>
-            <div class="field"><label for="tplBody">Message</label><textarea id="tplBody"></textarea></div>
+            <div class="field field-body"><label for="tplBody">Message</label><textarea id="tplBody" spellcheck="true"></textarea></div>
             <p class="hint" style="margin-top:0">Placeholders: {{name}}, {{city}}, {{category}}, {{phone}}, {{website}}</p>
             <div class="row-actions">
               <button type="button" class="primary" id="saveTplBtn">Save</button>
@@ -420,10 +446,12 @@ function setAppPanel(panel){
   appPanel=panel==='templates'?'templates':'leads';
   $('leadsPanel').classList.toggle('hidden',appPanel!=='leads');
   $('templatesPanel').classList.toggle('hidden',appPanel!=='templates');
+  document.documentElement.classList.toggle('templates-mode',appPanel==='templates');
+  document.body.classList.toggle('templates-mode',appPanel==='templates');
   document.querySelectorAll('#appNav [data-app-panel]').forEach(btn=>btn.classList.toggle('active',btn.dataset.appPanel===appPanel));
   if(appPanel==='templates'){
     loadTemplates().catch(()=>{});
-    window.scrollTo({top:0,behavior:'smooth'});
+    requestAnimationFrame(()=>{$('tplBody')&&$('tplBody').focus({preventScroll:true})});
   }
 }
 
@@ -825,7 +853,7 @@ function fillComposeTemplates(channel){
   const list=templatesFor(channel);
   const def=defaultTemplate(channel);
   if(!list.length){
-    $('composeTemplate').innerHTML='<option value="">No templates — expand Message templates below and save one</option>';
+    $('composeTemplate').innerHTML='<option value="">No templates — open Templates in the top menu and save one</option>';
     $('composeSubject').value='';
     $('composeBody').value='';
   }else{
@@ -1287,7 +1315,13 @@ updateViewHint();
 
 function showLoginError(text){const el=$('loginError');if(!text){el.className='login-error';el.textContent='';return}el.textContent=text;el.className='login-error show'}
 function setAuthed(username){$('loginCard').classList.add('hidden');$('app').classList.remove('hidden');$('appNav').classList.remove('hidden');$('signedInUser').textContent=username;$('signedInUser').classList.remove('hidden');$('logoutBtn').classList.remove('hidden');$('headerPill').classList.add('hidden');setAppPanel('leads')}
-function setLoggedOut(){$('app').classList.add('hidden');$('appNav').classList.add('hidden');$('loginCard').classList.remove('hidden');$('signedInUser').classList.add('hidden');$('logoutBtn').classList.add('hidden');$('headerPill').classList.remove('hidden');$('password').value='';showLoginError('')}
+function setLoggedOut(){
+  document.documentElement.classList.remove('templates-mode');
+  document.body.classList.remove('templates-mode');
+  $('app').classList.add('hidden');$('appNav').classList.add('hidden');$('loginCard').classList.remove('hidden');
+  $('signedInUser').classList.add('hidden');$('logoutBtn').classList.add('hidden');$('headerPill').classList.remove('hidden');
+  $('password').value='';showLoginError('');
+}
 async function enterApp(username){setAuthed(username);await loadTemplates();setTplChannel('email');await loadLocations()}
 $('loginForm').addEventListener('submit',async e=>{
   e.preventDefault();
