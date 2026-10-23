@@ -1,112 +1,1177 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Maps Lead Finder</title><style>
-:root{--bg:#0b1020;--panel:#121a2d;--panel2:#18233a;--line:#293650;--text:#edf3ff;--muted:#9aa9c4;--accent:#7c9cff;--green:#3bd5a0;--red:#ff7b8b}*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 20% 0%,#1b2a4d 0,transparent 45%),var(--bg);color:var(--text);font:14px/1.5 Inter,ui-sans-serif,system-ui,-apple-system,sans-serif}button,input,select{font:inherit}button{cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--panel2);color:var(--text);font-weight:650}button.primary{background:var(--accent);border-color:var(--accent);color:#081026}button:disabled{opacity:.5;cursor:wait}.wrap{max-width:1600px;margin:auto;padding:26px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}.brand{display:flex;gap:12px;align-items:center}.mark{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:linear-gradient(135deg,#7c9cff,#5ce0c0);color:#071026;font-size:20px;font-weight:900}.brand h1{font-size:20px;margin:0}.brand p{margin:2px 0;color:var(--muted)}.pill{border:1px solid var(--line);border-radius:999px;padding:7px 11px;color:var(--muted);font-size:12px}.searchbox,.stats,.toolbar,.tablebox{background:rgba(18,26,45,.94);border:1px solid var(--line);border-radius:16px}.searchbox{padding:20px;margin-bottom:16px}.sectionhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}.sectionhead h2{font-size:15px;margin:0}.sectionhead span{color:var(--muted);font-size:12px}.fields{display:grid;grid-template-columns:1fr 1fr 1.3fr 140px auto;gap:12px;align-items:end}.field label{display:block;color:var(--muted);font-size:12px;margin:0 0 6px}.field input,.field select,.toolbar input,.toolbar select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1527;color:var(--text);outline:none}.field input:focus,.field select:focus{border-color:var(--accent)}.hint{color:var(--muted);font-size:12px;margin-top:12px}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;overflow:hidden;margin-bottom:16px}.stat{padding:16px;background:rgba(18,26,45,.9)}.stat span{color:var(--muted);font-size:12px}.stat strong{display:block;font-size:24px;margin-top:5px}.toolbar{display:flex;align-items:center;gap:10px;padding:12px;margin-bottom:12px}.toolbar input{max-width:300px}.toolbar select{width:auto;min-width:140px}.toolbar .spacer{flex:1}.tablebox{overflow:visible}table{border-collapse:collapse;width:100%;min-width:2100px}.checkcol{width:40px}.checkcol input{accent-color:var(--accent);width:15px;height:15px}.placeid{display:flex;flex-direction:column;gap:6px;min-width:160px;max-width:220px}.placeid code{font:11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c5d4f0;word-break:break-all;background:#0d1527;border:1px solid var(--line);border-radius:7px;padding:6px 8px}.placeid .row{display:flex;gap:6px;flex-wrap:wrap}.placeid button,.placeid a{padding:5px 8px;font-size:11px;text-decoration:none;display:inline-flex;align-items:center}.toast-wrap{position:fixed;top:18px;right:18px;z-index:80;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:min(380px,calc(100vw - 32px))}.toast{pointer-events:auto;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#17233b;color:var(--text);box-shadow:0 12px 40px rgba(0,0,0,.35);font-size:13px;animation:toastIn .22s ease-out}.toast.error{border-color:#8b394b;color:#ffb5bf}.toast.ok{border-color:#2a6b55;color:#b8f0d8}.toast.hide{opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s}@keyframes toastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}.site,.email{max-width:220px;word-break:break-word}.email a{color:#bcd0ff;text-decoration:none}.social-list{display:flex;flex-direction:column;gap:4px;min-width:110px}.social-list a{color:#bcd0ff;text-decoration:none}.social-list a:hover{text-decoration:underline}th,td{text-align:left;padding:13px 12px;border-bottom:1px solid #26324a;vertical-align:top}th{position:sticky;top:0;background:#17223a;color:#b8c6df;font-size:11px;text-transform:uppercase;letter-spacing:.06em;z-index:2}th .sort{display:inline-flex;align-items:center;gap:5px;padding:0;border:0;background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;font-weight:inherit;cursor:pointer;white-space:nowrap}th .sort:hover,th .sort.active{color:#fff}th .arrow{font-size:10px;opacity:.4}th .sort.active .arrow{opacity:1;color:#7c9cff}td{font-size:12px;color:#dfe7f7}tr:hover td{background:#172139}.biz{font-size:13px;font-weight:750;color:#fff;min-width:180px}.sub{font-size:11px;color:var(--muted);font-weight:400;margin-top:4px;max-width:240px}.links{display:flex;gap:6px;flex-wrap:wrap}.links a{display:inline-grid;place-items:center;width:27px;height:27px;border-radius:8px;border:1px solid var(--line);color:#bcd0ff;text-decoration:none;font-size:11px}.links a:hover{background:#273655}.rating{font-weight:750;color:#ffd98a}.count{background:#263653;border-radius:7px;padding:3px 7px;display:inline-block}.flag{display:flex;gap:6px;align-items:center;white-space:nowrap}.flag input{accent-color:var(--accent);width:15px;height:15px}.statuslost{color:var(--red)}.review{max-width:240px;color:#bdc9df}.review small{display:block;color:var(--muted);margin-top:5px}.empty{text-align:center;padding:50px 20px;color:var(--muted)}.message{display:none;margin:0 0 14px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:#17233b}.message.show{display:block}.message.error{border-color:#8b394b;color:#ffb5bf}.loading{display:inline-block;width:13px;height:13px;border:2px solid #34415a;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:8px}@keyframes spin{to{transform:rotate(360deg)}}.footer{padding:18px 4px;color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:20px}.footer a{color:#b7caff}.login-card{max-width:420px;margin:60px auto;padding:28px;background:rgba(18,26,45,.94);border:1px solid var(--line);border-radius:16px}.login-card h2{margin:0 0 6px;font-size:18px}.login-card .sub{margin:0 0 18px}.login-card .field{margin-bottom:14px}.login-card button{width:100%;margin-top:6px}.login-error{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;border:1px solid #8b394b;color:#ffb5bf;background:#17233b;font-size:13px}.login-error.show{display:block}.authbar{display:flex;align-items:center;gap:10px}.authbar .user{color:var(--muted);font-size:12px}.hidden{display:none!important}.contact-actions{display:flex;flex-direction:column;gap:6px;min-width:120px}.contact-actions button{padding:6px 8px;font-size:11px;text-align:left}.contact-actions .none{color:var(--muted);font-size:11px}.modal-backdrop{position:fixed;inset:0;background:rgba(5,10,22,.72);display:flex;align-items:center;justify-content:center;padding:20px;z-index:40}.modal{width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;box-shadow:0 20px 60px rgba(0,0,0,.35)}.modal h3{margin:0 0 6px;font-size:16px}.modal .sub{margin:0 0 14px}.modal .field{margin-bottom:12px}.modal textarea{width:100%;min-height:120px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1527;color:var(--text);outline:none;resize:vertical;font:inherit}.modal textarea:focus,.modal input:focus{border-color:var(--accent)}.modal-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.modal-actions .spacer{flex:1}.channel-note{margin-top:10px;color:var(--muted);font-size:12px}.compose-contact{margin:0 0 14px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1527;font-size:13px}.compose-contact .label{display:block;color:var(--muted);font-size:11px;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}.compose-contact .value{color:#edf3ff;word-break:break-word}.compose-contact a{color:#bcd0ff;text-decoration:none}.compose-contact a:hover{text-decoration:underline}.templates{padding:20px;margin-bottom:16px;background:rgba(18,26,45,.94);border:1px solid var(--line);border-radius:16px}.template-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}.template-tabs button{padding:8px 12px}.template-tabs button.active{background:var(--accent);border-color:var(--accent);color:#081026}.template-layout{display:grid;grid-template-columns:220px 1fr;gap:16px}.template-list{display:flex;flex-direction:column;gap:8px}.template-list button{text-align:left;padding:10px 12px}.template-list button.active{border-color:var(--accent);background:#1a2744}.template-list .meta{display:block;color:var(--muted);font-size:11px;font-weight:500;margin-top:2px}.template-editor .row-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}.template-editor textarea{width:100%;min-height:140px;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1527;color:var(--text);outline:none;resize:vertical;font:inherit}.template-editor textarea:focus,.template-editor input:focus,.template-editor select:focus{border-color:var(--accent)}.modal select{width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);background:#0d1527;color:var(--text)}@media(max-width:900px){.template-layout{grid-template-columns:1fr}.wrap{padding:14px}.fields{grid-template-columns:1fr 1fr}.fields .field:nth-child(3){grid-column:span 2}.fields button{grid-column:span 2}.stats{grid-template-columns:1fr 1fr}.toolbar{flex-wrap:wrap}.toolbar .spacer{display:none}.top{align-items:flex-start}.footer{display:block}.authbar{flex-wrap:wrap}}
-</style></head><body><div class="wrap">
-<header class="top"><div class="brand"><div class="mark">M</div><div><h1>Maps Lead Finder</h1><p>Find businesses. Organize outreach. Export leads.</p></div></div><div class="authbar"><span class="pill" id="headerPill">Google Places API · PostgreSQL</span><span class="user hidden" id="signedInUser"></span><button type="button" class="hidden" id="logoutBtn">Log out</button></div></header>
-<section class="login-card" id="loginCard"><h2>Sign in</h2><p class="sub">Enter your username and password to continue.</p><div class="login-error" id="loginError" role="alert"></div><form id="loginForm"><div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" required placeholder="hello@appointhive.com"></div><div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div><button class="primary" id="loginBtn" type="submit">Sign in</button></form></section>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Maps Lead Finder</title>
+<style>
+:root{
+  --bg:#f3f5f7;--panel:#ffffff;--panel2:#eef1f4;--line:#d7dde5;--text:#1a2332;
+  --muted:#5c6b7a;--accent:#0f766e;--accent-soft:#ccfbf1;--green:#15803d;
+  --red:#b91c1c;--amber:#b45309;--star:#ca8a04;--shadow:0 8px 28px rgba(26,35,50,.06);
+}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#e8eef2 0%,var(--bg) 28%);color:var(--text);font:15px/1.5 "Source Sans 3",ui-sans-serif,system-ui,-apple-system,sans-serif}
+button,input,select,textarea{font:inherit}
+button{cursor:pointer;border:1px solid var(--line);border-radius:10px;padding:9px 13px;background:var(--panel);color:var(--text);font-weight:600}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.ghost{background:transparent}
+button.danger{color:var(--red);border-color:#fecaca}
+button:disabled{opacity:.5;cursor:wait}
+.wrap{max-width:1180px;margin:auto;padding:22px 18px 40px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:20px}
+.brand{display:flex;gap:12px;align-items:center}
+.mark{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;background:var(--accent);color:#fff;font-size:18px;font-weight:800}
+.brand h1{font-size:20px;margin:0;letter-spacing:-.02em}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.pill{border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--muted);font-size:12px;background:var(--panel)}
+.card,.searchbox,.stats,.toolbar,.templates,.leads{background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow)}
+.searchbox,.templates{padding:18px;margin-bottom:14px}
+.sectionhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.sectionhead h2{font-size:15px;margin:0}
+.sectionhead span,.hint{color:var(--muted);font-size:12px}
+.fields{display:grid;grid-template-columns:1fr 1fr 1.2fr 120px auto;gap:12px;align-items:end}
+.field label{display:block;color:var(--muted);font-size:12px;margin:0 0 5px}
+.field input,.field select,.toolbar input,.toolbar select,.drawer input,.drawer select,.drawer textarea,.modal input,.modal select,.modal textarea,.template-editor input,.template-editor textarea,.template-editor select{
+  width:100%;padding:10px 11px;border-radius:10px;border:1px solid var(--line);background:#fff;color:var(--text);outline:none
+}
+.field input:focus,.field select:focus,.toolbar input:focus,.toolbar select:focus,.drawer input:focus,.drawer textarea:focus,.modal input:focus,.modal textarea:focus,.modal select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.hint{margin-top:10px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;overflow:hidden;margin-bottom:14px;background:var(--line)}
+.stat{padding:14px 16px;background:var(--panel);cursor:pointer;border:0;text-align:left;border-radius:0;font-weight:500}
+.stat:hover{background:var(--panel2)}
+.stat.active{background:var(--accent-soft)}
+.stat span{color:var(--muted);font-size:12px;display:block}
+.stat strong{display:block;font-size:22px;margin-top:4px;letter-spacing:-.02em}
+.views{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.views button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px;margin-bottom:12px;flex-wrap:wrap}
+.toolbar input{max-width:220px}
+.toolbar select{width:auto;min-width:130px}
+.toolbar .spacer{flex:1}
+.bulkbar{display:none;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;background:var(--accent-soft);border:1px solid #99f6e4;border-radius:12px;flex-wrap:wrap}
+.bulkbar.show{display:flex}
+.leads{padding:6px;overflow:hidden}
+.lead{display:grid;grid-template-columns:36px 34px minmax(0,1.4fr) minmax(140px,.9fr) auto auto;gap:10px;align-items:center;padding:12px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.lead:last-child{border-bottom:0}
+.lead:hover{background:#f8fafb}
+.lead.active{background:var(--accent-soft)}
+.lead .checkcol input,.flag input{accent-color:var(--accent);width:15px;height:15px}
+.starbtn{border:0;background:transparent;padding:4px;font-size:18px;color:#cbd5e1;line-height:1}
+.starbtn.on{color:var(--star)}
+.biz{font-weight:700;font-size:14px;letter-spacing:-.01em}
+.sub{font-size:12px;color:var(--muted);margin-top:2px}
+.reach{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);font-size:11px;color:var(--muted);text-decoration:none;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip.ok{color:var(--accent);border-color:#99f6e4;background:#f0fdfa}
+.meta{display:flex;flex-direction:column;align-items:flex-end;gap:4px;min-width:88px}
+.rating{font-weight:700;color:var(--amber);font-size:13px}
+.badge{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:650;border:1px solid var(--line);background:var(--panel2);color:var(--muted);white-space:nowrap}
+.badge.queue{background:#fff7ed;border-color:#fed7aa;color:var(--amber)}
+.badge.contacted{background:#ecfdf5;border-color:#a7f3d0;color:var(--green)}
+.badge.lost{background:#fef2f2;border-color:#fecaca;color:var(--red)}
+.badge.due{background:#fef3c7;border-color:#fde68a;color:#92400e}
+.badge.overdue{background:#fee2e2;border-color:#fecaca;color:var(--red)}
+.actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.actions button{padding:6px 9px;font-size:12px}
+.empty{text-align:center;padding:48px 20px;color:var(--muted)}
+.message{display:none;margin:0 0 12px;padding:11px 13px;border-radius:10px;border:1px solid var(--line);background:var(--panel)}
+.message.show{display:block}
+.message.error{border-color:#fecaca;color:var(--red);background:#fef2f2}
+.toast-wrap{position:fixed;top:16px;right:16px;z-index:90;display:flex;flex-direction:column;gap:8px;pointer-events:none;max-width:min(360px,calc(100vw - 28px))}
+.toast{pointer-events:auto;padding:11px 13px;border-radius:12px;border:1px solid var(--line);background:#fff;box-shadow:var(--shadow);font-size:13px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.toast.error{border-color:#fecaca;color:var(--red)}
+.toast.ok{border-color:#a7f3d0;color:var(--green)}
+.toast button{padding:5px 10px;font-size:12px}
+.toast .toast-msg{flex:1;min-width:140px}
+.templates.collapsed .template-body{display:none}
+.templates .sectionhead{cursor:pointer;user-select:none}
+.snooze{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.snooze button{padding:5px 9px;font-size:11px}
+.ig-copy{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--panel2);font-size:12px;white-space:pre-wrap;max-height:120px;overflow:auto}
+.view-hint{font-size:12px;color:var(--muted);margin:-4px 0 10px}
+.footer{padding:16px 4px;color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:16px}
+.footer a{color:var(--accent)}
+.login-card{max-width:420px;margin:56px auto;padding:26px}
+.login-card h2{margin:0 0 6px;font-size:18px}
+.login-card .sub{margin:0 0 16px}
+.login-card .field{margin-bottom:12px}
+.login-card button{width:100%;margin-top:4px}
+.login-error{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;border:1px solid #fecaca;color:var(--red);background:#fef2f2;font-size:13px}
+.login-error.show{display:block}
+.authbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.authbar .user{color:var(--muted);font-size:12px}
+.hidden{display:none!important}
+.loading{display:inline-block;width:12px;height:12px;border:2px solid #cbd5e1;border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:7px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.template-tabs,.template-list{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.template-tabs button.active,.template-list button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.template-layout{display:grid;grid-template-columns:220px 1fr;gap:14px}
+.template-list{flex-direction:column;margin:0}
+.template-list button{text-align:left}
+.template-list .meta{display:block;color:var(--muted);font-size:11px;font-weight:500;margin-top:2px}
+.template-editor .row-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.template-editor textarea{min-height:120px;resize:vertical}
+.modal-backdrop,.drawer-backdrop{position:fixed;inset:0;background:rgba(26,35,50,.35);display:flex;z-index:50}
+.modal-backdrop{align-items:center;justify-content:center;padding:18px}
+.drawer-backdrop{justify-content:flex-end}
+.modal{width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+.drawer{width:min(420px,100%);height:100%;background:var(--panel);border-left:1px solid var(--line);padding:18px;overflow:auto;box-shadow:var(--shadow)}
+.modal h3,.drawer h3{margin:0 0 4px;font-size:16px}
+.modal .sub,.drawer .sub{margin:0 0 12px}
+.modal .field,.drawer .field{margin-bottom:11px}
+.modal textarea{min-height:110px;resize:vertical}
+.modal-actions,.drawer-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.modal-actions .spacer,.drawer-actions .spacer{flex:1}
+.compose-contact{margin:0 0 12px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);font-size:13px}
+.compose-contact .label{display:block;color:var(--muted);font-size:11px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
+.channel-note{margin-top:8px;color:var(--muted);font-size:12px}
+.activity{list-style:none;margin:0;padding:0}
+.activity li{padding:8px 0;border-bottom:1px solid var(--line);font-size:12px}
+.activity li:last-child{border-bottom:0}
+.flag{display:flex;gap:7px;align-items:center;margin:6px 0;font-size:13px}
+.drawer-section{margin:14px 0;padding-top:12px;border-top:1px solid var(--line)}
+.drawer-section h4{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.links{display:flex;gap:6px;flex-wrap:wrap}
+.links a{color:var(--accent);font-size:12px}
+@media(max-width:900px){
+  .fields{grid-template-columns:1fr 1fr}
+  .fields .field:nth-child(3),.fields button{grid-column:span 2}
+  .stats{grid-template-columns:1fr 1fr}
+  .lead{grid-template-columns:28px 28px 1fr;grid-template-rows:auto auto}
+  .lead .reach,.lead .meta,.lead .actions{grid-column:1 / -1}
+  .lead .meta,.lead .actions{align-items:flex-start;justify-content:flex-start}
+  .template-layout{grid-template-columns:1fr}
+  .footer{display:block}
+  .toolbar input{max-width:100%}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div class="brand"><div class="mark">M</div><div><h1>Maps Lead Finder</h1><p>Find, mark, contact, and follow up.</p></div></div>
+  <div class="authbar">
+    <span class="pill" id="headerPill">Google Places · outreach queue</span>
+    <span class="user hidden" id="signedInUser"></span>
+    <button type="button" class="hidden" id="logoutBtn">Log out</button>
+  </div>
+</header>
+
+<section class="login-card card" id="loginCard">
+  <h2>Sign in</h2>
+  <p class="sub">Enter your username and password to continue.</p>
+  <div class="login-error" id="loginError" role="alert"></div>
+  <form id="loginForm">
+    <div class="field"><label for="username">Username</label><input id="username" name="username" autocomplete="username" required placeholder="hello@appointhive.com"></div>
+    <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required></div>
+    <button class="primary" id="loginBtn" type="submit">Sign in</button>
+  </form>
+</section>
+
 <div id="app" class="hidden">
-<section class="searchbox"><div class="sectionhead"><h2>Find businesses</h2><span>Example: Australia · Sydney · barbers</span></div><form id="searchForm"><div class="fields"><div class="field"><label for="country">Country</label><select id="country" required><option value="">Loading countries…</option></select></div><div class="field"><label for="city">City</label><select id="city" required disabled><option value="">Select a country first</option></select></div><div class="field"><label for="category">Business type / search text</label><input id="category" required placeholder="e.g. barbers" value="barbers"></div><div class="field"><label for="maxResults">Max results</label><select id="maxResults"><option>20</option><option>40</option><option selected>60</option></select></div><button class="primary" id="searchBtn" type="submit">Search Maps ↗</button></div></form><div class="hint">The counts and table follow the country and city selected above. Uses Google's official Places API. Up to 60 results per query. API billing and usage limits may apply.</div></section>
-<div class="message" id="message" role="status"></div>
-<section class="stats"><div class="stat"><span>Businesses shown</span><strong id="total">0</strong></div><div class="stat"><span>Not contacted</span><strong id="uncontacted">0</strong></div><div class="stat"><span>Contacted</span><strong id="contacted">0</strong></div><div class="stat"><span>Lost</span><strong id="lost">0</strong></div></section>
-<section class="templates" id="templatesSection"><div class="sectionhead"><h2>Default templates</h2><span>Edit email, WhatsApp, and Instagram messages. Select one when you send.</span></div><div class="template-tabs"><button type="button" class="active" data-tpl-channel="email">Email</button><button type="button" data-tpl-channel="whatsapp">WhatsApp</button><button type="button" data-tpl-channel="instagram">Instagram</button></div><div class="template-layout"><div class="template-list" id="templateList"></div><div class="template-editor"><div class="field"><label for="tplName">Template name</label><input id="tplName"></div><div class="field" id="tplSubjectField"><label for="tplSubject">Email subject</label><input id="tplSubject"></div><div class="field"><label for="tplBody">Message</label><textarea id="tplBody"></textarea></div><p class="hint" style="margin-top:0">Placeholders: {{name}}, {{city}}, {{category}}</p><div class="row-actions"><button type="button" class="primary" id="saveTplBtn">Save template</button><button type="button" id="newTplBtn">New template</button><button type="button" id="setDefaultTplBtn">Set as default</button><button type="button" id="deleteTplBtn">Delete</button></div></div></div></section>
-<section class="toolbar"><input id="filterText" placeholder="Search name, address, phone, email…"><select id="statusFilter"><option value="all">All statuses</option><option value="uncontacted">Not contacted</option><option value="contacted">Contacted</option><option value="lost">Lost</option></select><button id="refreshBtn">Refresh</button><div class="spacer"></div><span class="pill" id="selectedCount">0 selected</span><button id="exportBtn">↓ Export selected</button></section>
-<section class="tablebox"><table><thead><tr><th class="checkcol"><input type="checkbox" id="selectAll" title="Select all visible" aria-label="Select all visible"></th><th aria-sort="ascending"><button type="button" class="sort active" data-sort="name">Business <span class="arrow">↑</span></button></th><th><button type="button" class="sort" data-sort="phone">Phone <span class="arrow">↕</span></button></th><th><button type="button" class="sort" data-sort="email">Email <span class="arrow">↕</span></button></th><th><button type="button" class="sort" data-sort="website">Website <span class="arrow">↕</span></button></th><th><button type="button" class="sort" data-sort="social">Social <span class="arrow">↕</span></button></th><th><button type="button" class="sort" data-sort="contact">Contact <span class="arrow">↕</span></button></th><th><button type="button" class="sort" data-sort="rating">Rating <span class="arrow">↕</span></button></th><th><button type="button" class="sort" data-sort="address">Address <span class="arrow">↕</span></button></th><th>Place ID</th><th><button type="button" class="sort" data-sort="details">Details <span class="arrow">↕</span></button></th><th><button type="button" class="sort" data-sort="pipeline">Pipeline <span class="arrow">↕</span></button></th></tr></thead><tbody id="rows"><tr><td colspan="12"><div class="empty">Search for a country, city and business type to load leads.</div></td></tr></tbody></table></section>
+  <section class="searchbox">
+    <div class="sectionhead"><h2>Find businesses</h2><span>Example: Australia · Sydney · barbers</span></div>
+    <form id="searchForm">
+      <div class="fields">
+        <div class="field"><label for="country">Country</label><select id="country" required><option value="">Loading…</option></select></div>
+        <div class="field"><label for="city">City</label><select id="city" required disabled><option value="">Select a country first</option></select></div>
+        <div class="field"><label for="category">Business type</label><input id="category" required placeholder="e.g. barbers" value="barbers"></div>
+        <div class="field"><label for="maxResults">Max</label><select id="maxResults"><option>20</option><option>40</option><option selected>60</option></select></div>
+        <button class="primary" id="searchBtn" type="submit">Search Maps</button>
+      </div>
+    </form>
+    <div class="hint">Re-search keeps pipeline status and accumulates search labels instead of overwriting category.</div>
+  </section>
+
+  <div class="message" id="message" role="status"></div>
+
+  <section class="views">
+    <button type="button" class="active" data-view="city">City leads</button>
+    <button type="button" data-view="queue">Global queue</button>
+    <button type="button" data-view="due">Due / overdue</button>
+  </section>
+  <p class="view-hint" id="viewHint">Showing leads for the selected country/city. Stats below match this city scope (except Global queue).</p>
+
+  <section class="stats" id="stats">
+    <button type="button" class="stat" data-status="all"><span id="statTotalLabel">City shown</span><strong id="statTotal">0</strong></button>
+    <button type="button" class="stat" data-status="queue"><span>City to contact</span><strong id="statQueue">0</strong></button>
+    <button type="button" class="stat" data-status="due"><span>Due (scope)</span><strong id="statDue">0</strong></button>
+    <button type="button" class="stat" data-status="uncontacted"><span>Not contacted</span><strong id="statUncontacted">0</strong></button>
+    <button type="button" class="stat" data-status="contacted"><span>Contacted</span><strong id="statContacted">0</strong></button>
+    <button type="button" class="stat" data-status="marked"><span>Marked</span><strong id="statMarked">0</strong></button>
+    <button type="button" class="stat" data-status="lost"><span>Lost</span><strong id="statLost">0</strong></button>
+    <button type="button" class="stat" data-view-jump="queue"><span>All cities · queue</span><strong id="statGlobal">0</strong></button>
+  </section>
+
+  <section class="templates collapsed" id="templatesSection">
+    <div class="sectionhead" id="templatesToggle"><h2>Message templates</h2><span id="templatesToggleLabel">Click to expand · saved on server</span></div>
+    <div class="template-body">
+      <div class="template-tabs">
+        <button type="button" class="active" data-tpl-channel="email">Email</button>
+        <button type="button" data-tpl-channel="whatsapp">WhatsApp</button>
+        <button type="button" data-tpl-channel="instagram">Instagram</button>
+      </div>
+      <div class="template-layout">
+        <div class="template-list" id="templateList"></div>
+        <div class="template-editor">
+          <div class="field"><label for="tplName">Template name</label><input id="tplName"></div>
+          <div class="field" id="tplSubjectField"><label for="tplSubject">Email subject</label><input id="tplSubject"></div>
+          <div class="field"><label for="tplBody">Message</label><textarea id="tplBody"></textarea></div>
+          <p class="hint" style="margin-top:0">Placeholders: {{name}}, {{city}}, {{category}}, {{phone}}, {{website}}</p>
+          <div class="row-actions">
+            <button type="button" class="primary" id="saveTplBtn">Save</button>
+            <button type="button" id="newTplBtn">New</button>
+            <button type="button" id="setDefaultTplBtn">Set default</button>
+            <button type="button" class="danger" id="deleteTplBtn">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="toolbar">
+    <input id="filterText" placeholder="Search name, phone, email, notes…">
+    <select id="statusFilter">
+      <option value="all">All statuses</option>
+      <option value="queue">Marked · not contacted</option>
+      <option value="marked">Marked</option>
+      <option value="uncontacted">Not contacted</option>
+      <option value="contacted">Contacted</option>
+      <option value="due">Due today / overdue</option>
+      <option value="overdue">Overdue only</option>
+      <option value="lost">Lost</option>
+      <option value="archived">Archived</option>
+    </select>
+    <select id="categoryFilter"><option value="">All categories / labels</option></select>
+    <select id="contactFilter">
+      <option value="any">Any contact</option>
+      <option value="any_channel">Has email / phone / IG</option>
+      <option value="email">Has email</option>
+      <option value="phone">Has phone</option>
+      <option value="instagram">Has Instagram</option>
+      <option value="email_unsent">Email · not sent yet</option>
+      <option value="whatsapp_unsent">WhatsApp · not sent yet</option>
+      <option value="instagram_unsent">Instagram · not sent yet</option>
+    </select>
+    <button type="button" id="refreshBtn">Refresh</button>
+    <button type="button" id="enrichBtn" title="Find email & social from websites">Enrich contacts</button>
+    <div class="spacer"></div>
+    <label class="pill" style="cursor:pointer">Import CSV<input type="file" id="importFile" accept=".csv,text/csv" hidden></label>
+    <button type="button" id="exportBtn">Export filtered</button>
+  </section>
+
+  <div class="bulkbar" id="bulkBar">
+    <span id="selectedCount">0 selected</span>
+    <button type="button" id="bulkMark">Mark</button>
+    <button type="button" id="bulkUnmark">Unmark</button>
+    <button type="button" id="bulkContacted">Mark contacted</button>
+    <button type="button" id="bulkLost">Mark lost</button>
+    <select id="bulkSnooze" title="Follow-up snooze">
+      <option value="1">Follow up tomorrow</option>
+      <option value="3" selected>Follow up +3 days</option>
+      <option value="7">Follow up +7 days</option>
+    </select>
+    <button type="button" id="bulkFollowUp">Apply follow-up</button>
+    <button type="button" id="bulkArchive">Archive</button>
+    <button type="button" id="bulkUnarchive">Unarchive</button>
+    <button type="button" class="ghost" id="clearSelection">Clear</button>
+  </div>
+
+  <section class="leads" id="leads">
+    <div class="lead" style="background:var(--panel2);cursor:default;font-size:12px;color:var(--muted);font-weight:650">
+      <div><input type="checkbox" id="selectAll" title="Select all" aria-label="Select all"></div>
+      <div></div>
+      <div>Business</div>
+      <div>Reach</div>
+      <div style="text-align:right">Status</div>
+      <div style="text-align:right">Actions</div>
+    </div>
+    <div id="rows"><div class="empty">Search for a country, city and business type to load leads.</div></div>
+  </section>
+
+  <div class="footer">
+    <span>Business information is sourced from Google Places. Email and social links are best-effort from public websites.</span>
+    <span>Compose opens Zoho Mail, WhatsApp Web, and Instagram Web; confirm sent after you actually send.</span>
+  </div>
+</div>
+</div>
+
 <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
-<div class="footer"><span>Business information is sourced from Google Places. Email addresses and social links are best-effort details found on a business's public website. Google Places does not provide email.</span><span>Contact actions open your email, WhatsApp, or Instagram so you can send from your own accounts.</span></div>
+
+<div class="modal-backdrop hidden" id="composeModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <h3 id="composeTitle">Send message</h3>
+    <p class="sub" id="composeLead"></p>
+    <div class="compose-contact"><span class="label" id="composeContactLabel">To</span><div class="value" id="composeContactValue"></div></div>
+    <div class="field"><label for="composeChannel">Channel</label><select id="composeChannel"></select></div>
+    <div class="field"><label for="composeTemplate">Template</label><select id="composeTemplate"></select></div>
+    <div class="field" id="composeSubjectField"><label for="composeSubject">Subject</label><input id="composeSubject"></div>
+    <div class="field"><label for="composeBody">Message</label><textarea id="composeBody"></textarea></div>
+    <div id="igCopyBox" class="ig-copy hidden"></div>
+    <div class="field"><label for="composeOutcome">Outcome (on confirm)</label>
+      <select id="composeOutcome">
+        <option value="">—</option>
+        <option value="interested">interested</option>
+        <option value="not_now">not now</option>
+        <option value="booked">booked</option>
+        <option value="no_reply">no reply</option>
+        <option value="wrong_contact">wrong contact</option>
+        <option value="other">other</option>
+      </select>
+    </div>
+    <div class="field"><label for="composeNotes">Notes (on confirm)</label><textarea id="composeNotes" rows="2" placeholder="Optional note after sending…"></textarea></div>
+    <div class="field"><label for="composeFollowUp">Follow up on</label><input id="composeFollowUp" type="date">
+      <div class="snooze">
+        <button type="button" data-snooze="1">Tomorrow</button>
+        <button type="button" data-snooze="3">+3 days</button>
+        <button type="button" data-snooze="7">+7 days</button>
+        <button type="button" data-snooze="clear">Clear</button>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="primary" id="openComposeBtn">Open Zoho Mail</button>
+      <button type="button" id="confirmSentBtn">Confirm sent</button>
+      <button type="button" id="confirmNextBtn" title="Confirm sent and open next lead (N)">Confirm + next</button>
+      <button type="button" id="skipNextBtn" title="Skip without confirming (S)">Skip → next</button>
+      <div class="spacer"></div>
+      <button type="button" id="closeComposeBtn">Close</button>
+    </div>
+    <p class="channel-note" id="composeNote">Opens Zoho Mail, WhatsApp Web, or Instagram Web in a new tab. Set follow-up only if you want one (default empty). <strong>N</strong> = confirm + next · <strong>S</strong> = skip without marking sent.</p>
+  </div>
 </div>
-<div class="modal-backdrop hidden" id="composeModal" role="dialog" aria-modal="true" aria-labelledby="composeTitle"><div class="modal"><h3 id="composeTitle">Send message</h3><p class="sub" id="composeLead"></p><div class="compose-contact" id="composeContact"><span class="label" id="composeContactLabel">To</span><div class="value" id="composeContactValue"></div></div><div class="field"><label for="composeChannel">Channel</label><select id="composeChannel"></select></div><div class="field"><label for="composeTemplate">Template</label><select id="composeTemplate"></select></div><div class="field" id="composeSubjectField"><label for="composeSubject">Subject</label><input id="composeSubject"></div><div class="field"><label for="composeBody">Message</label><textarea id="composeBody"></textarea></div><div class="modal-actions"><button type="button" class="primary" id="sendComposeBtn">Send message</button><div class="spacer"></div><button type="button" id="closeComposeBtn">Close</button></div><p class="channel-note" id="composeNote">Email and WhatsApp open with your message ready. Instagram opens the profile and copies the message so you can paste it.</p></div></div>
+
+<div class="drawer-backdrop hidden" id="drawer" role="dialog" aria-modal="true">
+  <aside class="drawer" id="drawerPanel">
+    <div class="sectionhead">
+      <div>
+        <h3 id="drawerTitle">Lead</h3>
+        <p class="sub" id="drawerSub"></p>
+      </div>
+      <button type="button" id="closeDrawerBtn">Close</button>
+    </div>
+    <div id="drawerBody"></div>
+  </aside>
 </div>
+
 <script>
-const $=id=>document.getElementById(id);let current=[];let rowsData=[];let searchScope={country:'',city:'',category:''};let locations={};let sortState={key:'name',dir:'asc'};let composeLead=null;let composePreferred='email';let activeTplChannel='email';let selectedTplId=null;let templatesStore=null;let selectedIds=new Set();
+const $=id=>document.getElementById(id);
 const CHANNELS=['email','whatsapp','instagram'];
-const DEFAULT_TEMPLATES={
-  email:[{id:'email-default',name:'Default email',subject:'Quick idea for {{name}}',body:'Hi {{name}},\n\nI came across your business in {{city}} and thought you might find AppointHive useful for bookings and client outreach.\n\nWould you be open to a quick chat?\n\nThanks!',isDefault:true}],
-  whatsapp:[{id:'whatsapp-default',name:'Default WhatsApp',subject:'',body:'Hi {{name}}! I saw your {{category}} business in {{city}}. Would you be open to a quick WhatsApp chat about AppointHive for bookings?',isDefault:true}],
-  instagram:[{id:'instagram-default',name:'Default Instagram',subject:'',body:'Hi {{name}} — loved your page. I help {{category}} businesses in {{city}} with AppointHive bookings. Mind if I share a quick idea?',isDefault:true}]
-};
+let rowsData=[];
+let locations={};
+let selectedIds=new Set();
+let composeLead=null;
+let composePreferred='email';
+let drawerLead=null;
+let activeTplChannel='email';
+let selectedTplId=null;
+let templatesStore=null;
+let viewMode='city'; // city | queue | due
+let openedChannel=null;
+let enriching=false;
+let lastUndo=null; // {type:'unarchive'|'restore', id, snapshot?}
+
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function uid(prefix){return prefix+'-'+Math.random().toString(36).slice(2,9)}
-function cloneDefaults(){return JSON.parse(JSON.stringify(DEFAULT_TEMPLATES))}
-function normalizeStore(raw){const store=cloneDefaults();CHANNELS.forEach(ch=>{const list=Array.isArray(raw?.[ch])?raw[ch]:[];if(!list.length)return;store[ch]=list.map((t,i)=>({id:t.id||uid(ch),name:t.name||`Template ${i+1}`,subject:t.subject||'',body:t.body||'',isDefault:!!t.isDefault}));if(!store[ch].some(t=>t.isDefault))store[ch][0].isDefault=true});return store}
-function channelLabel(ch){return ch==='email'?'Email':ch==='whatsapp'?'WhatsApp':ch==='instagram'?'Instagram':ch}
-function migrateLegacyTemplate(store){try{const legacy=localStorage.getItem('mlf_message_template');if(!legacy)return store;const parsed=JSON.parse(legacy);if(!parsed||(!parsed.subject&&!parsed.body))return store;if(store.email.length===1&&store.email[0].id==='email-default'){store.email[0].subject=parsed.subject||store.email[0].subject;store.email[0].body=parsed.body||store.email[0].body}localStorage.removeItem('mlf_message_template')}catch(e){}return store}
-function loadTemplates(){if(templatesStore)return templatesStore;try{const raw=localStorage.getItem('mlf_channel_templates');templatesStore=migrateLegacyTemplate(normalizeStore(raw?JSON.parse(raw):null))}catch(e){templatesStore=cloneDefaults()}return templatesStore}
-function persistTemplates(){localStorage.setItem('mlf_channel_templates',JSON.stringify(loadTemplates()))}
-function templatesFor(channel){return loadTemplates()[channel]||[]}
-function defaultTemplate(channel){const list=templatesFor(channel);return list.find(t=>t.isDefault)||list[0]||null}
-function getTemplate(channel,id){return templatesFor(channel).find(t=>t.id===id)||defaultTemplate(channel)}
-function fillTemplate(text,b){return String(text||'').split('{{name}}').join(b.name||'there').split('{{city}}').join(b.city||'').split('{{category}}').join(b.category||'')}
-function renderTemplateList(){const list=$('templateList');const items=templatesFor(activeTplChannel);if(!selectedTplId||!items.some(t=>t.id===selectedTplId))selectedTplId=(defaultTemplate(activeTplChannel)||items[0]||{}).id;list.innerHTML=items.map(t=>`<button type="button" class="${t.id===selectedTplId?'active':''}" data-tpl-id="${esc(t.id)}"><strong>${esc(t.name)}</strong><span class="meta">${t.isDefault?'Default · ':''}${channelLabel(activeTplChannel)}</span></button>`).join('')||'<span class="sub">No templates yet</span>';$('tplSubjectField').classList.toggle('hidden',activeTplChannel!=='email');const t=getTemplate(activeTplChannel,selectedTplId);if(!t){$('tplName').value='';$('tplSubject').value='';$('tplBody').value='';return}$('tplName').value=t.name;$('tplSubject').value=t.subject||'';$('tplBody').value=t.body||''}
-function setTplChannel(channel){activeTplChannel=channel;selectedTplId=null;document.querySelectorAll('[data-tpl-channel]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tplChannel===channel));renderTemplateList()}
-function saveCurrentTemplate(){const store=loadTemplates();const list=store[activeTplChannel];let t=list.find(x=>x.id===selectedTplId);if(!t){t={id:uid(activeTplChannel),name:'New template',subject:'',body:'',isDefault:!list.length};list.push(t);selectedTplId=t.id}t.name=$('tplName').value.trim()||t.name;t.subject=activeTplChannel==='email'?($('tplSubject').value.trim()):'';t.body=$('tplBody').value;persistTemplates();renderTemplateList();toast(`${channelLabel(activeTplChannel)} template saved.`)}
-function newTemplate(){const store=loadTemplates();const t={id:uid(activeTplChannel),name:`New ${channelLabel(activeTplChannel)} template`,subject:activeTplChannel==='email'?'Quick idea for {{name}}':'',body:'Hi {{name}},\n\n',isDefault:false};store[activeTplChannel].push(t);selectedTplId=t.id;persistTemplates();renderTemplateList();$('tplName').focus();toast('New template created.')}
-function setDefaultTemplate(){if(!selectedTplId){toast('Select a template first.',true);return}const store=loadTemplates();store[activeTplChannel].forEach(t=>t.isDefault=t.id===selectedTplId);persistTemplates();renderTemplateList();toast(`Default ${channelLabel(activeTplChannel)} template updated.`)}
-function deleteTemplate(){const store=loadTemplates();const list=store[activeTplChannel];if(list.length<=1){toast('Keep at least one template per channel.',true);return}store[activeTplChannel]=list.filter(t=>t.id!==selectedTplId);if(!store[activeTplChannel].some(t=>t.isDefault))store[activeTplChannel][0].isDefault=true;selectedTplId=null;persistTemplates();renderTemplateList();toast('Template deleted.')}
-document.querySelectorAll('[data-tpl-channel]').forEach(btn=>btn.addEventListener('click',()=>setTplChannel(btn.dataset.tplChannel)));
-$('templateList').addEventListener('click',e=>{const btn=e.target.closest('[data-tpl-id]');if(!btn)return;selectedTplId=btn.dataset.tplId;renderTemplateList()});
-$('saveTplBtn').addEventListener('click',saveCurrentTemplate);
-$('newTplBtn').addEventListener('click',newTemplate);
-$('setDefaultTplBtn').addEventListener('click',setDefaultTemplate);
-$('deleteTplBtn').addEventListener('click',deleteTemplate);
-function dateFmt(s){if(!s)return 'Date unavailable';let d=new Date(s);return isNaN(d)?s:d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'})}
-function link(url,label){if(!url)return '';return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="${esc(label)}">${label}</a>`}
+function toast(text,error=false,action){
+  const wrap=$('toastWrap');
+  const el=document.createElement('div');
+  el.className='toast '+(error?'error':'ok');
+  const msg=document.createElement('span');msg.className='toast-msg';msg.textContent=text;el.appendChild(msg);
+  if(action&&action.label&&action.onClick){
+    const btn=document.createElement('button');btn.type='button';btn.textContent=action.label;
+    btn.addEventListener('click',async()=>{btn.disabled=true;try{await action.onClick();el.remove()}catch(e){toast(e.message,true)}});
+    el.appendChild(btn);
+  }
+  wrap.appendChild(el);
+  setTimeout(()=>{if(el.isConnected)el.remove()},action?8000:3200);
+}
 function showMessage(text,error=false){$('message').textContent=text;$('message').className='message show'+(error?' error':'');toast(text,error)}
-function toast(text,error=false){const wrap=$('toastWrap');if(!wrap)return;const el=document.createElement('div');el.className='toast '+(error?'error':'ok');el.textContent=text;wrap.appendChild(el);setTimeout(()=>{el.classList.add('hide');setTimeout(()=>el.remove(),280)},2800)}
-function updateSelectedCount(){const n=selectedIds.size;$('selectedCount').textContent=n+' selected';$('exportBtn').disabled=n===0;$('exportBtn').textContent=n?'↓ Export selected ('+n+')':'↓ Export selected'}
-function syncSelectAll(){const boxes=[...document.querySelectorAll('input[data-select]')];const all=boxes.length&&boxes.every(b=>b.checked);const some=boxes.some(b=>b.checked);$('selectAll').checked=all;$('selectAll').indeterminate=!all&&some}
-function mapsPlaceUrl(placeId){const id=String(placeId||'').replace(/^places\//,'');return id?`https://www.google.com/maps/search/?api=1&query_place_id=${encodeURIComponent(id)}`:''}
-function placeIdLabel(placeId){return String(placeId||'').replace(/^places\//,'')}
-function placeIdCell(b){const raw=b.place_id||'';const id=placeIdLabel(raw);if(!id)return '<span class="sub">No place ID</span>';const maps=mapsPlaceUrl(raw);return `<div class="placeid"><code title="${esc(id)}">${esc(id)}</code><div class="row"><button type="button" data-copy-place="${esc(id)}">Copy</button>${maps?`<a href="${esc(maps)}" target="_blank" rel="noopener noreferrer">Open in Maps</a>`:''}</div></div>`}
-function updateStats(list){$('total').textContent=list.length;$('uncontacted').textContent=list.filter(x=>!x.contacted&&!x.lost).length;$('contacted').textContent=list.filter(x=>x.contacted&&!x.lost).length;$('lost').textContent=list.filter(x=>x.lost).length}
-function siteLabel(url){try{return new URL(url).hostname.replace(/^www\./,'')}catch(e){return url}}
-function firstEmail(b){return String(b.email||'').split(',').map(e=>e.trim()).filter(Boolean)[0]||''}
-function phoneDigits(b){const raw=b.international_phone||b.phone||'';return String(raw).replace(/\D/g,'')}
-function contactChannels(b){const s=b.social_links||{};return{email:!!firstEmail(b),whatsapp:phoneDigits(b).length>=8,instagram:!!s.instagram}}
-function contactCount(b){const c=contactChannels(b);return CHANNELS.reduce((n,ch)=>n+(c[ch]?1:0),0)}
+function updateViewHint(){
+  if(viewMode==='queue'){$('viewHint').textContent='Global queue: marked · not contacted across all cities.';$('statTotalLabel').textContent='Shown'}
+  else if(viewMode==='due'){$('viewHint').textContent='Due / overdue follow-ups across all cities.';$('statTotalLabel').textContent='Shown'}
+  else{$('viewHint').textContent='City leads for the selected country/city. “All cities · queue” is always global.';$('statTotalLabel').textContent='City shown'}
+}
 function apiError(detail,fallback){if(typeof detail==='string'&&detail)return detail;if(Array.isArray(detail))return detail.map(x=>x&&(x.msg||x.message||JSON.stringify(x))).filter(Boolean).join('; ')||fallback;if(detail&&typeof detail==='object')return detail.msg||detail.message||fallback;return fallback}
 function fallbackStatus(code){return code===401?'Authentication required':code===403?'Forbidden':'Request failed ('+code+')'}
 async function api(url,options={}){const opts={credentials:'same-origin',...options};if(opts.body&&typeof opts.body==='object'&&!(opts.body instanceof FormData)){opts.headers={'Content-Type':'application/json',...(opts.headers||{})};opts.body=JSON.stringify(opts.body)}const r=await fetch(url,opts);const text=await r.text();let data=null;try{data=text?JSON.parse(text):null}catch(e){data=null}if(!r.ok)throw Error(apiError(data&&data.detail,(typeof text==='string'&&text&&!data)?text:fallbackStatus(r.status)));return data}
-function sortValue(b,key){const links=b.social_links||{};if(key==='name')return b.name||'';if(key==='phone')return b.phone||'';if(key==='email')return firstEmail(b);if(key==='website')return b.website||'';if(key==='social')return Object.values(links).filter(Boolean).length;if(key==='contact')return contactCount(b);if(key==='rating')return b.rating;if(key==='address')return b.address||'';if(key==='details')return b.primary_type||b.business_status||b.editorial_summary||'';if(key==='pipeline')return b.lost?2:b.contacted?1:0;return ''}
-function detailsCell(b){const parts=[];if(b.primary_type)parts.push(`<div><span class="sub">Type</span> ${esc(b.primary_type)}</div>`);if(b.business_status)parts.push(`<div><span class="sub">Status</span> ${esc(b.business_status)}</div>`);if(b.editorial_summary)parts.push(`<div class="review">${esc(b.editorial_summary)}</div>`);if(!b.primary_type&&!b.business_status&&!b.editorial_summary)parts.push('<div class="sub">Type / status not loaded yet — run Search again to refresh Places details</div>');if(b.updated_at)parts.push(`<div class="sub">Updated · ${esc(dateFmt(b.updated_at))}</div>`);const missing=[];if(!b.phone&&!b.international_phone)missing.push('phone');if(!firstEmail(b))missing.push('email');if(!b.website)missing.push('website');if(!(b.social_links&&Object.keys(b.social_links).length))missing.push('social');if(missing.length)parts.push(`<div class="sub">Missing · ${esc(missing.join(', '))}</div>`);return parts.join('')}
-function sortedRows(){const mul=sortState.dir==='desc'?-1:1;return rowsData.slice().sort((a,b)=>{const av=sortValue(a,sortState.key),bv=sortValue(b,sortState.key);const aEmpty=av==null||av==='',bEmpty=bv==null||bv==='';if(aEmpty&&bEmpty)return String(a.name||'').localeCompare(String(b.name||''));if(aEmpty)return 1;if(bEmpty)return -1;const cmp=typeof av==='number'&&typeof bv==='number'?av-bv:String(av).localeCompare(String(bv),undefined,{numeric:true,sensitivity:'base'});return cmp*mul||String(a.name||'').localeCompare(String(b.name||''))})}
-function markSort(){document.querySelectorAll('button.sort').forEach(btn=>{const on=btn.dataset.sort===sortState.key;btn.classList.toggle('active',on);btn.closest('th').setAttribute('aria-sort',on?(sortState.dir==='asc'?'ascending':'descending'):'none');const arrow=btn.querySelector('.arrow');if(arrow)arrow.textContent=on?(sortState.dir==='asc'?'↑':'↓'):'↕'})}
-function contactButtons(b){const c=contactChannels(b);const parts=[];if(c.email)parts.push(`<button type="button" data-compose="${b.id}" data-channel="email">Email</button>`);if(c.whatsapp)parts.push(`<button type="button" data-compose="${b.id}" data-channel="whatsapp">WhatsApp</button>`);if(c.instagram)parts.push(`<button type="button" data-compose="${b.id}" data-channel="instagram">Instagram</button>`);return parts.length?`<div class="contact-actions">${parts.join('')}</div>`:'<span class="contact-actions"><span class="none">No email / WhatsApp / Instagram</span></span>'}
-function render(list){rowsData=list;paint()}
-function paint(){const list=sortedRows();current=list;updateStats(list);markSort();const body=$('rows');if(!list.length){const waiting=!$('country').value.trim()||!$('city').value.trim();body.innerHTML=`<tr><td colspan="12"><div class="empty">${waiting?'Select a country and city to see leads for that place.':'No leads saved for this country and city yet.'}</div></td></tr>`;$('selectAll').checked=false;$('selectAll').indeterminate=false;updateSelectedCount();return}body.innerHTML=list.map(b=>{let s=b.social_links||{};let social=[['instagram','Instagram'],['facebook','Facebook'],['tiktok','TikTok'],['linkedin','LinkedIn'],['youtube','YouTube'],['x','X']].filter(([k])=>s[k]).map(([k,t])=>`<div>${link(s[k],t)}</div>`).join('');let phone=b.phone?`<div>${esc(b.phone)}</div>`:'<div class="sub">No phone listed</div>';if(b.international_phone&&b.international_phone!==b.phone)phone+=`<div class="sub">${esc(b.international_phone)}</div>`;let website=b.website?`<div class="site">${link(b.website,siteLabel(b.website))}</div>`:'<div class="sub">No website listed</div>';let emails=String(b.email||'').split(',').map(e=>e.trim()).filter(Boolean);let email=emails.length?emails.map(e=>`<div class="email"><a href="mailto:${esc(e)}">${esc(e)}</a></div>`).join(''):'<div class="sub">No email listed</div>';let address=b.address?`<div>${esc(b.address)}</div>${link(b.google_maps_url,'Open in Maps')}`:(b.google_maps_url?link(b.google_maps_url,'Open in Maps'):'<div class="sub">No address listed</div>');const checked=selectedIds.has(String(b.id))?'checked':'';return `<tr><td class="checkcol"><input type="checkbox" data-select="${b.id}" ${checked} aria-label="Select ${esc(b.name)}"></td><td><div class="biz">${esc(b.name)}</div><div class="sub">${esc(b.category)} · ${esc(b.city)}, ${esc(b.country)}</div></td><td>${phone}</td><td>${email}</td><td>${website}</td><td><div class="social-list">${social||'<span class="sub">No social links found</span>'}</div></td><td>${contactButtons(b)}</td><td>${b.rating!=null?`<div class="rating">★ ${esc(b.rating)}</div>`:'—'}<div class="sub"><span class="count">${b.reviews_count??'—'} reviews</span></div></td><td>${address}</td><td>${placeIdCell(b)}</td><td>${detailsCell(b)}</td><td><label class="flag"><input type="checkbox" data-id="${b.id}" data-field="email_sent" ${b.email_sent?'checked':''}> Email sent</label><label class="flag" style="margin-top:7px"><input type="checkbox" data-id="${b.id}" data-field="whatsapp_sent" ${b.whatsapp_sent?'checked':''}> WhatsApp sent</label><label class="flag" style="margin-top:7px"><input type="checkbox" data-id="${b.id}" data-field="instagram_sent" ${b.instagram_sent?'checked':''}> Instagram sent</label><label class="flag" style="margin-top:10px"><input type="checkbox" data-id="${b.id}" data-field="contacted" ${b.contacted?'checked':''}> Contacted</label><label class="flag ${b.lost?'statuslost':''}" style="margin-top:7px"><input type="checkbox" data-id="${b.id}" data-field="lost" ${b.lost?'checked':''}> Lost</label><textarea data-notes="${b.id}" placeholder="Notes…" style="display:block;margin-top:8px;width:150px;min-height:44px;background:#0d1527;color:#dfe7f7;border:1px solid #293650;border-radius:7px;padding:7px;font:11px inherit">${esc(b.notes||'')}</textarea><button data-save="${b.id}" style="padding:5px 8px;font-size:11px;margin-top:5px">Save notes</button></td></tr>`}).join('');syncSelectAll();updateSelectedCount()}
-function queryParams(){const params=new URLSearchParams({q:$('filterText').value.trim(),status:$('statusFilter').value});const country=$('country').value.trim(),city=$('city').value.trim();if(country)params.set('country',country);if(city)params.set('city',city);return params}
-async function load(){const country=$('country').value.trim(),city=$('city').value.trim();if(!country||!city){render([]);return}try{const data=await api('/api/businesses?'+queryParams());render(data.results)}catch(e){showMessage('Could not load leads: '+e.message,true)}}
-function fillCities(country){const city=$('city');const cities=locations[country]||[];if(!country){city.innerHTML='<option value="">Select a country first</option>';city.disabled=true;return}if(!cities.length){city.innerHTML='<option value="">No cities listed</option>';city.disabled=true;return}city.innerHTML='<option value="">Select city</option>'+cities.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');city.disabled=false;if(country==='Australia'&&cities.includes('Sydney'))city.value='Sydney'}
-async function loadLocations(){try{const data=await api('/api/locations');locations=data.countries||{};const names=Object.keys(locations).sort((a,b)=>a.localeCompare(b));const options=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');$('country').innerHTML=options;$('country').value=names.includes('Australia')?'Australia':(names[0]||'');fillCities($('country').value);await load()}catch(e){showMessage(e.message,true)}}
-$('country').addEventListener('change',()=>{fillCities($('country').value);load()});
-$('city').addEventListener('change',load);
-document.querySelector('thead').addEventListener('click',e=>{const btn=e.target.closest('button.sort');if(!btn)return;const key=btn.dataset.sort;if(sortState.key===key)sortState.dir=sortState.dir==='asc'?'desc':'asc';else sortState={key,dir:['rating','social','contact'].includes(key)?'desc':'asc'};paint()});
+function channelLabel(ch){return ch==='email'?'Email':ch==='whatsapp'?'WhatsApp':ch==='instagram'?'Instagram':ch}
+function firstEmail(b){return String(b.email||'').split(',').map(e=>e.trim()).filter(Boolean)[0]||''}
+function phoneDigits(b){return String(b.international_phone||b.phone||'').replace(/\D/g,'')}
+function contactChannels(b){const s=b.social_links||{};return{email:!!firstEmail(b),whatsapp:phoneDigits(b).length>=8,instagram:!!s.instagram}}
+function siteLabel(url){try{return new URL(url).hostname.replace(/^www\./,'')}catch(e){return url}}
+function instagramHandle(url){
+  try{
+    const path=decodeURIComponent(new URL(url).pathname).replace(/^\/+|\/+$/g,'');
+    const part=(path.split('/').filter(Boolean)[0]||'').replace(/^@/,'');
+    if(!part||['p','reel','reels','stories','direct','explore','accounts'].includes(part.toLowerCase()))return '';
+    return part;
+  }catch(e){return ''}
+}
+function zohoComposeUrl(to,subject,body){
+  // Zoho Mail web composer (mailto handler style) — fills To, Subject, Body
+  const ct=`mailto:${to}?subject=${encodeURIComponent(subject||'')}&body=${encodeURIComponent(body||'')}`;
+  return `https://mail.zoho.com/mail/compose.do?extsrc=mailto&mode=compose&ct=${encodeURIComponent(ct)}`;
+}
+function whatsappWebUrl(phone,body){
+  return `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(body||'')}`;
+}
+function dateOnly(iso){if(!iso)return '';return String(iso).slice(0,10)}
+function plusDays(n){const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
+function isOverdue(b){if(!b.next_follow_up_at)return false;return dateOnly(b.next_follow_up_at)<localDay()}
+function isDue(b){if(!b.next_follow_up_at||b.lost||b.archived)return false;return dateOnly(b.next_follow_up_at)<=localDay()}
+function statusBadge(b){
+  if(b.archived)return '<span class="badge">Archived</span>';
+  if(b.lost)return '<span class="badge lost">Lost</span>';
+  if(isOverdue(b))return '<span class="badge overdue">Overdue</span>';
+  if(isDue(b))return '<span class="badge due">Due</span>';
+  if(b.marked_for_contact&&!b.contacted)return '<span class="badge queue">To contact</span>';
+  if(b.contacted)return '<span class="badge contacted">Contacted</span>';
+  if(b.marked_for_contact)return '<span class="badge queue">Marked</span>';
+  return '<span class="badge">New</span>';
+}
+function fillTemplate(text,b){return String(text||'')
+  .split('{{name}}').join(b.name||'there')
+  .split('{{city}}').join(b.city||'')
+  .split('{{category}}').join(b.category||'')
+  .split('{{phone}}').join(b.international_phone||b.phone||'')
+  .split('{{website}}').join(b.website||'')}
+
+function updateSelectedCount(){
+  const n=selectedIds.size;
+  $('selectedCount').textContent=n+' selected';
+  $('bulkBar').classList.toggle('show',n>0);
+  $('exportBtn').textContent=n?`Export selected (${n})`:'Export filtered';
+  const boxes=[...document.querySelectorAll('input[data-select]')];
+  const all=boxes.length&&boxes.every(b=>b.checked);
+  const some=boxes.some(b=>b.checked);
+  $('selectAll').checked=all;
+  $('selectAll').indeterminate=!all&&some;
+}
+
+function localDay(){
+  const d=new Date();
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function queryParams(){
+  const params=new URLSearchParams({
+    q:$('filterText').value.trim(),
+    status:$('statusFilter').value,
+    contact:$('contactFilter').value,
+    category:$('categoryFilter').value,
+    day:localDay(),
+  });
+  if(viewMode==='queue'){
+    params.set('scope','global');
+    params.set('status','queue');
+  }else if(viewMode==='due'){
+    params.set('scope','global');
+    if($('statusFilter').value!=='overdue')params.set('status','due');
+  }else{
+    params.set('scope','city');
+    const country=$('country').value.trim(),city=$('city').value.trim();
+    if(country)params.set('country',country);
+    if(city)params.set('city',city);
+  }
+  return params;
+}
+
+function statsParams(){
+  const params=new URLSearchParams({day:localDay()});
+  if(viewMode==='city'){
+    params.set('scope','city');
+    const country=$('country').value.trim(),city=$('city').value.trim();
+    if(country)params.set('country',country);
+    if(city)params.set('city',city);
+    if($('categoryFilter').value)params.set('category',$('categoryFilter').value);
+  }else{
+    params.set('scope','global');
+  }
+  return params;
+}
+
+async function loadCategories(){
+  try{
+    const params=new URLSearchParams();
+    if(viewMode==='city'){
+      params.set('scope','city');
+      const country=$('country').value.trim(),city=$('city').value.trim();
+      if(country)params.set('country',country);
+      if(city)params.set('city',city);
+    }else params.set('scope','global');
+    const data=await api('/api/categories?'+params);
+    const current=$('categoryFilter').value;
+    $('categoryFilter').innerHTML='<option value="">All categories</option>'+(data.categories||[]).map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    if(current&&(data.categories||[]).includes(current))$('categoryFilter').value=current;
+  }catch(e){}
+}
+
+async function loadStats(){
+  try{
+    const s=await api('/api/stats?'+statsParams());
+    $('statTotal').textContent=s.total??0;
+    $('statQueue').textContent=s.queue??0;
+    $('statDue').textContent=s.due??0;
+    $('statUncontacted').textContent=s.uncontacted??0;
+    $('statContacted').textContent=s.contacted??0;
+    $('statMarked').textContent=s.marked??0;
+    $('statLost').textContent=s.lost??0;
+    $('statGlobal').textContent=s.global_queue??0;
+  }catch(e){}
+}
+
+function reachCell(b){
+  const parts=[];
+  const phone=b.international_phone||b.phone;
+  if(phone)parts.push(`<span class="chip ok" title="${esc(phone)}">${esc(phone)}</span>`);
+  const email=firstEmail(b);
+  if(email)parts.push(`<span class="chip ok" title="${esc(email)}">${esc(email)}</span>`);
+  if(b.website)parts.push(`<a class="chip" href="${esc(b.website)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(siteLabel(b.website))}</a>`);
+  const ig=(b.social_links||{}).instagram;
+  if(ig)parts.push(`<a class="chip ok" href="${esc(ig)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Instagram</a>`);
+  return parts.length?`<div class="reach">${parts.join('')}</div>`:'<div class="sub">No contact details</div>';
+}
+
+function actionButtons(b){
+  const c=contactChannels(b);
+  const parts=[];
+  if(c.email)parts.push(`<button type="button" data-compose="${b.id}" data-channel="email">Email</button>`);
+  if(c.whatsapp)parts.push(`<button type="button" data-compose="${b.id}" data-channel="whatsapp">WA</button>`);
+  if(c.instagram)parts.push(`<button type="button" data-compose="${b.id}" data-channel="instagram">IG</button>`);
+  parts.push(`<button type="button" data-open="${b.id}">Details</button>`);
+  return `<div class="actions" onclick="event.stopPropagation()">${parts.join('')}</div>`;
+}
+
+function paint(){
+  const body=$('rows');
+  if(!rowsData.length){
+    const waiting=viewMode==='city'&&(!$('country').value.trim()||!$('city').value.trim());
+    body.innerHTML=`<div class="empty">${waiting?'Select a country and city to see leads.':'No leads match this view or filter.'}</div>`;
+    updateSelectedCount();
+    return;
+  }
+  body.innerHTML=rowsData.map(b=>{
+    const checked=selectedIds.has(String(b.id))?'checked':'';
+    const starred=b.marked_for_contact?'on':'';
+    const follow=b.next_follow_up_at?`<div class="sub">Follow up · ${esc(dateOnly(b.next_follow_up_at))}</div>`:'';
+    const labels=b.search_labels&&b.search_labels!==b.category?`<div class="sub">${esc(b.search_labels)}</div>`:'';
+    return `<div class="lead ${drawerLead&&drawerLead.id===b.id?'active':''}" data-row="${b.id}">
+      <div class="checkcol" onclick="event.stopPropagation()"><input type="checkbox" data-select="${b.id}" ${checked} aria-label="Select ${esc(b.name)}"></div>
+      <div onclick="event.stopPropagation()"><button type="button" class="starbtn ${starred}" data-mark="${b.id}" title="Mark for contact">${b.marked_for_contact?'★':'☆'}</button></div>
+      <div><div class="biz">${esc(b.name)}</div><div class="sub">${esc(b.category||'—')} · ${esc(b.city)}, ${esc(b.country)}</div>${labels}${follow}</div>
+      <div>${reachCell(b)}</div>
+      <div class="meta">${b.rating!=null?`<div class="rating">★ ${esc(b.rating)}</div>`:'<div class="sub">—</div>'}${statusBadge(b)}</div>
+      ${actionButtons(b)}
+    </div>`;
+  }).join('');
+  updateSelectedCount();
+}
+
+async function load(){
+  if(viewMode==='city'&&(!$('country').value.trim()||!$('city').value.trim())){
+    rowsData=[];paint();await loadStats();return;
+  }
+  try{
+    const data=await api('/api/businesses?'+queryParams());
+    rowsData=data.results||[];
+    paint();
+    await Promise.all([loadStats(),loadCategories()]);
+  }catch(e){showMessage('Could not load leads: '+e.message,true)}
+}
+
+function fillCities(country){
+  const city=$('city');
+  const cities=locations[country]||[];
+  if(!country){city.innerHTML='<option value="">Select a country first</option>';city.disabled=true;return}
+  if(!cities.length){city.innerHTML='<option value="">No cities listed</option>';city.disabled=true;return}
+  city.innerHTML='<option value="">Select city</option>'+cities.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  city.disabled=false;
+  if(country==='Australia'&&cities.includes('Sydney'))city.value='Sydney';
+}
+
+async function loadLocations(){
+  const data=await api('/api/locations');
+  locations=data.countries||{};
+  const names=Object.keys(locations).sort((a,b)=>a.localeCompare(b));
+  $('country').innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  $('country').value=names.includes('Australia')?'Australia':(names[0]||'');
+  fillCities($('country').value);
+  await load();
+}
+
+function setView(mode){
+  viewMode=mode;
+  document.querySelectorAll('[data-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.view===mode));
+  if(mode==='queue')$('statusFilter').value='queue';
+  if(mode==='due')$('statusFilter').value='due';
+  updateViewHint();
+  load();
+}
+
+async function enrichIds(ids,opts={}){
+  const list=[...new Set((ids||[]).map(Number).filter(Boolean))];
+  if(!list.length){toast('Nothing to enrich.');return}
+  if(enriching){toast('Enrich already running…');return}
+  enriching=true;
+  $('enrichBtn').disabled=true;
+  let enriched=0,failed=0;
+  const chunk=8;
+  try{
+    for(let i=0;i<list.length;i+=chunk){
+      const slice=list.slice(i,i+chunk);
+      $('enrichBtn').textContent=`Enriching ${Math.min(i+slice.length,list.length)}/${list.length}…`;
+      const data=await api('/api/businesses/enrich',{method:'POST',body:{ids:slice,force:!!opts.force,limit:slice.length}});
+      enriched+=data.enriched||0;failed+=data.failed||0;
+      for(const b of data.results||[]){
+        const idx=rowsData.findIndex(x=>String(x.id)===String(b.id));
+        if(idx>=0)rowsData[idx]=b;
+      }
+      paint();
+    }
+    toast(`Enrich done: ${enriched} updated${failed?`, ${failed} failed`:''}.`);
+    await loadStats();
+  }catch(e){toast(e.message,true)}
+  finally{enriching=false;$('enrichBtn').disabled=false;$('enrichBtn').textContent='Enrich contacts'}
+}
+
+function undoToast(message, undoFn){
+  lastUndo={run:undoFn};
+  toast(message,false,{label:'Undo',onClick:async()=>{await undoFn();await load();toast('Undone.')}});
+}
+
+async function patchLead(id,body){
+  const updated=await api('/api/businesses/'+id,{method:'PATCH',body});
+  const idx=rowsData.findIndex(x=>String(x.id)===String(id));
+  if(idx>=0)rowsData[idx]=updated;
+  if(drawerLead&&String(drawerLead.id)===String(id)){drawerLead=updated;renderDrawer()}
+  paint();
+  loadStats();
+  return updated;
+}
+
+async function toggleMark(id){
+  const row=rowsData.find(x=>String(x.id)===String(id));
+  if(!row)return;
+  try{
+    await patchLead(id,{marked_for_contact:!row.marked_for_contact});
+    toast(row.marked_for_contact?'Unmarked.':'Marked for contact.');
+  }catch(e){toast(e.message,true)}
+}
+
 function availableComposeChannels(b){const c=contactChannels(b);return CHANNELS.filter(ch=>c[ch])}
-function fillComposeTemplates(channel){const list=templatesFor(channel);const def=defaultTemplate(channel);$('composeTemplate').innerHTML=list.map(t=>`<option value="${esc(t.id)}" ${t.id===(def&&def.id)?'selected':''}>${esc(t.name)}${t.isDefault?' (default)':''}</option>`).join('');applyComposeTemplate()}
-function composeContactInfo(b,channel){const s=b.social_links||{};if(channel==='email'){const emails=String(b.email||'').split(',').map(e=>e.trim()).filter(Boolean);return{label:'Email',html:emails.length?emails.map(e=>`<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>'):'No email listed'}}if(channel==='whatsapp'){const display=b.international_phone||b.phone||'';const digits=phoneDigits(b);return{label:'WhatsApp / phone',html:display?`${esc(display)}${digits?`<div class="sub">+${esc(digits)}</div>`:''}`:'No phone listed'}}if(channel==='instagram'){const url=s.instagram||'';let handle='';try{handle=url?decodeURIComponent(new URL(url).pathname.replace(/^\/+|\/+$/g,'').split('/')[0]):''}catch(e){}return{label:'Instagram',html:url?`<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">${esc(handle?('@'+handle):url)}</a>`:'No Instagram listed'}}return{label:'Contact',html:'—'}}
-function updateComposeContact(){if(!composeLead)return;const channel=$('composeChannel').value;const info=composeContactInfo(composeLead,channel);$('composeContactLabel').textContent='Sending via '+channelLabel(channel);$('composeContactValue').innerHTML=info.html}
-function applyComposeTemplate(){if(!composeLead)return;const channel=$('composeChannel').value;const tpl=getTemplate(channel,$('composeTemplate').value);$('composeSubjectField').classList.toggle('hidden',channel!=='email');$('composeSubject').value=fillTemplate(tpl?.subject||'',composeLead);$('composeBody').value=fillTemplate(tpl?.body||'',composeLead);$('composeNote').textContent=channel==='email'?'Opens your email app with subject and message filled in.':channel==='whatsapp'?'Opens WhatsApp with this message ready to send.':'Copies the message and opens their Instagram profile so you can paste it.';$('sendComposeBtn').textContent='Send '+channelLabel(channel);updateComposeContact()}
-function openCompose(b,preferred){composeLead=b;const channels=availableComposeChannels(b);if(!channels.length){showMessage('No email, WhatsApp, or Instagram contact on this lead.',true);return}composePreferred=channels.includes(preferred)?preferred:channels[0];$('composeLead').textContent=`${b.name} · ${b.city}, ${b.country}`;$('composeChannel').innerHTML=channels.map(ch=>`<option value="${ch}" ${ch===composePreferred?'selected':''}>${channelLabel(ch)}</option>`).join('');fillComposeTemplates(composePreferred);updateComposeContact();$('composeModal').classList.remove('hidden');$('sendComposeBtn').focus()}
-function closeCompose(){$('composeModal').classList.add('hidden');composeLead=null}
-async function markChannelSent(id,channel){const field=channel==='email'?'email_sent':channel==='whatsapp'?'whatsapp_sent':channel==='instagram'?'instagram_sent':null;if(!field)return;try{await api('/api/businesses/'+id,{method:'PATCH',body:{[field]:true,contacted:true}});await load()}catch(e){}}
-async function launchChannel(channel){if(!composeLead)return;const b=composeLead;const subject=$('composeSubject').value.trim();const body=$('composeBody').value.trim();const s=b.social_links||{};let url='';if(channel==='email'){const to=firstEmail(b);if(!to){toast('No email on this lead.',true);return}url=`mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`}else if(channel==='whatsapp'){const phone=phoneDigits(b);if(!phone){toast('No phone on this lead.',true);return}url=`https://wa.me/${phone}?text=${encodeURIComponent(body)}`}else if(channel==='instagram'){if(!s.instagram){toast('No Instagram link on this lead.',true);return}try{await navigator.clipboard.writeText(body)}catch(e){}url=s.instagram}if(!url)return;window.open(url,'_blank','noopener,noreferrer');await markChannelSent(b.id,channel);closeCompose();if(channel==='instagram')toast('Message copied. Paste it in Instagram after the profile opens.');else toast(`Opened ${channelLabel(channel)} for ${b.name}. Marked as sent.`)}
-$('rows').addEventListener('click',async e=>{const copyBtn=e.target.closest('button[data-copy-place]');if(copyBtn){try{await navigator.clipboard.writeText(copyBtn.dataset.copyPlace);toast('Place ID copied — paste into Google Maps search.')}catch(err){toast('Could not copy Place ID.',true)}return}const btn=e.target.closest('button[data-compose]');if(!btn)return;const b=rowsData.find(x=>String(x.id)===String(btn.dataset.compose));if(b)openCompose(b,btn.dataset.channel)});
+
+function composeContactInfo(b,channel){
+  const s=b.social_links||{};
+  if(channel==='email'){const emails=String(b.email||'').split(',').map(e=>e.trim()).filter(Boolean);return{label:'Email',html:emails.length?emails.map(e=>`<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>'):'No email'}}
+  if(channel==='whatsapp'){const display=b.international_phone||b.phone||'';return{label:'WhatsApp',html:display?esc(display):'No phone'}}
+  if(channel==='instagram'){return{label:'Instagram',html:s.instagram?`<a href="${esc(s.instagram)}" target="_blank" rel="noopener noreferrer">Open profile</a>`:'No Instagram'}}
+  return{label:'Contact',html:'—'};
+}
+
+function templatesFor(channel){return (templatesStore&&templatesStore[channel])||[]}
+function defaultTemplate(channel){const list=templatesFor(channel);return list.find(t=>t.isDefault)||list[0]||null}
+function getTemplate(channel,id){return templatesFor(channel).find(t=>String(t.id)===String(id))||defaultTemplate(channel)}
+
+async function migrateLocalTemplates(){
+  try{
+    if(localStorage.getItem('mlf_templates_migrated'))return;
+    const raw=localStorage.getItem('mlf_channel_templates');
+    if(!raw){localStorage.setItem('mlf_templates_migrated','1');return}
+    const parsed=JSON.parse(raw);
+    let migrated=0;
+    for(const ch of CHANNELS){
+      const list=Array.isArray(parsed?.[ch])?parsed[ch]:[];
+      for(const t of list){
+        if(!t||!(t.body||t.subject))continue;
+        if(t.id&&String(t.id).endsWith('-default')&&list.length===1)continue;
+        await api('/api/templates',{method:'POST',body:{channel:ch,name:t.name||`Imported ${ch}`,subject:t.subject||'',body:t.body||'',is_default:!!t.isDefault}});
+        migrated++;
+      }
+    }
+    localStorage.setItem('mlf_templates_migrated','1');
+    if(migrated)toast(`Migrated ${migrated} local templates to server.`);
+  }catch(e){localStorage.setItem('mlf_templates_migrated','1')}
+}
+async function loadTemplates(){
+  await migrateLocalTemplates();
+  templatesStore=await api('/api/templates');
+  renderTemplateList();
+}
+
+function renderTemplateList(){
+  const list=$('templateList');
+  const items=templatesFor(activeTplChannel);
+  if(!selectedTplId||!items.some(t=>String(t.id)===String(selectedTplId)))selectedTplId=(defaultTemplate(activeTplChannel)||items[0]||{}).id;
+  list.innerHTML=items.map(t=>`<button type="button" class="${String(t.id)===String(selectedTplId)?'active':''}" data-tpl-id="${esc(t.id)}"><strong>${esc(t.name)}</strong><span class="meta">${t.isDefault?'Default · ':''}${channelLabel(activeTplChannel)}</span></button>`).join('')||'<span class="sub">No templates</span>';
+  $('tplSubjectField').classList.toggle('hidden',activeTplChannel!=='email');
+  const t=getTemplate(activeTplChannel,selectedTplId);
+  if(!t){$('tplName').value='';$('tplSubject').value='';$('tplBody').value='';return}
+  $('tplName').value=t.name;$('tplSubject').value=t.subject||'';$('tplBody').value=t.body||'';
+}
+
+function setTplChannel(channel){
+  activeTplChannel=channel;selectedTplId=null;
+  document.querySelectorAll('[data-tpl-channel]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tplChannel===channel));
+  renderTemplateList();
+}
+
+async function saveCurrentTemplate(){
+  const t=getTemplate(activeTplChannel,selectedTplId);
+  const body={channel:activeTplChannel,name:$('tplName').value.trim()||'Template',subject:$('tplSubject').value,body:$('tplBody').value,is_default:!!(t&&t.isDefault)};
+  if(t&&t.id){await api('/api/templates/'+t.id,{method:'PATCH',body});toast('Template saved.')}
+  else{const created=await api('/api/templates',{method:'POST',body});selectedTplId=created.id;toast('Template created.')}
+  await loadTemplates();
+}
+async function newTemplate(){
+  const created=await api('/api/templates',{method:'POST',body:{channel:activeTplChannel,name:`New ${channelLabel(activeTplChannel)}`,subject:activeTplChannel==='email'?'Quick idea for {{name}}':'',body:'Hi {{name}},\n\n',is_default:false}});
+  selectedTplId=created.id;await loadTemplates();$('tplName').focus();toast('New template created.');
+}
+async function setDefaultTemplate(){
+  if(!selectedTplId){toast('Select a template first.',true);return}
+  await api('/api/templates/'+selectedTplId+'/default',{method:'POST'});
+  await loadTemplates();toast('Default updated.');
+}
+async function deleteTemplate(){
+  if(!selectedTplId)return;
+  try{await api('/api/templates/'+selectedTplId,{method:'DELETE'});selectedTplId=null;await loadTemplates();toast('Template deleted.')}
+  catch(e){toast(e.message,true)}
+}
+
+function fillComposeTemplates(channel){
+  const list=templatesFor(channel);
+  const def=defaultTemplate(channel);
+  $('composeTemplate').innerHTML=list.map(t=>`<option value="${esc(t.id)}" ${String(t.id)===String(def&&def.id)?'selected':''}>${esc(t.name)}${t.isDefault?' (default)':''}</option>`).join('');
+  applyComposeTemplate();
+}
+function applyComposeTemplate(){
+  if(!composeLead)return;
+  const channel=$('composeChannel').value;
+  const tpl=getTemplate(channel,$('composeTemplate').value);
+  $('composeSubjectField').classList.toggle('hidden',channel!=='email');
+  $('composeSubject').value=fillTemplate(tpl?.subject||'',composeLead);
+  $('composeBody').value=fillTemplate(tpl?.body||'',composeLead);
+  const info=composeContactInfo(composeLead,channel);
+  $('composeContactLabel').textContent='Sending via '+channelLabel(channel);
+  $('composeContactValue').innerHTML=info.html;
+  $('composeNote').textContent=channel==='email'
+    ?'Opens mail.zoho.com compose with To, subject, and message filled in. You must be logged into Zoho Mail.'
+    :channel==='whatsapp'
+      ?'Opens WhatsApp Web with this chat and message ready. You must be logged into web.whatsapp.com.'
+      :'Copies the message and opens Instagram Web DM. Paste (⌘/Ctrl+V) into the compose box, then send.';
+  $('openComposeBtn').textContent=channel==='email'?'Open Zoho Mail':channel==='whatsapp'?'Open WhatsApp Web':'Open Instagram Web';
+}
+function openCompose(b,preferred){
+  composeLead=b;openedChannel=null;
+  const channels=availableComposeChannels(b);
+  if(!channels.length){showMessage('No email, WhatsApp, or Instagram on this lead. Edit contacts in Details or run Enrich.',true);return}
+  composePreferred=channels.includes(preferred)?preferred:channels[0];
+  $('composeLead').textContent=`${b.name} · ${b.city}, ${b.country}`;
+  $('composeChannel').innerHTML=channels.map(ch=>`<option value="${ch}" ${ch===composePreferred?'selected':''}>${channelLabel(ch)}</option>`).join('');
+  $('composeOutcome').value=b.outcome||'';
+  $('composeNotes').value='';
+  // Leave follow-up empty unless this lead already has one — avoids accidental +3 day schedules
+  $('composeFollowUp').value=dateOnly(b.next_follow_up_at)||'';
+  $('igCopyBox').classList.add('hidden');
+  fillComposeTemplates(composePreferred);
+  $('composeModal').classList.remove('hidden');
+}
+function closeCompose(){$('composeModal').classList.add('hidden');composeLead=null;openedChannel=null;$('igCopyBox').classList.add('hidden')}
+function nextWorkLead(afterId){
+  // Walk whatever is currently on screen: Due list, queue, or city filter results
+  let list=rowsData.filter(b=>!b.archived&&!b.lost);
+  if(viewMode==='queue'||$('statusFilter').value==='queue'){
+    list=list.filter(b=>b.marked_for_contact&&!b.contacted);
+  }else if(viewMode==='due'||$('statusFilter').value==='due'||$('statusFilter').value==='overdue'){
+    list=list.filter(b=>b.next_follow_up_at&&isDue(b));
+  }else if($('statusFilter').value==='marked'){
+    list=list.filter(b=>b.marked_for_contact);
+  }
+  // Prefer leads that still have a reachable channel
+  const withChannel=list.filter(b=>availableComposeChannels(b).length);
+  if(withChannel.length)list=withChannel;
+  if(!list.length)return null;
+  if(afterId==null)return list[0];
+  const idx=list.findIndex(b=>String(b.id)===String(afterId));
+  if(idx<0)return list[0];
+  return list[idx+1]||null; // stop at end (don't wrap) so Due workflow feels finished
+}
+function openNextLead(afterId){
+  const next=nextWorkLead(afterId);
+  if(!next){toast('No more leads in this view.');return false}
+  openCompose(next,availableComposeChannels(next)[0]||'email');
+  return true;
+}
+
+async function openChannelApp(){
+  if(!composeLead)return;
+  const channel=$('composeChannel').value;
+  const b=composeLead;
+  const subject=$('composeSubject').value.trim();
+  const body=$('composeBody').value.trim();
+  const s=b.social_links||{};
+  let url='';
+  let tip='';
+  if(channel==='email'){
+    const to=firstEmail(b);if(!to){toast('No email.',true);return}
+    url=zohoComposeUrl(to,subject,body);
+    tip='Opened Zoho Mail compose. Confirm sent when done.';
+  }else if(channel==='whatsapp'){
+    const phone=phoneDigits(b);if(!phone){toast('No phone.',true);return}
+    url=whatsappWebUrl(phone,body);
+    tip='Opened WhatsApp Web. Confirm sent when done.';
+  }else if(channel==='instagram'){
+    if(!s.instagram){toast('No Instagram.',true);return}
+    $('igCopyBox').textContent=body||'(empty message)';
+    $('igCopyBox').classList.remove('hidden');
+    try{
+      await navigator.clipboard.writeText(body);
+      tip='Message copied. Paste (⌘/Ctrl+V) into Instagram DM, then confirm sent.';
+    }catch(e){
+      tip='Clipboard blocked — copy from the box below, paste in Instagram DM.';
+      try{const range=document.createRange();range.selectNodeContents($('igCopyBox'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range)}catch(err){}
+    }
+    const handle=instagramHandle(s.instagram);
+    if(handle)url=`https://ig.me/m/${encodeURIComponent(handle)}`;
+    else url=s.instagram||'https://www.instagram.com/direct/inbox/';
+  }
+  if(!url)return;
+  window.open(url,'_blank','noopener,noreferrer');
+  openedChannel=channel;
+  toast(tip);
+}
+
+async function confirmSent(opts={}){
+  if(!composeLead)return;
+  const channel=openedChannel||$('composeChannel').value;
+  const currentId=composeLead.id;
+  try{
+    const body={channel};
+    const follow=$('composeFollowUp').value;
+    if(follow)body.next_follow_up_at=follow;
+    else body.next_follow_up_at=null;
+    const outcome=$('composeOutcome').value;
+    const notes=$('composeNotes').value.trim();
+    if(outcome)body.outcome=outcome;
+    if(notes)body.notes=notes;
+    const updated=await api('/api/businesses/'+composeLead.id+'/confirm-sent',{method:'POST',body});
+    closeCompose();
+    toast(`Confirmed ${channelLabel(channel)} sent for ${updated.name}.`);
+    // Always refresh current view so Global queue / Due lists drop completed leads
+    await load();
+    if(opts.next)openNextLead(currentId);
+  }catch(e){toast(e.message,true)}
+}
+
+async function openDrawer(id){
+  const b=rowsData.find(x=>String(x.id)===String(id));
+  if(!b)return;
+  drawerLead=b;
+  $('drawer').classList.remove('hidden');
+  renderDrawer();
+  paint();
+  try{
+    const act=await api('/api/businesses/'+id+'/activity');
+    const list=$('activityList');
+    if(list)list.innerHTML=(act.results||[]).length?(act.results||[]).map(a=>`<li><strong>${esc(a.kind)}</strong>${a.channel?' · '+esc(a.channel):''}${a.note?' · '+esc(a.note):''}<div class="sub">${esc(dateOnly(a.created_at)||a.created_at||'')}</div></li>`).join(''):'<li class="sub">No activity yet</li>';
+  }catch(e){}
+}
+function closeDrawer(){$('drawer').classList.add('hidden');drawerLead=null;paint()}
+
+function renderDrawer(){
+  const b=drawerLead;if(!b)return;
+  $('drawerTitle').textContent=b.name;
+  $('drawerSub').textContent=`${b.category||'—'} · ${b.city}, ${b.country}`;
+  const s=b.social_links||{};
+  $('drawerBody').innerHTML=`
+    <div class="field"><label>Status</label><div>${statusBadge(b)}</div></div>
+    <div class="sub">${b.rating!=null?`★ ${esc(b.rating)} · ${esc(b.reviews_count??'—')} reviews`:''}</div>
+    <div class="sub">${b.editorial_summary?esc(b.editorial_summary):''}</div>
+    <div class="sub">Labels · ${esc(b.search_labels||b.category||'—')}</div>
+    <div class="drawer-section">
+      <h4>Contacts (editable)</h4>
+      <div class="field"><label for="drawerEmail">Email</label><input id="drawerEmail" value="${esc(b.email||'')}" placeholder="name@business.com"></div>
+      <div class="field"><label for="drawerPhone">Phone</label><input id="drawerPhone" value="${esc(b.phone||'')}" placeholder="Local phone"></div>
+      <div class="field"><label for="drawerIntlPhone">International phone</label><input id="drawerIntlPhone" value="${esc(b.international_phone||'')}" placeholder="+61…"></div>
+      <div class="field"><label for="drawerWebsite">Website</label><input id="drawerWebsite" value="${esc(b.website||'')}" placeholder="https://"></div>
+      <div class="field"><label for="drawerInstagram">Instagram URL</label><input id="drawerInstagram" value="${esc(s.instagram||'')}" placeholder="https://instagram.com/…"></div>
+      <div class="field"><label for="drawerAddress">Address</label><input id="drawerAddress" value="${esc(b.address||'')}"></div>
+      <div class="links" style="margin-top:6px">${b.google_maps_url?`<a href="${esc(b.google_maps_url)}" target="_blank" rel="noopener noreferrer">Google Maps</a>`:''}</div>
+    </div>
+    <div class="drawer-section">
+      <h4>Pipeline</h4>
+      <label class="flag"><input type="checkbox" data-dfield="marked_for_contact" ${b.marked_for_contact?'checked':''}> Marked for contact</label>
+      <label class="flag"><input type="checkbox" data-dfield="email_sent" ${b.email_sent?'checked':''}> Email sent</label>
+      <label class="flag"><input type="checkbox" data-dfield="whatsapp_sent" ${b.whatsapp_sent?'checked':''}> WhatsApp sent</label>
+      <label class="flag"><input type="checkbox" data-dfield="instagram_sent" ${b.instagram_sent?'checked':''}> Instagram sent</label>
+      <label class="flag"><input type="checkbox" data-dfield="contacted" ${b.contacted?'checked':''}> Contacted</label>
+      <label class="flag"><input type="checkbox" data-dfield="lost" ${b.lost?'checked':''}> Lost</label>
+      <div class="field" style="margin-top:10px"><label for="drawerFollowUp">Next follow up</label><input id="drawerFollowUp" type="date" value="${esc(dateOnly(b.next_follow_up_at))}"></div>
+      <div class="field"><label for="drawerOutcome">Outcome</label>
+        <select id="drawerOutcome">
+          <option value="">—</option>
+          ${['interested','not_now','booked','no_reply','wrong_contact','other'].map(o=>`<option value="${o}" ${b.outcome===o?'selected':''}>${o.replace('_',' ')}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label for="drawerNotes">Notes</label><textarea id="drawerNotes">${esc(b.notes||'')}</textarea></div>
+      <div class="field" style="margin-top:8px"><label>Snooze follow-up</label>
+        <div class="snooze">
+          <button type="button" data-drawer-snooze="1">Tomorrow</button>
+          <button type="button" data-drawer-snooze="3">+3 days</button>
+          <button type="button" data-drawer-snooze="7">+7 days</button>
+        </div>
+      </div>
+      <div class="drawer-actions">
+        <button type="button" class="primary" id="saveDrawerBtn">Save</button>
+        <button type="button" id="enrichDrawerBtn">Enrich</button>
+        ${b.archived
+          ?'<button type="button" id="unarchiveDrawerBtn">Unarchive</button>'
+          :'<button type="button" id="archiveDrawerBtn">Archive</button>'}
+        <button type="button" class="danger" id="deleteDrawerBtn" title="Soft-delete (archive) with undo">Delete</button>
+      </div>
+    </div>
+    <div class="drawer-section">
+      <h4>Meta</h4>
+      <div class="sub">Place ID · ${esc(String(b.place_id||'').replace(/^places\//,''))}</div>
+    </div>
+    <div class="drawer-section">
+      <h4>Activity</h4>
+      <ul class="activity" id="activityList"><li class="sub">Loading…</li></ul>
+    </div>`;
+}
+
+async function saveDrawer(){
+  if(!drawerLead)return;
+  try{
+    await patchLead(drawerLead.id,{
+      email:$('drawerEmail').value.trim(),
+      phone:$('drawerPhone').value.trim(),
+      international_phone:$('drawerIntlPhone').value.trim(),
+      website:$('drawerWebsite').value.trim(),
+      instagram:$('drawerInstagram').value.trim(),
+      address:$('drawerAddress').value.trim(),
+      notes:$('drawerNotes').value,
+      outcome:$('drawerOutcome').value,
+      next_follow_up_at:$('drawerFollowUp').value||null,
+      marked_for_contact:!!$('drawerPanel').querySelector('[data-dfield="marked_for_contact"]').checked,
+      email_sent:!!$('drawerPanel').querySelector('[data-dfield="email_sent"]').checked,
+      whatsapp_sent:!!$('drawerPanel').querySelector('[data-dfield="whatsapp_sent"]').checked,
+      instagram_sent:!!$('drawerPanel').querySelector('[data-dfield="instagram_sent"]').checked,
+      contacted:!!$('drawerPanel').querySelector('[data-dfield="contacted"]').checked,
+      lost:!!$('drawerPanel').querySelector('[data-dfield="lost"]').checked,
+    });
+    toast('Lead saved.');
+  }catch(e){toast(e.message,true)}
+}
+
+async function bulk(body,opts={}){
+  const ids=[...selectedIds].map(Number);
+  if(!ids.length){toast('Select leads first.',true);return []}
+  try{
+    await api('/api/businesses/bulk',{method:'POST',body:{ids,...body}});
+    selectedIds.clear();
+    await load();
+    if(!opts.silent)toast('Updated '+ids.length+' leads.');
+    return ids;
+  }catch(e){toast(e.message,true);return []}
+}
+
+// Events
+document.querySelectorAll('[data-view]').forEach(btn=>btn.addEventListener('click',()=>setView(btn.dataset.view)));
+document.querySelectorAll('#stats .stat').forEach(btn=>btn.addEventListener('click',()=>{
+  if(btn.dataset.viewJump){setView(btn.dataset.viewJump);return}
+  const status=btn.dataset.status;
+  if(status==='queue'){setView('queue');return}
+  if(status==='due'){setView('due');return}
+  if(viewMode!=='city')setView('city');
+  $('statusFilter').value=status;
+  document.querySelectorAll('#stats .stat').forEach(s=>s.classList.toggle('active',s===btn));
+  load();
+}));
+$('country').addEventListener('change',()=>{fillCities($('country').value);if(viewMode==='city')load()});
+$('city').addEventListener('change',()=>{if(viewMode==='city')load()});
+let filterTimer;
+$('filterText').addEventListener('input',()=>{clearTimeout(filterTimer);filterTimer=setTimeout(load,250)});
+$('statusFilter').addEventListener('change',load);
+$('categoryFilter').addEventListener('change',load);
+$('contactFilter').addEventListener('change',load);
+$('refreshBtn').addEventListener('click',load);
+$('selectAll').addEventListener('change',()=>{
+  const on=$('selectAll').checked;
+  document.querySelectorAll('input[data-select]').forEach(box=>{box.checked=on;const id=String(box.dataset.select);if(on)selectedIds.add(id);else selectedIds.delete(id)});
+  updateSelectedCount();
+});
+$('clearSelection').addEventListener('click',()=>{selectedIds.clear();paint()});
+$('bulkMark').addEventListener('click',()=>bulk({marked_for_contact:true}));
+$('bulkUnmark').addEventListener('click',()=>bulk({marked_for_contact:false}));
+$('bulkContacted').addEventListener('click',()=>bulk({contacted:true}));
+$('bulkLost').addEventListener('click',()=>bulk({lost:true}));
+$('bulkFollowUp').addEventListener('click',()=>bulk({next_follow_up_at:plusDays(Number($('bulkSnooze').value||3))}));
+$('bulkArchive').addEventListener('click',async()=>{
+  const ids=await bulk({archived:true},{silent:true});
+  if(ids.length)undoToast('Archived '+ids.length+' leads.',async()=>{await api('/api/businesses/bulk-unarchive',{method:'POST',body:{ids}})});
+});
+$('bulkUnarchive').addEventListener('click',()=>bulk({archived:false}));
+$('exportBtn').addEventListener('click',()=>{
+  if(selectedIds.size){
+    const params=new URLSearchParams({ids:[...selectedIds].join(',')});
+    window.location.href='/api/export.csv?'+params;
+    toast('Exporting '+selectedIds.size+' selected leads.');
+    return;
+  }
+  window.location.href='/api/export.csv?'+queryParams().toString();
+  toast('Exporting current filtered view.');
+});
+$('enrichBtn').addEventListener('click',()=>{
+  const ids=selectedIds.size?[...selectedIds].map(Number):rowsData.filter(b=>b.website&&(!firstEmail(b)||!(b.social_links&&Object.keys(b.social_links).length))).map(b=>b.id);
+  enrichIds(ids.length?ids:rowsData.map(b=>b.id));
+});
+$('templatesToggle').addEventListener('click',()=>{
+  const sec=$('templatesSection');
+  sec.classList.toggle('collapsed');
+  $('templatesToggleLabel').textContent=sec.classList.contains('collapsed')?'Click to expand · saved on server':'Click to collapse · saved on server';
+});
+document.querySelectorAll('[data-snooze]').forEach(btn=>btn.addEventListener('click',()=>{
+  const v=btn.dataset.snooze;
+  $('composeFollowUp').value=v==='clear'?'':plusDays(Number(v));
+}));
+$('importFile').addEventListener('change',async e=>{
+  const file=e.target.files&&e.target.files[0];
+  if(!file)return;
+  const fd=new FormData();fd.append('file',file);
+  try{
+    const r=await fetch('/api/import.csv',{method:'POST',body:fd,credentials:'same-origin'});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw Error(apiError(data.detail,'Import failed'));
+    showMessage(`Import complete: ${data.inserted} new, ${data.updated} updated, ${data.skipped} skipped.`);
+    await load();
+  }catch(err){showMessage(err.message,true)}
+  e.target.value='';
+});
+$('searchForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const country=$('country').value.trim(),city=$('city').value.trim(),category=$('category').value.trim();
+  if(!country||!city||!category)return;
+  viewMode='city';
+  document.querySelectorAll('[data-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.view==='city'));
+  updateViewHint();
+  $('searchBtn').disabled=true;$('searchBtn').innerHTML='<span class="loading"></span>Searching';
+  showMessage('Searching Google Places (contacts enrich runs after)…');
+  try{
+    const d=await api('/api/search',{method:'POST',body:{country,city,category,max_results:Number($('maxResults').value)}});
+    showMessage(`Search complete: ${d.found} found, ${d.inserted} new, ${d.updated} refreshed. Query: ${d.query}`);
+    $('categoryFilter').value=category;
+    await load();
+    if((d.enrich_ids||[]).length){
+      toast(`Enriching email/social for ${d.enrich_ids.length} sites in background…`);
+      enrichIds(d.enrich_ids);
+    }
+  }catch(err){showMessage(err.message,true)}
+  finally{$('searchBtn').disabled=false;$('searchBtn').textContent='Search Maps'}
+});
+$('rows').addEventListener('click',async e=>{
+  const mark=e.target.closest('[data-mark]');
+  if(mark){await toggleMark(mark.dataset.mark);return}
+  const compose=e.target.closest('[data-compose]');
+  if(compose){const b=rowsData.find(x=>String(x.id)===String(compose.dataset.compose));if(b)openCompose(b,compose.dataset.channel);return}
+  const open=e.target.closest('[data-open]');
+  if(open){openDrawer(open.dataset.open);return}
+  const row=e.target.closest('[data-row]');
+  if(row&&!e.target.closest('input,button,a'))openDrawer(row.dataset.row);
+});
+$('rows').addEventListener('change',e=>{
+  const el=e.target;
+  if(el.matches('input[data-select]')){
+    const id=String(el.dataset.select);
+    if(el.checked)selectedIds.add(id);else selectedIds.delete(id);
+    updateSelectedCount();
+  }
+});
 $('closeComposeBtn').addEventListener('click',closeCompose);
 $('composeModal').addEventListener('click',e=>{if(e.target===$('composeModal'))closeCompose()});
 $('composeChannel').addEventListener('change',()=>fillComposeTemplates($('composeChannel').value));
 $('composeTemplate').addEventListener('change',applyComposeTemplate);
-$('sendComposeBtn').addEventListener('click',()=>launchChannel($('composeChannel').value));
-$('searchForm').addEventListener('submit',async e=>{e.preventDefault();const country=$('country').value.trim(),city=$('city').value.trim(),category=$('category').value.trim();if(!country||!city||!category)return;searchScope={country,city,category};$('searchBtn').disabled=true;$('searchBtn').innerHTML='<span class="loading"></span>Searching';showMessage('Searching Google Places. This may take a few seconds…');try{const d=await api('/api/search',{method:'POST',body:{country,city,category,max_results:Number($('maxResults').value)}});showMessage(`Search complete: ${d.found} results returned, ${d.inserted} new records saved, ${d.updated} existing records refreshed. Query: ${d.query}`);await load()}catch(err){showMessage(err.message,true)}finally{$('searchBtn').disabled=false;$('searchBtn').textContent='Search Maps ↗'}});
-let filterTimer; $('filterText').addEventListener('input',()=>{clearTimeout(filterTimer);filterTimer=setTimeout(load,250)});$('statusFilter').addEventListener('change',load);$('refreshBtn').addEventListener('click',load);
-$('rows').addEventListener('change',async e=>{const el=e.target;if(el.matches('input[data-select]')){const id=String(el.dataset.select);if(el.checked)selectedIds.add(id);else selectedIds.delete(id);syncSelectAll();updateSelectedCount();return}if(!el.matches('input[data-id]'))return;const id=el.dataset.id,field=el.dataset.field;try{await api('/api/businesses/'+id,{method:'PATCH',body:{[field]:el.checked}});const row=rowsData.find(x=>String(x.id)===String(id));if(row)row[field]=el.checked;toast((field.replace(/_/g,' '))+' updated.');await load()}catch(err){toast(err.message,true);el.checked=!el.checked}});
-$('selectAll').addEventListener('change',()=>{const on=$('selectAll').checked;document.querySelectorAll('input[data-select]').forEach(box=>{box.checked=on;const id=String(box.dataset.select);if(on)selectedIds.add(id);else selectedIds.delete(id)});updateSelectedCount()});
-$('rows').addEventListener('click',async e=>{const btn=e.target.closest('button[data-save]');if(!btn)return;const id=btn.dataset.save,notes=document.querySelector(`[data-notes="${id}"]`).value;btn.disabled=true;try{await api('/api/businesses/'+id,{method:'PATCH',body:{notes}});toast('Notes saved.')}catch(err){toast(err.message,true)}finally{btn.disabled=false}});
-$('exportBtn').addEventListener('click',()=>{if(!selectedIds.size){toast('Select at least one lead to export.',true);return}const params=new URLSearchParams({ids:[...selectedIds].join(',')});window.location.href='/api/export.csv?'+params.toString();toast('Exporting '+selectedIds.size+' selected lead'+(selectedIds.size===1?'':'s')+'.')});
-updateSelectedCount();
+$('openComposeBtn').addEventListener('click',openChannelApp);
+$('confirmSentBtn').addEventListener('click',()=>confirmSent());
+$('confirmNextBtn').addEventListener('click',()=>confirmSent({next:true}));
+$('skipNextBtn').addEventListener('click',()=>{
+  const id=composeLead&&composeLead.id;
+  closeCompose();
+  openNextLead(id);
+});
+$('closeDrawerBtn').addEventListener('click',closeDrawer);
+$('drawer').addEventListener('click',e=>{if(e.target===$('drawer'))closeDrawer()});
+$('drawerPanel').addEventListener('click',async e=>{
+  const snooze=e.target.closest('[data-drawer-snooze]');
+  if(snooze){$('drawerFollowUp').value=plusDays(Number(snooze.dataset.drawerSnooze));return}
+  if(e.target.id==='saveDrawerBtn'){await saveDrawer();return}
+  if(e.target.id==='enrichDrawerBtn'){
+    if(!drawerLead)return;
+    await enrichIds([drawerLead.id],{force:true});
+    const refreshed=rowsData.find(x=>String(x.id)===String(drawerLead.id));
+    if(refreshed){drawerLead=refreshed;renderDrawer()}
+    return;
+  }
+  if(e.target.id==='archiveDrawerBtn'){
+    if(!drawerLead)return;
+    const id=drawerLead.id;
+    try{
+      await patchLead(id,{archived:true});
+      closeDrawer();
+      await load();
+      undoToast('Archived.',async()=>{await api('/api/businesses/'+id+'/unarchive',{method:'POST'})});
+    }catch(err){toast(err.message,true)}
+    return;
+  }
+  if(e.target.id==='unarchiveDrawerBtn'){
+    if(!drawerLead)return;
+    try{await api('/api/businesses/'+drawerLead.id+'/unarchive',{method:'POST'});toast('Unarchived.');closeDrawer();await load()}catch(err){toast(err.message,true)}
+    return;
+  }
+  if(e.target.id==='deleteDrawerBtn'){
+    if(!drawerLead)return;
+    const id=drawerLead.id;
+    // Soft-delete (archive) with undo — avoids permanent loss by default
+    if(!confirm('Remove this lead from active lists? You can Undo from the toast, or Unarchive later.'))return;
+    try{
+      await api('/api/businesses/'+id,{method:'DELETE'});
+      closeDrawer();
+      await load();
+      undoToast('Lead removed (archived).',async()=>{await api('/api/businesses/'+id+'/unarchive',{method:'POST'})});
+    }catch(err){toast(err.message,true)}
+  }
+});
+document.querySelectorAll('[data-tpl-channel]').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();setTplChannel(btn.dataset.tplChannel)}));
+$('templateList').addEventListener('click',e=>{const btn=e.target.closest('[data-tpl-id]');if(!btn)return;selectedTplId=btn.dataset.tplId;renderTemplateList()});
+$('saveTplBtn').addEventListener('click',()=>saveCurrentTemplate().catch(e=>toast(e.message,true)));
+$('newTplBtn').addEventListener('click',()=>newTemplate().catch(e=>toast(e.message,true)));
+$('setDefaultTplBtn').addEventListener('click',()=>setDefaultTemplate().catch(e=>toast(e.message,true)));
+$('deleteTplBtn').addEventListener('click',()=>deleteTemplate());
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){if(!$('composeModal').classList.contains('hidden'))closeCompose();if(!$('drawer').classList.contains('hidden'))closeDrawer();return}
+  const typing=e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.tagName==='SELECT');
+  if(typing)return;
+  const modalOpen=!$('composeModal').classList.contains('hidden');
+  if((e.key==='n'||e.key==='N')&&modalOpen){e.preventDefault();confirmSent({next:true});return}
+  if((e.key==='s'||e.key==='S')&&modalOpen){e.preventDefault();const id=composeLead&&composeLead.id;closeCompose();openNextLead(id);return}
+  if((e.key==='n'||e.key==='N')&&!modalOpen){e.preventDefault();openNextLead(drawerLead&&drawerLead.id)}
+});
+updateViewHint();
+
 function showLoginError(text){const el=$('loginError');if(!text){el.className='login-error';el.textContent='';return}el.textContent=text;el.className='login-error show'}
 function setAuthed(username){$('loginCard').classList.add('hidden');$('app').classList.remove('hidden');$('signedInUser').textContent=username;$('signedInUser').classList.remove('hidden');$('logoutBtn').classList.remove('hidden');$('headerPill').classList.add('hidden')}
 function setLoggedOut(){$('app').classList.add('hidden');$('loginCard').classList.remove('hidden');$('signedInUser').classList.add('hidden');$('logoutBtn').classList.add('hidden');$('headerPill').classList.remove('hidden');$('password').value='';showLoginError('')}
-async function enterApp(username){setAuthed(username);setTplChannel('email');await loadLocations()}
-$('loginForm').addEventListener('submit',async e=>{e.preventDefault();const username=$('username').value.trim(),password=$('password').value;if(!username||!password)return;$('loginBtn').disabled=true;showLoginError('');try{const d=await api('/api/login',{method:'POST',body:{username,password}});await enterApp(d.username||username)}catch(err){showLoginError(err.message)}finally{$('loginBtn').disabled=false}});
+async function enterApp(username){setAuthed(username);await loadTemplates();setTplChannel('email');await loadLocations()}
+$('loginForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const username=$('username').value.trim(),password=$('password').value;
+  if(!username||!password)return;
+  $('loginBtn').disabled=true;showLoginError('');
+  try{const d=await api('/api/login',{method:'POST',body:{username,password}});await enterApp(d.username||username)}
+  catch(err){showLoginError(err.message)}
+  finally{$('loginBtn').disabled=false}
+});
 $('logoutBtn').addEventListener('click',async()=>{try{await api('/api/logout',{method:'POST'})}catch(e){}setLoggedOut()});
 (async function boot(){try{const d=await api('/api/me');await enterApp(d.username)}catch(e){setLoggedOut()}})();
-</script></body></html>
+</script>
+</body>
+</html>
