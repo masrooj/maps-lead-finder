@@ -26,6 +26,9 @@ button:disabled{opacity:.5;cursor:wait}
 .brand h1{font-size:20px;margin:0}
 .brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
 .pill{border:1px solid var(--line);border-radius:999px;padding:6px 10px;color:var(--muted);font-size:12px;background:var(--panel)}
+.app-nav{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.app-nav button{padding:7px 12px;font-size:13px;border-radius:999px}
+.app-nav button.active{background:var(--accent);border-color:var(--accent);color:#081026}
 .card,.searchbox,.stats,.toolbar,.templates,.leads{background:rgba(18,26,45,.94);border:1px solid var(--line);border-radius:14px}
 .searchbox,.templates{padding:18px;margin-bottom:14px}
 .sectionhead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
@@ -38,12 +41,12 @@ button:disabled{opacity:.5;cursor:wait}
 }
 .field input:focus,.field select:focus,.toolbar input:focus,.toolbar select:focus,.drawer input:focus,.drawer textarea:focus,.modal input:focus,.modal textarea:focus,.modal select:focus{border-color:var(--accent)}
 .hint{margin-top:10px}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;overflow:hidden;margin-bottom:14px;background:var(--line)}
-.stat{padding:14px 16px;background:rgba(18,26,45,.9);cursor:pointer;border:0;text-align:left;border-radius:0;font-weight:500;color:var(--text)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;overflow:hidden;margin:0 0 14px;background:var(--line)}
+.stat{padding:12px 14px;background:rgba(18,26,45,.9);cursor:pointer;border:0;text-align:left;border-radius:0;font-weight:500;color:var(--text)}
 .stat:hover{background:#172139}
 .stat.active{background:var(--accent-soft)}
-.stat span{color:var(--muted);font-size:12px;display:block}
-.stat strong{display:block;font-size:22px;margin-top:4px}
+.stat span{color:var(--muted);font-size:11px;display:block;line-height:1.3}
+.stat strong{display:block;font-size:20px;margin-top:4px;letter-spacing:-.02em}
 .views{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap}
 .views button.active{background:var(--accent);border-color:var(--accent);color:#081026}
 .toolbar{display:flex;align-items:center;gap:8px;padding:10px;margin-bottom:12px;flex-wrap:wrap}
@@ -85,14 +88,14 @@ button:disabled{opacity:.5;cursor:wait}
 .toast.ok{border-color:#2a6b55;color:#b8f0d8}
 .toast button{padding:5px 10px;font-size:12px}
 .toast .toast-msg{flex:1;min-width:140px}
-.templates.collapsed .template-body{display:none}
-.templates .sectionhead{cursor:pointer;user-select:none}
 .snooze{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .snooze button{padding:5px 9px;font-size:11px}
-.ig-copy{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--input);font-size:12px;white-space:pre-wrap;max-height:120px;overflow:auto}
+.ig-copy{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--input);font-size:12px;white-space:pre-wrap;max-height:100px;overflow:auto}
 .view-hint{font-size:12px;color:var(--muted);margin:-4px 0 10px}
 .footer{padding:16px 4px;color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:16px}
 .footer a{color:#b7caff}
+.panel-page{display:block}
+.panel-page.hidden{display:none!important}
 .login-card{max-width:420px;margin:56px auto;padding:26px}
 .login-card h2{margin:0 0 6px;font-size:18px}
 .login-card .sub{margin:0 0 16px}
@@ -113,16 +116,32 @@ button:disabled{opacity:.5;cursor:wait}
 .template-list .meta{display:block;color:var(--muted);font-size:11px;font-weight:500;margin-top:2px}
 .template-editor .row-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .template-editor textarea{min-height:120px;resize:vertical}
-.modal-backdrop,.drawer-backdrop{position:fixed;inset:0;background:rgba(5,10,22,.72);display:flex;z-index:50}
-.modal-backdrop{align-items:center;justify-content:center;padding:18px}
-.drawer-backdrop{justify-content:flex-end}
-.modal{width:min(520px,100%);background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
-.drawer{width:min(420px,100%);height:100%;background:var(--panel);border-left:1px solid var(--line);padding:18px;overflow:auto;box-shadow:var(--shadow)}
+.modal-backdrop,.drawer-backdrop{position:fixed;inset:0;background:rgba(5,10,22,.78);display:flex;z-index:50;-webkit-overflow-scrolling:touch}
+.modal-backdrop{
+  align-items:flex-start;justify-content:center;overflow:auto;
+  padding:max(12px,env(safe-area-inset-top)) 12px max(16px,env(safe-area-inset-bottom));
+}
+.drawer-backdrop{justify-content:flex-end;align-items:stretch}
+.modal{
+  width:min(560px,100%);max-height:min(92dvh,920px);margin:auto 0;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;overflow:hidden;padding:0;
+}
+.modal-head{padding:16px 18px 8px;flex:0 0 auto}
+.modal-scroll{padding:4px 18px 8px;overflow:auto;flex:1 1 auto;min-height:0;-webkit-overflow-scrolling:touch}
+.modal-foot{padding:12px 18px 16px;flex:0 0 auto;border-top:1px solid var(--line);background:var(--panel)}
+.drawer{
+  width:min(440px,100%);height:100%;max-height:100dvh;background:var(--panel);border-left:1px solid var(--line);
+  padding:0;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column;
+}
+.drawer-head{padding:16px 16px 10px;flex:0 0 auto;border-bottom:1px solid var(--line)}
+.drawer-scroll{padding:12px 16px 24px;overflow:auto;flex:1 1 auto;min-height:0;-webkit-overflow-scrolling:touch}
 .modal h3,.drawer h3{margin:0 0 4px;font-size:16px}
-.modal .sub,.drawer .sub{margin:0 0 12px}
-.modal .field,.drawer .field{margin-bottom:11px}
-.modal textarea{min-height:110px;resize:vertical}
-.modal-actions,.drawer-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.modal .sub,.drawer .sub{margin:0 0 10px}
+.modal .field,.drawer .field{margin-bottom:10px}
+.modal textarea#composeBody{min-height:88px;max-height:180px;resize:vertical}
+.modal textarea#composeNotes{min-height:56px;resize:vertical}
+.modal-actions,.drawer-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:0}
 .modal-actions .spacer,.drawer-actions .spacer{flex:1}
 .compose-contact{margin:0 0 12px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--input);font-size:13px}
 .compose-contact .label{display:block;color:var(--muted);font-size:11px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em}
@@ -138,6 +157,8 @@ button:disabled{opacity:.5;cursor:wait}
 .links{display:flex;gap:6px;flex-wrap:wrap}
 .links a{color:var(--accent);font-size:12px}
 @media(max-width:900px){
+  .top{align-items:flex-start;flex-wrap:wrap}
+  .authbar{width:100%;justify-content:flex-start}
   .fields{grid-template-columns:1fr 1fr}
   .fields .field:nth-child(3),.fields button{grid-column:span 2}
   .stats{grid-template-columns:1fr 1fr}
@@ -147,6 +168,8 @@ button:disabled{opacity:.5;cursor:wait}
   .template-layout{grid-template-columns:1fr}
   .footer{display:block}
   .toolbar input{max-width:100%}
+  .modal{max-height:min(94dvh,100%)}
+  .drawer{width:min(100vw,100%)}
 }
 </style>
 </head>
@@ -155,6 +178,10 @@ button:disabled{opacity:.5;cursor:wait}
 <header class="top">
   <div class="brand"><div class="mark">M</div><div><h1>Maps Lead Finder</h1><p>Find, mark, contact, and follow up.</p></div></div>
   <div class="authbar">
+    <nav class="app-nav hidden" id="appNav" aria-label="Main">
+      <button type="button" class="active" data-app-panel="leads">Leads</button>
+      <button type="button" data-app-panel="templates">Templates</button>
+    </nav>
     <span class="pill" id="headerPill">Google Places · outreach queue</span>
     <span class="user hidden" id="signedInUser"></span>
     <button type="button" class="hidden" id="logoutBtn">Log out</button>
@@ -173,125 +200,132 @@ button:disabled{opacity:.5;cursor:wait}
 </section>
 
 <div id="app" class="hidden">
-  <section class="searchbox">
-    <div class="sectionhead"><h2>Find businesses</h2><span>Example: Australia · Sydney · barbers</span></div>
-    <form id="searchForm">
-      <div class="fields">
-        <div class="field"><label for="country">Country</label><select id="country" required><option value="">Loading…</option></select></div>
-        <div class="field"><label for="city">City</label><select id="city" required disabled><option value="">Select a country first</option></select></div>
-        <div class="field"><label for="category">Business type</label><input id="category" required placeholder="e.g. barbers" value="barbers"></div>
-        <div class="field"><label for="maxResults">Max</label><select id="maxResults"><option>20</option><option>40</option><option selected>60</option></select></div>
-        <button class="primary" id="searchBtn" type="submit">Search Maps</button>
+  <div class="panel-page" id="leadsPanel">
+    <section class="searchbox">
+      <div class="sectionhead"><h2>Find businesses</h2><span>Example: Australia · Sydney · barbers</span></div>
+      <form id="searchForm">
+        <div class="fields">
+          <div class="field"><label for="country">Country</label><select id="country" required><option value="">Loading…</option></select></div>
+          <div class="field"><label for="city">City</label><select id="city" required disabled><option value="">Select a country first</option></select></div>
+          <div class="field"><label for="category">Business type</label><input id="category" required placeholder="e.g. barbers" value="barbers"></div>
+          <div class="field"><label for="maxResults">Max</label><select id="maxResults"><option>20</option><option>40</option><option selected>60</option></select></div>
+          <button class="primary" id="searchBtn" type="submit">Search Maps</button>
+        </div>
+      </form>
+      <div class="hint">Re-search keeps pipeline status and accumulates search labels instead of overwriting category.</div>
+    </section>
+
+    <section class="stats" id="stats" aria-label="Lead counts">
+      <button type="button" class="stat" data-status="all"><span id="statTotalLabel">City shown</span><strong id="statTotal">0</strong></button>
+      <button type="button" class="stat" data-status="queue"><span>City to contact</span><strong id="statQueue">0</strong></button>
+      <button type="button" class="stat" data-status="due"><span>Due (scope)</span><strong id="statDue">0</strong></button>
+      <button type="button" class="stat" data-status="uncontacted"><span>Not contacted</span><strong id="statUncontacted">0</strong></button>
+      <button type="button" class="stat" data-status="contacted"><span>Contacted</span><strong id="statContacted">0</strong></button>
+      <button type="button" class="stat" data-status="marked"><span>Marked</span><strong id="statMarked">0</strong></button>
+      <button type="button" class="stat" data-status="lost"><span>Lost</span><strong id="statLost">0</strong></button>
+      <button type="button" class="stat" data-view-jump="queue"><span>All cities · queue</span><strong id="statGlobal">0</strong></button>
+    </section>
+
+    <div class="message" id="message" role="status"></div>
+
+    <section class="views">
+      <button type="button" class="active" data-view="city">City leads</button>
+      <button type="button" data-view="queue">Global queue</button>
+      <button type="button" data-view="due">Due / overdue</button>
+    </section>
+    <p class="view-hint" id="viewHint">Showing leads for the selected country/city.</p>
+
+    <section class="toolbar">
+      <input id="filterText" placeholder="Search name, phone, email, notes…">
+      <select id="statusFilter">
+        <option value="all">All statuses</option>
+        <option value="queue">Marked · not contacted</option>
+        <option value="marked">Marked</option>
+        <option value="uncontacted">Not contacted</option>
+        <option value="contacted">Contacted</option>
+        <option value="due">Due today / overdue</option>
+        <option value="overdue">Overdue only</option>
+        <option value="lost">Lost</option>
+        <option value="archived">Archived</option>
+      </select>
+      <select id="categoryFilter"><option value="">All categories / labels</option></select>
+      <select id="contactFilter">
+        <option value="any">Any contact</option>
+        <option value="any_channel">Has email / phone / IG</option>
+        <option value="email">Has email</option>
+        <option value="phone">Has phone</option>
+        <option value="instagram">Has Instagram</option>
+        <option value="email_unsent">Email · not sent yet</option>
+        <option value="whatsapp_unsent">WhatsApp · not sent yet</option>
+        <option value="instagram_unsent">Instagram · not sent yet</option>
+      </select>
+      <button type="button" id="refreshBtn">Refresh</button>
+      <button type="button" id="enrichBtn" title="Find email & social from websites">Enrich contacts</button>
+      <div class="spacer"></div>
+      <label class="pill" style="cursor:pointer">Import CSV<input type="file" id="importFile" accept=".csv,text/csv" hidden></label>
+      <button type="button" id="exportBtn">Export filtered</button>
+    </section>
+
+    <div class="bulkbar" id="bulkBar">
+      <span id="selectedCount">0 selected</span>
+      <button type="button" id="bulkMark">Mark</button>
+      <button type="button" id="bulkUnmark">Unmark</button>
+      <button type="button" id="bulkContacted">Mark contacted</button>
+      <button type="button" id="bulkLost">Mark lost</button>
+      <select id="bulkSnooze" title="Follow-up snooze">
+        <option value="1">Follow up tomorrow</option>
+        <option value="3" selected>Follow up +3 days</option>
+        <option value="7">Follow up +7 days</option>
+      </select>
+      <button type="button" id="bulkFollowUp">Apply follow-up</button>
+      <button type="button" id="bulkArchive">Archive</button>
+      <button type="button" id="bulkUnarchive">Unarchive</button>
+      <button type="button" class="ghost" id="clearSelection">Clear</button>
+    </div>
+
+    <section class="leads" id="leads">
+      <div class="lead" style="background:var(--panel2);cursor:default;font-size:12px;color:var(--muted);font-weight:650">
+        <div><input type="checkbox" id="selectAll" title="Select all" aria-label="Select all"></div>
+        <div></div>
+        <div>Business</div>
+        <div>Reach</div>
+        <div style="text-align:right">Status</div>
+        <div style="text-align:right">Actions</div>
       </div>
-    </form>
-    <div class="hint">Re-search keeps pipeline status and accumulates search labels instead of overwriting category.</div>
-  </section>
-
-  <div class="message" id="message" role="status"></div>
-
-  <section class="views">
-    <button type="button" class="active" data-view="city">City leads</button>
-    <button type="button" data-view="queue">Global queue</button>
-    <button type="button" data-view="due">Due / overdue</button>
-  </section>
-  <p class="view-hint" id="viewHint">Showing leads for the selected country/city.</p>
-
-  <section class="toolbar">
-    <input id="filterText" placeholder="Search name, phone, email, notes…">
-    <select id="statusFilter">
-      <option value="all">All statuses</option>
-      <option value="queue">Marked · not contacted</option>
-      <option value="marked">Marked</option>
-      <option value="uncontacted">Not contacted</option>
-      <option value="contacted">Contacted</option>
-      <option value="due">Due today / overdue</option>
-      <option value="overdue">Overdue only</option>
-      <option value="lost">Lost</option>
-      <option value="archived">Archived</option>
-    </select>
-    <select id="categoryFilter"><option value="">All categories / labels</option></select>
-    <select id="contactFilter">
-      <option value="any">Any contact</option>
-      <option value="any_channel">Has email / phone / IG</option>
-      <option value="email">Has email</option>
-      <option value="phone">Has phone</option>
-      <option value="instagram">Has Instagram</option>
-      <option value="email_unsent">Email · not sent yet</option>
-      <option value="whatsapp_unsent">WhatsApp · not sent yet</option>
-      <option value="instagram_unsent">Instagram · not sent yet</option>
-    </select>
-    <button type="button" id="refreshBtn">Refresh</button>
-    <button type="button" id="enrichBtn" title="Find email & social from websites">Enrich contacts</button>
-    <div class="spacer"></div>
-    <label class="pill" style="cursor:pointer">Import CSV<input type="file" id="importFile" accept=".csv,text/csv" hidden></label>
-    <button type="button" id="exportBtn">Export filtered</button>
-  </section>
-
-  <div class="bulkbar" id="bulkBar">
-    <span id="selectedCount">0 selected</span>
-    <button type="button" id="bulkMark">Mark</button>
-    <button type="button" id="bulkUnmark">Unmark</button>
-    <button type="button" id="bulkContacted">Mark contacted</button>
-    <button type="button" id="bulkLost">Mark lost</button>
-    <select id="bulkSnooze" title="Follow-up snooze">
-      <option value="1">Follow up tomorrow</option>
-      <option value="3" selected>Follow up +3 days</option>
-      <option value="7">Follow up +7 days</option>
-    </select>
-    <button type="button" id="bulkFollowUp">Apply follow-up</button>
-    <button type="button" id="bulkArchive">Archive</button>
-    <button type="button" id="bulkUnarchive">Unarchive</button>
-    <button type="button" class="ghost" id="clearSelection">Clear</button>
+      <div id="rows"><div class="empty">Search for a country, city and business type to load leads.</div></div>
+    </section>
   </div>
 
-  <section class="leads" id="leads">
-    <div class="lead" style="background:var(--panel2);cursor:default;font-size:12px;color:var(--muted);font-weight:650">
-      <div><input type="checkbox" id="selectAll" title="Select all" aria-label="Select all"></div>
-      <div></div>
-      <div>Business</div>
-      <div>Reach</div>
-      <div style="text-align:right">Status</div>
-      <div style="text-align:right">Actions</div>
-    </div>
-    <div id="rows"><div class="empty">Search for a country, city and business type to load leads.</div></div>
-  </section>
-
-  <section class="stats" id="stats">
-    <button type="button" class="stat" data-status="all"><span id="statTotalLabel">City shown</span><strong id="statTotal">0</strong></button>
-    <button type="button" class="stat" data-status="queue"><span>City to contact</span><strong id="statQueue">0</strong></button>
-    <button type="button" class="stat" data-status="due"><span>Due (scope)</span><strong id="statDue">0</strong></button>
-    <button type="button" class="stat" data-status="uncontacted"><span>Not contacted</span><strong id="statUncontacted">0</strong></button>
-    <button type="button" class="stat" data-status="contacted"><span>Contacted</span><strong id="statContacted">0</strong></button>
-    <button type="button" class="stat" data-status="marked"><span>Marked</span><strong id="statMarked">0</strong></button>
-    <button type="button" class="stat" data-status="lost"><span>Lost</span><strong id="statLost">0</strong></button>
-    <button type="button" class="stat" data-view-jump="queue"><span>All cities · queue</span><strong id="statGlobal">0</strong></button>
-  </section>
-
-  <section class="templates" id="templatesSection">
-    <div class="sectionhead" id="templatesToggle"><h2>Message templates</h2><span id="templatesToggleLabel">Click to collapse · edit email / WhatsApp / Instagram copy</span></div>
-    <div class="template-body">
-      <div class="template-tabs">
-        <button type="button" class="active" data-tpl-channel="email">Email</button>
-        <button type="button" data-tpl-channel="whatsapp">WhatsApp</button>
-        <button type="button" data-tpl-channel="instagram">Instagram</button>
+  <div class="panel-page hidden" id="templatesPanel">
+    <section class="templates" id="templatesSection">
+      <div class="sectionhead">
+        <h2>Message templates</h2>
+        <span>Email, WhatsApp, and Instagram copy used when you compose</span>
       </div>
-      <div class="template-layout">
-        <div class="template-list" id="templateList"></div>
-        <div class="template-editor">
-          <div class="field"><label for="tplName">Template name</label><input id="tplName"></div>
-          <div class="field" id="tplSubjectField"><label for="tplSubject">Email subject</label><input id="tplSubject"></div>
-          <div class="field"><label for="tplBody">Message</label><textarea id="tplBody"></textarea></div>
-          <p class="hint" style="margin-top:0">Placeholders: {{name}}, {{city}}, {{category}}, {{phone}}, {{website}}</p>
-          <div class="row-actions">
-            <button type="button" class="primary" id="saveTplBtn">Save</button>
-            <button type="button" id="newTplBtn">New</button>
-            <button type="button" id="setDefaultTplBtn">Set default</button>
-            <button type="button" class="danger" id="deleteTplBtn">Delete</button>
+      <div class="template-body">
+        <div class="template-tabs">
+          <button type="button" class="active" data-tpl-channel="email">Email</button>
+          <button type="button" data-tpl-channel="whatsapp">WhatsApp</button>
+          <button type="button" data-tpl-channel="instagram">Instagram</button>
+        </div>
+        <div class="template-layout">
+          <div class="template-list" id="templateList"></div>
+          <div class="template-editor">
+            <div class="field"><label for="tplName">Template name</label><input id="tplName"></div>
+            <div class="field" id="tplSubjectField"><label for="tplSubject">Email subject</label><input id="tplSubject"></div>
+            <div class="field"><label for="tplBody">Message</label><textarea id="tplBody"></textarea></div>
+            <p class="hint" style="margin-top:0">Placeholders: {{name}}, {{city}}, {{category}}, {{phone}}, {{website}}</p>
+            <div class="row-actions">
+              <button type="button" class="primary" id="saveTplBtn">Save</button>
+              <button type="button" id="newTplBtn">New</button>
+              <button type="button" id="setDefaultTplBtn">Set default</button>
+              <button type="button" class="danger" id="deleteTplBtn">Delete</button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
+  </div>
 
   <div class="footer">
     <span>Business information is sourced from Google Places. Email and social links are best-effort from public websites.</span>
@@ -302,58 +336,64 @@ button:disabled{opacity:.5;cursor:wait}
 
 <div class="toast-wrap" id="toastWrap" aria-live="polite"></div>
 
-<div class="modal-backdrop hidden" id="composeModal" role="dialog" aria-modal="true">
+<div class="modal-backdrop hidden" id="composeModal" role="dialog" aria-modal="true" aria-labelledby="composeTitle">
   <div class="modal">
-    <h3 id="composeTitle">Send message</h3>
-    <p class="sub" id="composeLead"></p>
-    <div class="compose-contact"><span class="label" id="composeContactLabel">To</span><div class="value" id="composeContactValue"></div></div>
-    <div class="field"><label for="composeChannel">Channel</label><select id="composeChannel"></select></div>
-    <div class="field"><label for="composeTemplate">Template</label><select id="composeTemplate"></select></div>
-    <div class="field" id="composeSubjectField"><label for="composeSubject">Subject</label><input id="composeSubject"></div>
-    <div class="field"><label for="composeBody">Message</label><textarea id="composeBody"></textarea></div>
-    <div id="igCopyBox" class="ig-copy hidden"></div>
-    <div class="field"><label for="composeOutcome">Outcome (on confirm)</label>
-      <select id="composeOutcome">
-        <option value="">—</option>
-        <option value="interested">interested</option>
-        <option value="not_now">not now</option>
-        <option value="booked">booked</option>
-        <option value="no_reply">no reply</option>
-        <option value="wrong_contact">wrong contact</option>
-        <option value="other">other</option>
-      </select>
+    <div class="modal-head">
+      <h3 id="composeTitle">Send message</h3>
+      <p class="sub" id="composeLead"></p>
+      <div class="compose-contact"><span class="label" id="composeContactLabel">To</span><div class="value" id="composeContactValue"></div></div>
     </div>
-    <div class="field"><label for="composeNotes">Notes (on confirm)</label><textarea id="composeNotes" rows="2" placeholder="Optional note after sending…"></textarea></div>
-    <div class="field"><label for="composeFollowUp">Follow up on</label><input id="composeFollowUp" type="date">
-      <div class="snooze">
-        <button type="button" data-snooze="1">Tomorrow</button>
-        <button type="button" data-snooze="3">+3 days</button>
-        <button type="button" data-snooze="7">+7 days</button>
-        <button type="button" data-snooze="clear">Clear</button>
+    <div class="modal-scroll">
+      <div class="field"><label for="composeChannel">Channel</label><select id="composeChannel"></select></div>
+      <div class="field"><label for="composeTemplate">Template</label><select id="composeTemplate"></select></div>
+      <div class="field" id="composeSubjectField"><label for="composeSubject">Subject</label><input id="composeSubject"></div>
+      <div class="field"><label for="composeBody">Message</label><textarea id="composeBody"></textarea></div>
+      <div id="igCopyBox" class="ig-copy hidden"></div>
+      <div class="field"><label for="composeOutcome">Outcome (on confirm)</label>
+        <select id="composeOutcome">
+          <option value="">—</option>
+          <option value="interested">interested</option>
+          <option value="not_now">not now</option>
+          <option value="booked">booked</option>
+          <option value="no_reply">no reply</option>
+          <option value="wrong_contact">wrong contact</option>
+          <option value="other">other</option>
+        </select>
+      </div>
+      <div class="field"><label for="composeNotes">Notes (on confirm)</label><textarea id="composeNotes" rows="2" placeholder="Optional note after sending…"></textarea></div>
+      <div class="field"><label for="composeFollowUp">Follow up on</label><input id="composeFollowUp" type="date">
+        <div class="snooze">
+          <button type="button" data-snooze="1">Tomorrow</button>
+          <button type="button" data-snooze="3">+3 days</button>
+          <button type="button" data-snooze="7">+7 days</button>
+          <button type="button" data-snooze="clear">Clear</button>
+        </div>
+      </div>
+      <p class="channel-note" id="composeNote">Opens the channel in a new tab. <strong>N</strong> confirm + next · <strong>S</strong> skip.</p>
+    </div>
+    <div class="modal-foot">
+      <div class="modal-actions">
+        <button type="button" class="primary" id="openComposeBtn">Open Zoho Mail</button>
+        <button type="button" id="confirmSentBtn">Confirm sent</button>
+        <button type="button" id="confirmNextBtn" title="Confirm sent and open next lead (N)">Confirm + next</button>
+        <button type="button" id="skipNextBtn" title="Skip without confirming (S)">Skip → next</button>
+        <div class="spacer"></div>
+        <button type="button" id="closeComposeBtn">Close</button>
       </div>
     </div>
-    <div class="modal-actions">
-      <button type="button" class="primary" id="openComposeBtn">Open Zoho Mail</button>
-      <button type="button" id="confirmSentBtn">Confirm sent</button>
-      <button type="button" id="confirmNextBtn" title="Confirm sent and open next lead (N)">Confirm + next</button>
-      <button type="button" id="skipNextBtn" title="Skip without confirming (S)">Skip → next</button>
-      <div class="spacer"></div>
-      <button type="button" id="closeComposeBtn">Close</button>
-    </div>
-    <p class="channel-note" id="composeNote">Opens Zoho Mail, WhatsApp Web, or Instagram Web in a new tab. Set follow-up only if you want one (default empty). <strong>N</strong> = confirm + next · <strong>S</strong> = skip without marking sent.</p>
   </div>
 </div>
 
-<div class="drawer-backdrop hidden" id="drawer" role="dialog" aria-modal="true">
+<div class="drawer-backdrop hidden" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawerTitle">
   <aside class="drawer" id="drawerPanel">
-    <div class="sectionhead">
+    <div class="drawer-head sectionhead">
       <div>
         <h3 id="drawerTitle">Lead</h3>
         <p class="sub" id="drawerSub"></p>
       </div>
       <button type="button" id="closeDrawerBtn">Close</button>
     </div>
-    <div id="drawerBody"></div>
+    <div class="drawer-scroll" id="drawerBody"></div>
   </aside>
 </div>
 
@@ -374,6 +414,18 @@ let openedChannel=null;
 let enriching=false;
 let lastUndo=null; // {type:'unarchive'|'restore', id, snapshot?}
 let loadSeq=0; // ignore stale responses when views/filters change quickly
+let appPanel='leads'; // leads | templates
+
+function setAppPanel(panel){
+  appPanel=panel==='templates'?'templates':'leads';
+  $('leadsPanel').classList.toggle('hidden',appPanel!=='leads');
+  $('templatesPanel').classList.toggle('hidden',appPanel!=='templates');
+  document.querySelectorAll('#appNav [data-app-panel]').forEach(btn=>btn.classList.toggle('active',btn.dataset.appPanel===appPanel));
+  if(appPanel==='templates'){
+    loadTemplates().catch(()=>{});
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+}
 
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function toast(text,error=false,action){
@@ -820,9 +872,17 @@ async function openCompose(b,preferred){
   $('igCopyBox').classList.add('hidden');
   fillComposeTemplates(composePreferred);
   $('composeModal').classList.remove('hidden');
+  document.body.style.overflow='hidden';
+  const scroll=$('composeModal').querySelector('.modal-scroll');
+  if(scroll)scroll.scrollTop=0;
   $('composeBody').focus();
 }
-function closeCompose(){$('composeModal').classList.add('hidden');composeLead=null;openedChannel=null;$('igCopyBox').classList.add('hidden')}
+function closeCompose(){
+  $('composeModal').classList.add('hidden');
+  composeLead=null;openedChannel=null;
+  $('igCopyBox').classList.add('hidden');
+  if($('drawer').classList.contains('hidden'))document.body.style.overflow='';
+}
 function nextWorkLead(afterId){
   // Walk whatever is currently on screen: Due list, queue, or city filter results
   let list=rowsData.filter(b=>!b.archived&&!b.lost);
@@ -930,11 +990,19 @@ async function openDrawer(id){
   if(!b)return;
   drawerLead=b;
   $('drawer').classList.remove('hidden');
+  document.body.style.overflow='hidden';
   renderDrawer();
   paint();
+  const scroll=$('drawerBody');
+  if(scroll)scroll.scrollTop=0;
   await loadActivity(id);
 }
-function closeDrawer(){$('drawer').classList.add('hidden');drawerLead=null;paint()}
+function closeDrawer(){
+  $('drawer').classList.add('hidden');
+  drawerLead=null;
+  paint();
+  if($('composeModal').classList.contains('hidden'))document.body.style.overflow='';
+}
 
 function renderDrawer(){
   const b=drawerLead;if(!b)return;
@@ -1084,13 +1152,7 @@ $('enrichBtn').addEventListener('click',()=>{
   const ids=selectedIds.size?[...selectedIds].map(Number):rowsData.filter(b=>b.website&&(!firstEmail(b)||!(b.social_links&&Object.keys(b.social_links).length))).map(b=>b.id);
   enrichIds(ids.length?ids:rowsData.map(b=>b.id));
 });
-$('templatesToggle').addEventListener('click',()=>{
-  const sec=$('templatesSection');
-  sec.classList.toggle('collapsed');
-  $('templatesToggleLabel').textContent=sec.classList.contains('collapsed')
-    ?'Click to expand · edit email / WhatsApp / Instagram copy'
-    :'Click to collapse · edit email / WhatsApp / Instagram copy';
-});
+document.querySelectorAll('#appNav [data-app-panel]').forEach(btn=>btn.addEventListener('click',()=>setAppPanel(btn.dataset.appPanel)));
 document.querySelectorAll('[data-snooze]').forEach(btn=>btn.addEventListener('click',()=>{
   const v=btn.dataset.snooze;
   $('composeFollowUp').value=v==='clear'?'':plusDays(Number(v));
@@ -1224,8 +1286,8 @@ document.addEventListener('keydown',e=>{
 updateViewHint();
 
 function showLoginError(text){const el=$('loginError');if(!text){el.className='login-error';el.textContent='';return}el.textContent=text;el.className='login-error show'}
-function setAuthed(username){$('loginCard').classList.add('hidden');$('app').classList.remove('hidden');$('signedInUser').textContent=username;$('signedInUser').classList.remove('hidden');$('logoutBtn').classList.remove('hidden');$('headerPill').classList.add('hidden')}
-function setLoggedOut(){$('app').classList.add('hidden');$('loginCard').classList.remove('hidden');$('signedInUser').classList.add('hidden');$('logoutBtn').classList.add('hidden');$('headerPill').classList.remove('hidden');$('password').value='';showLoginError('')}
+function setAuthed(username){$('loginCard').classList.add('hidden');$('app').classList.remove('hidden');$('appNav').classList.remove('hidden');$('signedInUser').textContent=username;$('signedInUser').classList.remove('hidden');$('logoutBtn').classList.remove('hidden');$('headerPill').classList.add('hidden');setAppPanel('leads')}
+function setLoggedOut(){$('app').classList.add('hidden');$('appNav').classList.add('hidden');$('loginCard').classList.remove('hidden');$('signedInUser').classList.add('hidden');$('logoutBtn').classList.add('hidden');$('headerPill').classList.remove('hidden');$('password').value='';showLoginError('')}
 async function enterApp(username){setAuthed(username);await loadTemplates();setTplChannel('email');await loadLocations()}
 $('loginForm').addEventListener('submit',async e=>{
   e.preventDefault();
