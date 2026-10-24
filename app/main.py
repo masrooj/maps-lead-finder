@@ -460,8 +460,85 @@ def _places_api_key() -> str:
     return key
 
 
-def geocode_city_viewport(city: str, country: str) -> Optional[dict]:
-    """Return {"low": {lat,lng}, "high": {lat,lng}} city viewport, or None."""
+def _viewport_from_latlng(lat: float, lng: float, pad: float = 0.12) -> dict:
+    """Build a rectangle around a point (pad ≈ degrees, ~0.12 ≈ 13km)."""
+    return {
+        "low": {"latitude": lat - pad, "longitude": lng - pad},
+        "high": {"latitude": lat + pad, "longitude": lng + pad},
+    }
+
+
+def _normalize_viewport(vp: dict) -> Optional[dict]:
+    """Accept Places {low,high} or Geocoding {southwest,northeast} → Places rectangle."""
+    if not isinstance(vp, dict):
+        return None
+    low = vp.get("low") or vp.get("southwest") or {}
+    high = vp.get("high") or vp.get("northeast") or {}
+    # Places uses latitude/longitude; Geocoding uses lat/lng
+    def coord(obj, *keys):
+        for k in keys:
+            if k in obj and obj[k] is not None:
+                return float(obj[k])
+        return None
+    lat0 = coord(low, "latitude", "lat")
+    lng0 = coord(low, "longitude", "lng")
+    lat1 = coord(high, "latitude", "lat")
+    lng1 = coord(high, "longitude", "lng")
+    if None in (lat0, lng0, lat1, lng1):
+        return None
+    if lat1 < lat0:
+        lat0, lat1 = lat1, lat0
+    if lng1 < lng0:
+        lng0, lng1 = lng1, lng0
+    # Slight pad so edge suburbs aren't clipped by tile borders
+    pad_lat = max(0.01, (lat1 - lat0) * 0.05)
+    pad_lng = max(0.01, (lng1 - lng0) * 0.05)
+    return {
+        "low": {"latitude": lat0 - pad_lat, "longitude": lng0 - pad_lng},
+        "high": {"latitude": lat1 + pad_lat, "longitude": lng1 + pad_lng},
+    }
+
+
+def places_city_viewport(city: str, country: str) -> Optional[dict]:
+    """Resolve city bounds via Places Text Search (same API already enabled for lead search)."""
+    url = "https://places.googleapis.com/v1/places:searchText"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": _places_api_key(),
+        "X-Goog-FieldMask": "places.id,places.displayName,places.location,places.viewport,places.types",
+    }
+    body = {"textQuery": f"{city}, {country}", "pageSize": 5}
+    try:
+        response = requests.post(url, headers=headers, json=body, timeout=30)
+    except requests.RequestException:
+        return None
+    if not response.ok:
+        return None
+    places = response.json().get("places") or []
+    if not places:
+        return None
+    city_l = city.strip().lower()
+    # Prefer a named match for the city; else first result with a viewport/location
+    ranked = sorted(
+        places,
+        key=lambda p: (
+            0 if city_l and city_l in ((p.get("displayName") or {}).get("text") or "").lower() else 1,
+            0 if p.get("viewport") else 1,
+        ),
+    )
+    for p in ranked:
+        vp = _normalize_viewport(p.get("viewport") or {})
+        if vp:
+            return vp
+        loc = p.get("location") or {}
+        lat, lng = loc.get("latitude"), loc.get("longitude")
+        if lat is not None and lng is not None:
+            return _viewport_from_latlng(float(lat), float(lng))
+    return None
+
+
+def geocode_api_viewport(city: str, country: str) -> Optional[dict]:
+    """Optional Geocoding API fallback (only if that API is enabled on the project)."""
     try:
         r = requests.get(
             "https://maps.googleapis.com/maps/api/geocode/json",
@@ -475,22 +552,19 @@ def geocode_city_viewport(city: str, country: str) -> Optional[dict]:
     if data.get("status") != "OK" or not data.get("results"):
         return None
     result = data["results"][0]
-    vp = (result.get("geometry") or {}).get("viewport") or {}
-    ne, sw = vp.get("northeast") or {}, vp.get("southwest") or {}
-    if not all(k in ne for k in ("lat", "lng")) or not all(k in sw for k in ("lat", "lng")):
-        loc = (result.get("geometry") or {}).get("location") or {}
-        if "lat" not in loc or "lng" not in loc:
-            return None
-        # ~15km box around point if no viewport
-        d = 0.12
-        return {
-            "low": {"latitude": loc["lat"] - d, "longitude": loc["lng"] - d},
-            "high": {"latitude": loc["lat"] + d, "longitude": loc["lng"] + d},
-        }
-    return {
-        "low": {"latitude": sw["lat"], "longitude": sw["lng"]},
-        "high": {"latitude": ne["lat"], "longitude": ne["lng"]},
-    }
+    geometry = result.get("geometry") or {}
+    vp = _normalize_viewport(geometry.get("viewport") or {})
+    if vp:
+        return vp
+    loc = geometry.get("location") or {}
+    if "lat" in loc and "lng" in loc:
+        return _viewport_from_latlng(float(loc["lat"]), float(loc["lng"]))
+    return None
+
+
+def geocode_city_viewport(city: str, country: str) -> Optional[dict]:
+    """Return city rectangle for tiled search. Prefer Places (already enabled); Geocoding optional."""
+    return places_city_viewport(city, country) or geocode_api_viewport(city, country)
 
 
 def city_grid_rectangles(viewport: dict, max_results: int) -> list[dict]:
@@ -608,7 +682,11 @@ def google_search(country: str, city: str, category: str, max_results: int):
     if not viewport:
         # Can't tile without bounds — take Google's full 60 from one query
         places = places_text_search_pages(query, PLACES_QUERY_CAP)
-        return query, places, {"tiles": 1, "mode": "single_fallback", "note": "Could not geocode city for full scan"}
+        return query, places, {
+            "tiles": 1,
+            "mode": "single_fallback",
+            "note": "Could not resolve city map bounds — got Google’s 60-result cap only",
+        }
 
     tiles = city_grid_rectangles(viewport, want)
     # Unrestricted city query first (best ranking), then tile the viewport.
