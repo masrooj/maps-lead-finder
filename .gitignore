@@ -11,15 +11,10 @@ htmlcov/
 *.sqlite3
 local-dev.db
 
-# Local agent / deploy / support planes (not product)
-.cursor/
-.deploy/
-qa/
+# Support plane (docs, QA, governance, local deploy notes) — not product
 support/
-
-# QA living reports & evidence only — keep product docs (LIMITATIONS, METRICS, plan)
-docs/qa/
-
+.cursor/
+qa/
 
 uploads/
 *.pdf

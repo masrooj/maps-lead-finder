@@ -140,3 +140,34 @@ def test_stripe_webhook_uses_settings_secret(auth_client):
         headers={"content-type": "application/json", "stripe-signature": "t=1,v1=bad"},
     )
     assert r.status_code in (400, 401, 403)
+
+
+def test_storage_blob_preferred_over_s3(monkeypatch):
+    from app.services import storage
+
+    monkeypatch.delenv("STORAGE_BACKEND", raising=False)
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "vercel_blob_test_token")
+    monkeypatch.setenv("S3_BUCKET", "should-not-win")
+    assert storage.backend() == "blob"
+
+
+def test_storage_blob_put_mocked(monkeypatch):
+    from app.services import storage
+
+    monkeypatch.setenv("STORAGE_BACKEND", "blob")
+    monkeypatch.setenv("BLOB_READ_WRITE_TOKEN", "vercel_blob_test_token")
+
+    class FakeResp:
+        ok = True
+        content = b'{"url":"https://blob.vercel-storage.com/demos/x.png"}'
+        text = content.decode()
+
+        def json(self):
+            return {"url": "https://blob.vercel-storage.com/demos/x.png"}
+
+    with patch("app.services.storage.requests.put", return_value=FakeResp()) as put:
+        out = storage.save_bytes("demos/x.png", b"png", content_type="image/png")
+    assert out["backend"] == "blob"
+    assert out["url"].startswith("https://blob.vercel-storage.com/")
+    assert put.called
+    assert "Authorization" in put.call_args.kwargs["headers"]

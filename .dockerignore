@@ -5,11 +5,9 @@ __pycache__
 *.pyc
 .pytest_cache
 .cursor
-.deploy
-docs/qa/evidence
+support
 local-dev.db
 *.db
 uploads
-support
 agent-transcripts
 **/.DS_Store

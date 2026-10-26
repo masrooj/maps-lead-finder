@@ -2,8 +2,6 @@
 
 Internal AppointHive sales workspace: **Discover** (Google Places) plus **pipeline, tasks, proposals, invoices, and payments**.
 
-Locked plan: [docs/APPOINTHIVE_SALES_OS_PLAN.md](docs/APPOINTHIVE_SALES_OS_PLAN.md)
-
 This is **one codebase** for both workflows:
 
 - **Local:** Docker Compose runs FastAPI + PostgreSQL in containers.
@@ -14,7 +12,7 @@ This is **one codebase** for both workflows:
 pytest tests/ -v
 ```
 
-Docs: [METRICS](docs/METRICS.md) · [LIMITATIONS](docs/LIMITATIONS.md) · [PLAN](docs/APPOINTHIVE_SALES_OS_PLAN.md)
+Local docs / QA notes live under `support/` (gitignored; not part of the shipped product tree).
 
 > Vercel does not run the PostgreSQL container from Docker Compose. Use a hosted PostgreSQL database for production.
 
@@ -78,6 +76,8 @@ To stop containers without deleting the saved PostgreSQL volume, run `docker com
    - `DISCOVER_SOCIAL_LINKS` = `true` (optional; can be `false` to disable website scanning)
    - `LOGIN_PASSWORD` = password for username `hello@appointhive.com`
    - `SESSION_SECRET` = a long random string used to sign the login cookie
+   - `BLOB_READ_WRITE_TOKEN` = Vercel Blob store token (demo uploads; prefer Blob — S3 not required)
+   - Stripe/PayPal keys = **optional** (Owner confirm works without them)
 4. Deploy. If you change environment variables later, redeploy.
 5. Check `https://YOUR-PROJECT.vercel.app/api/health`, then open the site's root URL, sign in with `hello@appointhive.com`, and test searching, updating contact status, refreshing, and exporting CSV.
 

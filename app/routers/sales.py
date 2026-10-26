@@ -1567,7 +1567,7 @@ def delete_demo_asset(asset_id: int, _user: str = Depends(require_user), db=Depe
 
 @router.post("/demo-assets/upload")
 async def upload_demo_asset(request: Request, _user: str = Depends(require_user), db=Depends(get_db)):
-    """Multipart: title, notes, file. Uses local disk or S3 when STORAGE_BACKEND/S3_BUCKET set."""
+    """Multipart: title, notes, file. Local disk, Vercel Blob (BLOB_READ_WRITE_TOKEN), or optional S3."""
     from pathlib import Path
     import uuid
     from app.services.authz import get_user_by_email, require_role
