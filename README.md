@@ -1,9 +1,20 @@
-# Maps Lead Finder — Local Docker + Live Vercel
+# AppointHive Sales OS (Maps Lead Finder)
+
+Internal AppointHive sales workspace: **Discover** (Google Places) plus **pipeline, tasks, proposals, invoices, and payments**.
+
+Locked plan: [docs/APPOINTHIVE_SALES_OS_PLAN.md](docs/APPOINTHIVE_SALES_OS_PLAN.md)
 
 This is **one codebase** for both workflows:
 
 - **Local:** Docker Compose runs FastAPI + PostgreSQL in containers.
 - **Live:** Vercel runs the FastAPI app; a hosted PostgreSQL database (for example Neon) stores the same business records.
+
+```bash
+# Tests (synthetic DB)
+pytest tests/ -v
+```
+
+Docs: [METRICS](docs/METRICS.md) · [LIMITATIONS](docs/LIMITATIONS.md) · [PLAN](docs/APPOINTHIVE_SALES_OS_PLAN.md)
 
 > Vercel does not run the PostgreSQL container from Docker Compose. Use a hosted PostgreSQL database for production.
 

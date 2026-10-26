@@ -3,3 +3,23 @@ __pycache__/
 *.py[cod]
 .venv/
 .DS_Store
+.pytest_cache/
+.coverage
+htmlcov/
+*.db
+*.db-journal
+*.sqlite3
+local-dev.db
+
+# Local agent / deploy / support planes (not product)
+.cursor/
+.deploy/
+qa/
+support/
+
+# QA living reports & evidence only — keep product docs (LIMITATIONS, METRICS, plan)
+docs/qa/
+
+
+uploads/
+*.pdf

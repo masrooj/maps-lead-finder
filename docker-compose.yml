@@ -23,8 +23,13 @@ services:
       DATABASE_URL: postgresql+psycopg://mapsleads:${POSTGRES_PASSWORD:-change-this-password}@db:5432/mapsleads
     ports:
       - "${APP_PORT:-8000}:8000"
+    volumes:
+      - uploads_data:/app/uploads
+      # Live-reload app code without image rebuild (avoids hung/slow compose builds on low disk).
+      - ./app:/app/app
     depends_on:
       db:
         condition: service_healthy
 volumes:
   postgres_data:
+  uploads_data:

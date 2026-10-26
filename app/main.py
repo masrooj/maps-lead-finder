@@ -16,16 +16,17 @@ from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, Up
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, create_engine, or_, select, text, and_
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+from sqlalchemy import or_, select, and_
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local-dev.db")
-LOGIN_USERNAME = "hello@appointhive.com"
-LOGIN_PASSWORD = os.getenv("LOGIN_PASSWORD", "").strip()
-SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()
-SESSION_COOKIE = "mlf_session"
-SESSION_DAYS = 14
-CHANNELS = ("email", "whatsapp", "instagram")
+from app.config import LOGIN_PASSWORD, LOGIN_USERNAME, SESSION_COOKIE, SESSION_DAYS, SESSION_SECRET
+from app.db import Base, SessionLocal, apply_migrations, engine, migration_status
+from app.models import ActivityLog, Business, MessageTemplate
+from app.routers import ops as ops_router
+from app.routers import sales as sales_router
+from app.services.pipeline import backfill_prospect_stages, init_new_prospect
+from app.services.seed import seed_sales_os
+
+CHANNELS = ("email", "whatsapp", "instagram", "invoice")
 DEFAULT_TEMPLATES = {
     "email": {
         "name": "Default email",
@@ -42,143 +43,32 @@ DEFAULT_TEMPLATES = {
         "subject": "",
         "body": "Hi {{name}} — loved your page. I help {{category}} businesses in {{city}} with AppointHive bookings. Mind if I share a quick idea?",
     },
+    "invoice": {
+        "name": "Invoice email (with PDF)",
+        "subject": "Invoice {{invoice_number}} — {{total_fmt}}",
+        "body": (
+            "Hi {{name}},\n\n"
+            "Please find invoice {{invoice_number}} for {{total_fmt}}.\n\n"
+            "{{pay_block}}\n\n"
+            "A PDF is attached (download from AppointHive if your mail client cannot attach automatically).\n\n"
+            "Thanks,\nAppointHive"
+        ),
+    },
 }
 
-_engine_options = {"pool_pre_ping": True}
-if DATABASE_URL.startswith("sqlite"):
-    _engine_options["connect_args"] = {"check_same_thread": False}
-else:
-    _engine_options.update({"pool_size": 1, "max_overflow": 0, "pool_recycle": 300})
-engine = create_engine(DATABASE_URL, **_engine_options)
-SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
-
-
-class Base(DeclarativeBase):
-    pass
-
-
-class Business(Base):
-    __tablename__ = "businesses"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    place_id: Mapped[str] = mapped_column(String(200), unique=True, index=True)
-    name: Mapped[str] = mapped_column(String(300), index=True)
-    country: Mapped[str] = mapped_column(String(120), default="")
-    city: Mapped[str] = mapped_column(String(120), default="")
-    category: Mapped[str] = mapped_column(String(200), default="")
-    address: Mapped[str] = mapped_column(Text, default="")
-    phone: Mapped[str] = mapped_column(String(100), default="")
-    international_phone: Mapped[str] = mapped_column(String(100), default="")
-    website: Mapped[str] = mapped_column(Text, default="")
-    email: Mapped[str] = mapped_column(String(320), default="")
-    google_maps_url: Mapped[str] = mapped_column(Text, default="")
-    rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    reviews_count: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    latest_review_date: Mapped[str] = mapped_column(String(100), default="")
-    latest_review_rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    latest_review_text: Mapped[str] = mapped_column(Text, default="")
-    social_links_json: Mapped[str] = mapped_column(Text, default="{}")
-    review_response_time: Mapped[str] = mapped_column(String(150), default="Not provided by Places API")
-    business_status: Mapped[str] = mapped_column(String(80), default="")
-    primary_type: Mapped[str] = mapped_column(String(200), default="")
-    editorial_summary: Mapped[str] = mapped_column(Text, default="")
-    contacted: Mapped[bool] = mapped_column(Boolean, default=False)
-    lost: Mapped[bool] = mapped_column(Boolean, default=False)
-    email_sent: Mapped[bool] = mapped_column(Boolean, default=False)
-    whatsapp_sent: Mapped[bool] = mapped_column(Boolean, default=False)
-    instagram_sent: Mapped[bool] = mapped_column(Boolean, default=False)
-    marked_for_contact: Mapped[bool] = mapped_column(Boolean, default=False)
-    archived: Mapped[bool] = mapped_column(Boolean, default=False)
-    next_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_contacted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    outcome: Mapped[str] = mapped_column(String(80), default="")
-    search_labels: Mapped[str] = mapped_column(String(500), default="")
-    notes: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-    )
-
-
-class MessageTemplate(Base):
-    __tablename__ = "message_templates"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    channel: Mapped[str] = mapped_column(String(40), index=True)
-    name: Mapped[str] = mapped_column(String(200), default="")
-    subject: Mapped[str] = mapped_column(String(500), default="")
-    body: Mapped[str] = mapped_column(Text, default="")
-    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
-    )
-
-
-class ActivityLog(Base):
-    __tablename__ = "activity_log"
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    business_id: Mapped[int] = mapped_column(Integer, index=True)
-    kind: Mapped[str] = mapped_column(String(80), default="")
-    channel: Mapped[str] = mapped_column(String(40), default="")
-    note: Mapped[str] = mapped_column(Text, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
-
-
 Base.metadata.create_all(engine)
-MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
-
-
-def sql_statements(script: str) -> list[str]:
-    lines = [line for line in script.splitlines() if not line.strip().startswith("--")]
-    return [part.strip() for part in "\n".join(lines).split(";") if part.strip()]
-
-
-def adapt_migration_sql(statement: str) -> str:
-    if engine.dialect.name != "sqlite":
-        return statement
-    return re.sub(r"(?i)\bADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\b", "ADD COLUMN", statement)
-
-
-def apply_migrations():
-    MIGRATIONS_DIR.mkdir(parents=True, exist_ok=True)
-    with engine.begin() as conn:
-        conn.execute(text(
-            "CREATE TABLE IF NOT EXISTS schema_migrations ("
-            "version VARCHAR(255) PRIMARY KEY, "
-            "applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)"
-        ))
-        applied = {row[0] for row in conn.execute(text("SELECT version FROM schema_migrations"))}
-        for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
-            if path.name in applied:
-                continue
-            for statement in sql_statements(path.read_text(encoding="utf-8")):
-                sql = adapt_migration_sql(statement)
-                try:
-                    conn.execute(text(sql))
-                except Exception as e:
-                    msg = str(e).lower()
-                    if "duplicate column" in msg or "already exists" in msg:
-                        continue
-                    raise
-            conn.execute(text("INSERT INTO schema_migrations (version) VALUES (:version)"), {"version": path.name})
-
-
 apply_migrations()
 
+# Seed Sales OS catalog/stages/owner (idempotent)
+with SessionLocal() as _seed_db:
+    try:
+        seed_sales_os(_seed_db)
+        backfill_prospect_stages(_seed_db)
+    except Exception:
+        # Do not block app boot if seed races; APIs can re-run backfill
+        pass
 
-def migration_status():
-    files = [path.name for path in sorted(MIGRATIONS_DIR.glob("*.sql"))]
-    with engine.connect() as conn:
-        rows = conn.execute(text("SELECT version, applied_at FROM schema_migrations ORDER BY version")).all()
-    applied = [{"version": version, "applied_at": applied_at.isoformat() if applied_at else ""} for version, applied_at in rows]
-    applied_names = {item["version"] for item in applied}
-    return {"applied": applied, "pending": [name for name in files if name not in applied_names]}
-
-
-app = FastAPI(title="Maps Lead Finder", version="1.1.0")
+app = FastAPI(title="AppointHive Sales OS", version="2.0.0")
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = BASE_DIR / "app" / "templates"
 app.mount("/static", StaticFiles(directory=str(TEMPLATE_DIR)), name="static")
@@ -190,7 +80,7 @@ class LoginRequest(BaseModel):
 
 
 def auth_configured() -> bool:
-    return bool(LOGIN_PASSWORD and SESSION_SECRET)
+    return bool(SESSION_SECRET)
 
 
 def secure_equal(left: str, right: str) -> bool:
@@ -200,34 +90,68 @@ def secure_equal(left: str, right: str) -> bool:
     )
 
 
+def _cookie_email_encode(email: str) -> str:
+    # base64url — emails contain '.' which would break cookie.split(".")
+    import base64
+
+    raw = email.strip().lower().encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _cookie_email_decode(token: str) -> str:
+    import base64
+
+    pad = "=" * (-len(token) % 4)
+    return base64.urlsafe_b64decode((token + pad).encode("ascii")).decode("utf-8").strip().lower()
+
+
 def sign_session(username: str, expires_at: int) -> str:
-    payload = f"{username.lower()}:{expires_at}"
+    """Cookie value: expires.encodedEmail.signature"""
+    email = username.strip().lower()
+    enc = _cookie_email_encode(email)
+    payload = f"{email}:{expires_at}"
     signature = hmac.new(SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    return f"{expires_at}.{signature}"
+    return f"{expires_at}.{enc}.{signature}"
 
 
 def verify_session(cookie: Optional[str]) -> Optional[str]:
-    if not cookie or not auth_configured():
+    if not cookie or not SESSION_SECRET:
         return None
     try:
-        expires_str, signature = cookie.split(".", 1)
-        expires_at = int(expires_str)
+        parts = cookie.split(".")
+        if len(parts) == 3:
+            expires_str, enc, signature = parts
+            expires_at = int(expires_str)
+            email = _cookie_email_decode(enc)
+            expected = sign_session(email, expires_at)
+            if expires_at < int(datetime.now(timezone.utc).timestamp()):
+                return None
+            if not hmac.compare_digest(cookie, expected):
+                return None
+            return email
+        # Legacy cookie: expires.signature bound to LOGIN_USERNAME
+        if len(parts) == 2 and LOGIN_PASSWORD:
+            expires_str, signature = parts
+            expires_at = int(expires_str)
+            if expires_at < int(datetime.now(timezone.utc).timestamp()):
+                return None
+            payload = f"{LOGIN_USERNAME.lower()}:{expires_at}"
+            expected_sig = hmac.new(SESSION_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(signature, expected_sig):
+                return None
+            return LOGIN_USERNAME.lower()
     except (ValueError, AttributeError):
         return None
-    if expires_at < int(datetime.now(timezone.utc).timestamp()):
-        return None
-    expected = sign_session(LOGIN_USERNAME, expires_at)
-    if not hmac.compare_digest(cookie, expected):
-        return None
-    return LOGIN_USERNAME
+    return None
 
 
-def set_session_cookie(response: Response, request: Request):
+def set_session_cookie(response: Response, request: Request, username: str = ""):
+    email = (username or LOGIN_USERNAME).strip().lower()
     expires_at = int((datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)).timestamp())
     secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto", "").lower() == "https"
     response.set_cookie(
         key=SESSION_COOKIE,
-        value=sign_session(LOGIN_USERNAME, expires_at),
+        value=sign_session(email, expires_at),
         httponly=True,
         samesite="lax",
         secure=secure,
@@ -245,6 +169,18 @@ def require_login(request: Request) -> str:
     if not username:
         raise HTTPException(401, "Authentication required")
     return username
+
+
+sales_router.bind_auth(require_login)
+ops_router.bind_auth(require_login)
+app.include_router(sales_router.router)
+app.include_router(ops_router.router)
+
+# Demo uploads + generated artifacts (local / Docker volume)
+_uploads = Path("uploads")
+_uploads.mkdir(parents=True, exist_ok=True)
+(_uploads / "demos").mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(_uploads)), name="uploads")
 
 
 def utcnow() -> datetime:
@@ -775,6 +711,18 @@ def business_dict(b: Business) -> dict:
         "notes": b.notes or "",
         "created_at": iso_or_empty(b.created_at),
         "updated_at": iso_or_empty(b.updated_at),
+        "product_line": getattr(b, "product_line", None) or "STANDALONE",
+        "pipeline_stage_id": getattr(b, "pipeline_stage_id", None),
+        "deal_value": getattr(b, "deal_value", None),
+        "currency": getattr(b, "currency", None) or "AUD",
+        "next_action": getattr(b, "next_action", None) or "",
+        "qualification_score": getattr(b, "qualification_score", None),
+        "opt_out": bool(getattr(b, "opt_out", False)),
+        "lost_reason": getattr(b, "lost_reason", None) or "",
+        "owner_id": getattr(b, "owner_id", None),
+        "state": getattr(b, "state", None) or "",
+        "postcode": getattr(b, "postcode", None) or "",
+        "lead_source": getattr(b, "lead_source", None) or "",
     }
 
 
@@ -786,6 +734,10 @@ def template_dict(t: MessageTemplate) -> dict:
         "subject": t.subject or "",
         "body": t.body or "",
         "isDefault": bool(t.is_default),
+        "product_line": getattr(t, "product_line", "") or "",
+        "country": getattr(t, "country", "") or "",
+        "purpose": getattr(t, "purpose", "") or "",
+        "governance_ok": bool(getattr(t, "governance_ok", True)),
         "updated_at": iso_or_empty(t.updated_at),
     }
 
@@ -807,9 +759,11 @@ def log_activity(db, business_id: int, kind: str, channel: str = "", note: str =
 
 def seed_default_templates(db):
     existing = db.scalars(select(MessageTemplate)).all()
-    if existing:
-        return
+    have = {t.channel for t in existing}
+    created = False
     for channel, data in DEFAULT_TEMPLATES.items():
+        if channel in have:
+            continue
         db.add(MessageTemplate(
             channel=channel,
             name=data["name"],
@@ -817,7 +771,9 @@ def seed_default_templates(db):
             body=data["body"],
             is_default=True,
         ))
-    db.commit()
+        created = True
+    if created or not existing:
+        db.commit()
 
 
 def parse_follow_up(value: Any) -> Optional[datetime]:
@@ -1017,16 +973,35 @@ def health():
 
 @app.post("/api/login")
 def login(payload: LoginRequest, request: Request, response: Response):
-    if not auth_configured():
-        raise HTTPException(503, "Login is not configured. Set LOGIN_PASSWORD and SESSION_SECRET.")
+    if not SESSION_SECRET:
+        raise HTTPException(503, "Login is not configured. Set SESSION_SECRET.")
     username = str(payload.username or "").strip().lower()
     password = str(payload.password or "")
-    username_ok = secure_equal(username, LOGIN_USERNAME.lower())
-    password_ok = secure_equal(password, LOGIN_PASSWORD)
-    if not (username_ok and password_ok):
+    if not username or not password:
         raise HTTPException(401, "Invalid username or password")
-    set_session_cookie(response, request)
-    return {"username": LOGIN_USERNAME}
+
+    from app.services.passwords import verify_password
+    from app.models import User
+
+    with SessionLocal() as db:
+        user = db.scalar(select(User).where(User.email == username))
+        ok = False
+        role = "owner"
+        if user and user.active and user.password_hash:
+            ok = verify_password(password, user.password_hash)
+            role = user.role or "sales"
+        elif user and user.active and not user.password_hash and LOGIN_PASSWORD:
+            # Legacy directory user without personal password: shared LOGIN_PASSWORD only for owner email
+            if username == LOGIN_USERNAME.lower() and secure_equal(password, LOGIN_PASSWORD):
+                ok = True
+                role = user.role or "owner"
+        elif not user and username == LOGIN_USERNAME.lower() and LOGIN_PASSWORD and secure_equal(password, LOGIN_PASSWORD):
+            ok = True
+            role = "owner"
+        if not ok:
+            raise HTTPException(401, "Invalid username or password")
+        set_session_cookie(response, request, username)
+        return {"username": username, "role": role, "has_password": bool(user and user.password_hash)}
 
 
 @app.post("/api/logout")
@@ -1040,7 +1015,16 @@ def me(request: Request):
     username = verify_session(request.cookies.get(SESSION_COOKIE))
     if not username:
         raise HTTPException(401, "Authentication required")
-    return {"username": username}
+    from app.models import User
+
+    with SessionLocal() as db:
+        u = db.scalar(select(User).where(User.email == username.lower()))
+        return {
+            "username": username,
+            "role": (u.role if u else "owner"),
+            "name": (u.name if u else ""),
+            "user_id": (u.id if u else None),
+        }
 
 
 @app.get("/api/migrations")
@@ -1153,6 +1137,7 @@ def search(payload: dict, _user: str = Depends(require_login)):
                 b.business_status = status
                 b.primary_type = primary_type
                 b.editorial_summary = editorial
+                init_new_prospect(db, b, lead_source="google_places")
             db.flush()
             if website and (not b.email or b.social_links_json in ("", "{}")):
                 enrich_ids.append(b.id)
@@ -1443,14 +1428,19 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
         raise HTTPException(422, "channel must be email, whatsapp, or instagram")
     field = f"{channel}_sent"
     with SessionLocal() as db:
+        from app.services.authz import get_user_by_email
+        from app.services.automation import on_outreach_confirmed
+
         b = db.get(Business, business_id)
         if not b:
             raise HTTPException(404, "Business not found")
         setattr(b, field, True)
         b.contacted = True
         b.last_contacted_at = utcnow()
+        follow = None
         if payload.next_follow_up_at is not None:
-            b.next_follow_up_at = parse_follow_up(payload.next_follow_up_at)
+            follow = parse_follow_up(payload.next_follow_up_at)
+            b.next_follow_up_at = follow
         if payload.notes is not None and str(payload.notes).strip():
             note = str(payload.notes).strip()
             existing = (b.notes or "").strip()
@@ -1459,6 +1449,16 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
             b.outcome = str(payload.outcome)[:80]
         b.updated_at = utcnow()
         log_activity(db, b.id, "confirmed_sent", channel=channel, note=payload.outcome or "")
+        actor = get_user_by_email(db, _user)
+        on_outreach_confirmed(
+            db,
+            b,
+            channel=channel,
+            actor_id=actor.id if actor else None,
+            follow_up_at=follow,
+            outcome=str(payload.outcome or ""),
+            notes=str(payload.notes or ""),
+        )
         db.commit()
         db.refresh(b)
         return business_dict(b)
@@ -1466,14 +1466,43 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
 
 @app.get("/api/businesses/{business_id}/activity")
 def business_activity(business_id: int, _user: str = Depends(require_login)):
+    """Unified timeline: Discover activity_log + Sales OS activities."""
+    from app.models import Activity as SalesActivity
+
     with SessionLocal() as db:
         b = db.get(Business, business_id)
         if not b:
             raise HTTPException(404, "Business not found")
-        rows = db.scalars(
+        legacy = db.scalars(
             select(ActivityLog).where(ActivityLog.business_id == business_id).order_by(ActivityLog.created_at.desc())
         ).all()
-        return {"count": len(rows), "results": [activity_dict(a) for a in rows]}
+        sales = db.scalars(
+            select(SalesActivity).where(SalesActivity.business_id == business_id).order_by(SalesActivity.created_at.desc())
+        ).all()
+        merged = []
+        for a in legacy:
+            merged.append(
+                {
+                    "source": "discover",
+                    **activity_dict(a),
+                    "sort_at": a.created_at.isoformat() if a.created_at else "",
+                }
+            )
+        for a in sales:
+            merged.append(
+                {
+                    "source": "sales",
+                    "id": a.id,
+                    "business_id": a.business_id,
+                    "action": a.activity_type,
+                    "channel": a.channel or "",
+                    "note": a.summary or a.outcome or "",
+                    "created_at": a.created_at.isoformat() if a.created_at else "",
+                    "sort_at": a.created_at.isoformat() if a.created_at else "",
+                }
+            )
+        merged.sort(key=lambda x: x.get("sort_at") or "", reverse=True)
+        return {"count": len(merged), "results": merged}
 
 
 @app.delete("/api/businesses/{business_id}")
@@ -1531,6 +1560,10 @@ class TemplatePayload(BaseModel):
     subject: str = Field(default="", max_length=500)
     body: str = Field(default="", max_length=10000)
     is_default: bool = False
+    product_line: str = Field(default="", max_length=40)
+    country: str = Field(default="", max_length=8)
+    purpose: str = Field(default="", max_length=80)
+    governance_ok: bool = True
 
 
 @app.get("/api/templates")
@@ -1561,6 +1594,10 @@ def create_template(payload: TemplatePayload, _user: str = Depends(require_login
             subject=(payload.subject or "")[:500] if channel == "email" else "",
             body=payload.body or "",
             is_default=bool(payload.is_default),
+            product_line=(payload.product_line or "")[:40],
+            country=(payload.country or "")[:8],
+            purpose=(payload.purpose or "")[:80],
+            governance_ok=bool(payload.governance_ok),
         )
         db.add(t)
         db.commit()
@@ -1585,6 +1622,10 @@ def update_template(template_id: int, payload: TemplatePayload, _user: str = Dep
         t.subject = (payload.subject or "")[:500] if channel == "email" else ""
         t.body = payload.body if payload.body is not None else t.body
         t.is_default = bool(payload.is_default) or t.is_default
+        t.product_line = (payload.product_line or "")[:40]
+        t.country = (payload.country or "")[:8]
+        t.purpose = (payload.purpose or "")[:80]
+        t.governance_ok = bool(payload.governance_ok)
         t.updated_at = utcnow()
         db.commit()
         db.refresh(t)
@@ -1709,6 +1750,7 @@ async def import_csv(file: UploadFile = File(...), _user: str = Depends(require_
     if not reader.fieldnames:
         raise HTTPException(422, "CSV has no headers")
     inserted, updated, skipped = 0, 0, 0
+    duplicate_hints = []
     with SessionLocal() as db:
         for row in reader:
             def col(*names, default=""):
@@ -1733,9 +1775,47 @@ async def import_csv(file: UploadFile = File(...), _user: str = Depends(require_
                 b = existing
                 updated += 1
             else:
-                b = Business(place_id=place_id)
+                # Soft duplicate detection — never auto-merge uncertain matches
+                website = (col("Website") or "").strip().lower().rstrip("/")
+                city = col("City")
+                country = col("Country")
+                soft = None
+                if website:
+                    soft = db.scalar(
+                        select(Business).where(
+                            Business.website != "",
+                            Business.website.ilike(f"%{website.replace('https://','').replace('http://','')}%"),
+                        )
+                    )
+                if not soft and name and city:
+                    soft = db.scalar(
+                        select(Business).where(
+                            Business.name.ilike(name),
+                            Business.city.ilike(city),
+                        )
+                    )
+                hint_idx = None
+                if soft:
+                    duplicate_hints.append(
+                        {
+                            "import_name": name,
+                            "import_place_id": place_id,
+                            "matched_id": soft.id,
+                            "matched_name": soft.name,
+                            "reason": "website_or_name_city",
+                            "action": "created_new_no_merge",
+                        }
+                    )
+                    hint_idx = len(duplicate_hints) - 1
+                b = Business(place_id=place_id, name=name or "Imported business")
                 db.add(b)
                 inserted += 1
+                with db.no_autoflush:
+                    init_new_prospect(db, b, lead_source="csv_import")
+                db.flush()
+                if hint_idx is not None:
+                    duplicate_hints[hint_idx]["new_id"] = b.id
+                    duplicate_hints[hint_idx]["existing_id"] = soft.id
 
             b.name = name or b.name or "Imported business"
             b.country = col("Country") or b.country
@@ -1812,4 +1892,11 @@ async def import_csv(file: UploadFile = File(...), _user: str = Depends(require_
                     pass
             b.updated_at = utcnow()
         db.commit()
-    return {"inserted": inserted, "updated": updated, "skipped": skipped}
+    return {
+        "inserted": inserted,
+        "updated": updated,
+        "skipped": skipped,
+        "duplicate_hints": duplicate_hints[:100],
+        "duplicate_hint_count": len(duplicate_hints),
+        "note": "Uncertain matches are reported only — records are never auto-merged.",
+    }

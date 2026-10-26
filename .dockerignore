@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.cursor
+.deploy
+docs/qa/evidence
+local-dev.db
+*.db
+uploads
+support
+agent-transcripts
+**/.DS_Store
