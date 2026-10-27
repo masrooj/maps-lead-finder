@@ -946,21 +946,23 @@ body:not(.authed) .wrap{
   <div class="panel-page hidden" id="guidePanel">
     <section class="panel card">
       <div class="sectionhead"><h2>How it works</h2><span>Discovery → Money path</span></div>
-      <p class="hint" style="margin-top:0">Use this loop for every city. Click a step to jump there.</p>
+      <p class="hint" style="margin-top:0">One business = one prospect. Discover / Contact queue / Pipeline / Tasks / Communication are <strong>views of the same record</strong>, not separate databases. Use this loop for every city.</p>
       <div class="guide-steps" id="guideSteps">
-        <button type="button" class="guide-step" data-goto="leads"><strong>1. Discover</strong><span>Search Places (Fetch: All for city scan). Star ★ leads. Prospects auto-setup on import.</span></button>
-        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → mark to contact → To contact → send message. Re-ranks after discovery.</span></button>
-        <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>Stages advance automatically on confirm-sent, discovery, demo, and score. Drag only to override.</span></button>
-        <button type="button" class="guide-step" data-goto="tasks"><strong>4. Tasks</strong><span>Follow-ups auto-create when you confirm email/WA/IG sent. Complete or reschedule.</span></button>
-        <button type="button" class="guide-step" data-goto="activities"><strong>5. Communication</strong><span>Outreach log (email / WhatsApp / IG / calls). Separate from closing deals.</span></button>
-        <button type="button" class="guide-step" data-goto="demos"><strong>6. Demos</strong><span>Record demo outcome; positive demos auto-advance toward proposal.</span></button>
-        <button type="button" class="guide-step" data-goto="deals"><strong>7. Deals</strong><span>Proposals, pay links, and confirm close — kept apart from day-to-day comms.</span></button>
-        <button type="button" class="guide-step" data-goto="money"><strong>8. Money</strong><span>Where cash comes from: payments − refunds. Providers + invoice ledger.</span></button>
-        <button type="button" class="guide-step" data-goto="reports"><strong>9. Reports</strong><span>Funnel, score bands, win rate, sources — open from menu or KPI cards.</span></button>
+        <button type="button" class="guide-step" data-goto="leads"><strong>1. Discover</strong><span>Search Places by country + city. Import / star ★. Each saved lead becomes a prospect (stage, currency, product line).</span></button>
+        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>Ranked who to message. All → pick → Mark to contact → To contact → Message → Confirm sent.</span></button>
+        <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>Same prospects on a stage board. Confirm-sent / discovery / demo / score move stages; drag only to override.</span></button>
+        <button type="button" class="guide-step" data-goto="prospects"><strong>4. Prospects (directory)</strong><span>Search your whole book by country/city/name. Open any row → same detail drawer used from queue or pipeline. Optional lookup — not a required daily step.</span></button>
+        <button type="button" class="guide-step" data-goto="tasks"><strong>5. Tasks</strong><span>Follow-ups auto-create when you Confirm sent. Complete or reschedule; still tied to that prospect.</span></button>
+        <button type="button" class="guide-step" data-goto="activities"><strong>6. Communication</strong><span>Outreach log for that prospect (email / WA / IG / calls). Not where deals close.</span></button>
+        <button type="button" class="guide-step" data-goto="demos"><strong>7. Demos</strong><span>Record demo outcome on the prospect; positive demos advance toward proposal.</span></button>
+        <button type="button" class="guide-step" data-goto="deals"><strong>8. Deals</strong><span>Proposals + pay links for a prospect; confirm close here.</span></button>
+        <button type="button" class="guide-step" data-goto="money"><strong>9. Money</strong><span>Cash collected: payments − refunds. Invoice ledger + providers.</span></button>
+        <button type="button" class="guide-step" data-goto="reports"><strong>10. Reports</strong><span>Funnel, scores, win rate, sources across the same prospect book.</span></button>
       </div>
       <div class="empty-card" style="margin-top:14px;text-align:left">
-        <strong style="color:var(--text)">Why only ~60 leads after a big fetch?</strong>
-        <p class="hint" style="margin:8px 0 0">Docker uses <em>Postgres</em>. Large historical fetches may live in <code>local-dev.db</code> (SQLite). Discover also filters by the selected city — pick the city you searched, or use Global queue. Use Fetch: <strong>All (scan city)</strong> for &gt;60 Places results.</p>
+        <strong style="color:var(--text)">Daily path (short)</strong>
+        <p class="hint" style="margin:8px 0 0"><strong>Discover</strong> → <strong>Contact queue</strong> (mark → send → confirm) → stages move on <strong>Pipeline</strong> → <strong>Tasks</strong> / <strong>Communication</strong> follow that prospect → later <strong>Demos / Deals / Money</strong>. Open <strong>Prospects</strong> anytime to find someone by name or city.</p>
+        <p class="hint" style="margin:10px 0 0"><strong>Why only ~60 after a big fetch?</strong> Docker uses Postgres; older SQLite fetches may sit in <code>local-dev.db</code>. Filter the city you searched, or use Global queue. Fetch: <strong>All (scan city)</strong> for &gt;60 Places results.</p>
       </div>
     </section>
   </div>
@@ -976,7 +978,7 @@ body:not(.authed) .wrap{
 
   <div class="panel-page" id="leadsPanel">
     <section class="searchbox">
-      <div class="sectionhead"><h2>Find businesses</h2><span>Example: Australia · Sydney · barbers</span></div>
+      <div class="sectionhead"><h2>Find businesses</h2><span>Google Maps search → import. Already saved? Use Prospects to look them up.</span></div>
       <form id="searchForm">
         <div class="fields">
           <div class="field"><label for="country">Country</label><select id="country" required><option value="">Loading…</option></select></div>
@@ -1103,7 +1105,7 @@ body:not(.authed) .wrap{
           <button type="button" id="prospectsRefresh">Refresh</button>
         </div>
       </div>
-      <p class="hint" id="prospectsMeta" style="margin-top:0">Filter by country, then city — lists stay city-scoped, never mixed.</p>
+      <p class="hint" id="prospectsMeta" style="margin-top:0">Directory of saved businesses (same records as Discover). Use this to look someone up — not to search Google Maps.</p>
       <div class="sales-table-wrap"><table class="sales-table prospects-table" id="prospectsTable"><thead><tr><th>Name</th><th>Country</th><th>City</th><th>Stage</th><th>Value</th><th>Score</th><th></th></tr></thead><tbody></tbody></table></div>
     </section>
   </div>
@@ -1598,10 +1600,10 @@ function closeSidebar(){
 const PANEL_META={
   guide:{title:'How it works',sub:'Discovery → Money playbook'},
   dashboard:{title:'Dashboard',sub:'Queues, pipeline value, and cash collected'},
-  leads:{title:'Discover',sub:'Find and contact prospects'},
+  leads:{title:'Discover',sub:'Search Google Maps and import new leads'},
   contactQueue:{title:'Contact queue',sub:'Ranked who to call next'},
   pipeline:{title:'Pipeline',sub:'Stages (auto-advance + manual override)'},
-  prospects:{title:'Prospects',sub:'Search your sales book'},
+  prospects:{title:'Prospects',sub:'Look up your saved book — not a Maps search'},
   tasks:{title:'Tasks',sub:'Follow-ups due and overdue'},
   activities:{title:'Communication',sub:'Outreach log — not deal closing'},
   demos:{title:'Demos',sub:'Demo outcomes and next steps'},
