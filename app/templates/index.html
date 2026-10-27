@@ -57,31 +57,70 @@ button:focus-visible,a:focus-visible,.stat:focus-visible,.guide-step:focus-visib
 }
 .shell{display:flex;min-height:100dvh;align-items:stretch;width:100%;max-width:100%;overflow-x:hidden}
 .sidebar{
-  width:248px;flex:0 0 248px;display:none;flex-direction:column;gap:6px;
-  padding:calc(16px + var(--safe-t)) 12px calc(16px + var(--safe-b));
+  width:232px;flex:0 0 232px;display:none;flex-direction:column;gap:0;
+  padding:calc(10px + var(--safe-t)) 8px calc(10px + var(--safe-b));
   border-right:1px solid var(--line-soft);background:rgba(8,12,24,.94);backdrop-filter:blur(16px);
-  position:sticky;top:0;align-self:flex-start;height:100dvh;max-height:100dvh;overflow:auto;z-index:var(--z-sidebar);
+  position:sticky;top:0;align-self:flex-start;height:100dvh;max-height:100dvh;overflow:hidden;z-index:var(--z-sidebar);
 }
 body.authed .sidebar,.sidebar.is-open{display:flex!important}
-.sidebar-brand{display:flex;gap:12px;align-items:center;padding:6px 10px 16px;border-bottom:1px solid var(--line-soft);margin-bottom:8px}
-.sidebar-brand .mark{width:38px;height:38px;border-radius:12px;font-size:15px}
-.sidebar-brand h1{font-size:15px;margin:0;letter-spacing:-.02em;font-weight:800}
-.sidebar-brand p{margin:2px 0 0;color:var(--muted);font-size:11px;font-weight:600}
-.nav-group{display:flex;flex-direction:column;gap:3px;margin-bottom:10px}
+.sidebar-brand{
+  display:flex;gap:10px;align-items:center;flex:0 0 auto;
+  padding:4px 8px 10px;border-bottom:1px solid var(--line-soft);margin:0 0 6px;
+}
+.sidebar-brand .mark{width:32px;height:32px;border-radius:10px;font-size:13px}
+.sidebar-brand h1{font-size:14px;margin:0;letter-spacing:-.02em;font-weight:800;line-height:1.2}
+.sidebar-brand p{margin:1px 0 0;color:var(--muted);font-size:10px;font-weight:600;line-height:1.2}
+.nav-group{display:flex;flex-direction:column;gap:1px;margin:0 0 6px;padding-bottom:4px;border-bottom:1px solid rgba(34,49,73,.55)}
+.nav-group:last-child{margin-bottom:0;padding-bottom:0;border-bottom:0}
 .nav-label{
-  margin:8px 10px 4px;font-size:10px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:#6f7f9d
+  margin:4px 8px 3px;font-size:9px;font-weight:750;letter-spacing:.08em;text-transform:uppercase;color:#6f7f9d;line-height:1.2
 }
-.app-nav{display:flex;flex-direction:column;gap:2px;flex:1 1 auto}
+.nav-group:first-child .nav-label{margin-top:0}
+.app-nav{
+  display:flex;flex-direction:column;gap:0;flex:1 1 auto;min-height:0;
+  overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;scrollbar-gutter:stable;padding:0 2px 4px;
+}
+.app-nav::-webkit-scrollbar{width:6px}
+.app-nav::-webkit-scrollbar-thumb{background:rgba(126,162,255,.28);border-radius:999px}
+.app-nav::-webkit-scrollbar-track{background:transparent}
 .app-nav button{
-  width:100%;text-align:left;padding:10px 12px;font-size:13px;border-radius:11px;min-height:40px;
-  background:transparent;border-color:transparent;font-weight:650;color:var(--muted);
+  width:100%;display:flex;align-items:center;gap:10px;text-align:left;
+  padding:7px 10px;font-size:13px;border-radius:10px;min-height:36px;
+  background:transparent;border-color:transparent;font-weight:650;color:var(--muted);line-height:1.2;
 }
-.app-nav button:hover{background:rgba(255,255,255,.04);color:var(--text);border-color:transparent}
+.app-nav button .nav-ico{
+  width:18px;height:18px;flex:0 0 18px;display:inline-grid;place-items:center;opacity:.78;color:inherit
+}
+.app-nav button .nav-ico svg{
+  width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round
+}
+.app-nav button .nav-txt{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.app-nav button:hover{background:rgba(255,255,255,.045);color:var(--text);border-color:transparent}
+.app-nav button:hover .nav-ico{opacity:1}
 .app-nav button.active{
-  background:linear-gradient(180deg,#8eafff 0%,var(--accent) 100%);border-color:transparent;color:#071022;box-shadow:0 8px 20px rgba(126,162,255,.22)
+  background:linear-gradient(180deg,#8eafff 0%,var(--accent) 100%);border-color:transparent;color:#071022;
+  box-shadow:0 6px 14px rgba(126,162,255,.18)
 }
-.sidebar-foot{margin-top:auto;padding-top:14px;border-top:1px solid var(--line-soft)}
-.sidebar-foot .hint{padding:0 10px;margin:0;font-size:11px}
+.app-nav button.active .nav-ico{opacity:1}
+.sidebar-foot{flex:0 0 auto;margin-top:0;padding:8px 8px 2px;border-top:1px solid var(--line-soft)}
+.sidebar-foot .hint{padding:0;margin:0;font-size:10px;line-height:1.3;color:var(--muted)}
+.muted-dash{color:var(--muted);font-weight:500}
+.score-pill,.value-pill{
+  display:inline-flex;align-items:center;gap:5px;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:700;
+  border:1px solid var(--line-soft);background:rgba(255,255,255,.03);line-height:1.4
+}
+.score-pill.has,.value-pill.has{border-color:rgba(126,162,255,.35);background:var(--accent-soft);color:var(--text)}
+.score-card{
+  margin-top:6px;padding:10px;border:1px solid var(--line-soft);border-radius:12px;background:rgba(11,19,36,.55)
+}
+.score-card .score-grid{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;margin:0 0 10px}
+.score-card .score-grid label{font-size:12px;color:var(--label);font-weight:600}
+.score-card .score-grid select{
+  min-height:34px;border-radius:9px;border:1px solid var(--line);background:var(--input);color:var(--text);padding:4px 8px;min-width:92px
+}
+.score-card .score-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.score-card .score-live{font-size:12px;color:var(--muted);margin:0 0 8px}
 .main{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
 .topbar{
   display:none;position:sticky;top:0;z-index:var(--z-topbar);align-items:center;justify-content:space-between;gap:12px;
@@ -153,7 +192,7 @@ body.authed .top{display:none}
 .brand h1{font-size:22px;margin:0;letter-spacing:-.03em;font-weight:800}
 .brand p{margin:3px 0 0;color:var(--muted);font-size:13px}
 .pill{border:1px solid var(--line);border-radius:999px;padding:7px 12px;color:var(--muted);font-size:12px;background:var(--panel);font-weight:600}
-.nav-toggle{display:none;align-items:center;justify-content:center;min-width:42px;min-height:42px;padding:8px 12px;font-weight:750}
+.nav-toggle{display:none;align-items:center;justify-content:center;gap:8px;min-width:42px;min-height:42px;padding:8px 12px;font-weight:750}
 .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(3,6,14,.62);backdrop-filter:blur(2px);z-index:35}
 body.sidebar-open .sidebar-backdrop{display:block}
 /* Surfaces */
@@ -420,20 +459,73 @@ body.templates-mode .template-editor > .field-body label{flex:0 0 auto}
 body.templates-mode .template-editor #tplBody{flex:1 1 auto;min-height:0;height:100%;width:100%;resize:none;overflow:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;white-space:pre-wrap}
 body.templates-mode .template-editor > .hint,body.templates-mode .template-editor > .row-actions{flex:0 0 auto}
 body.templates-mode .template-editor .row-actions{margin-top:4px}
-/* Auth */
+/* Auth — full-viewport sign-in (no competing header chrome) */
+body:not(.authed) .sidebar,
+body:not(.authed) .topbar,
+body:not(.authed) .top{display:none!important}
+body:not(.authed) .shell{min-height:100dvh}
+body:not(.authed) .main{min-height:100dvh}
+body:not(.authed) .wrap{
+  max-width:none;margin:0;padding:0;min-height:100dvh;display:flex;flex-direction:column
+}
 #loginCard.login-card,#loginCard.auth-screen{
-  max-width:440px;margin:48px auto;padding:28px;border-radius:18px;position:relative;overflow:hidden
+  flex:1 1 auto;min-height:100dvh;margin:0;padding:0;border:0;border-radius:0;box-shadow:none;
+  background:transparent;display:flex;align-items:center;justify-content:center;
+  position:relative;overflow:hidden
 }
 #loginCard::before{
-  content:"";position:absolute;inset:0 auto auto 0;width:140%;height:120px;
-  background:linear-gradient(120deg,rgba(126,162,255,.18),rgba(92,224,192,.08),transparent 70%);pointer-events:none
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background:
+    radial-gradient(720px 420px at 18% 12%,rgba(126,162,255,.22),transparent 58%),
+    radial-gradient(560px 380px at 88% 78%,rgba(92,224,192,.10),transparent 55%),
+    linear-gradient(180deg,rgba(7,11,22,.2),rgba(7,11,22,.85));
 }
-#loginCard h2{margin:0 0 6px;font-size:24px;letter-spacing:-.03em;font-weight:800;position:relative}
-#loginCard .sub{margin:0 0 18px;line-height:1.5;position:relative}
-#loginCard .field{margin-bottom:14px;position:relative}
-#loginCard .hint{margin-top:4px!important;line-height:1.45;position:relative}
-#loginCard button{width:100%;margin-top:10px;min-height:48px;font-size:15px;border-radius:12px;position:relative}
-.login-error{display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;border:1px solid #8b394b;color:#ffb5bf;background:#17233b;font-size:13px;position:relative}
+#loginCard .login-panel{
+  position:relative;z-index:1;width:min(420px,calc(100% - 32px));
+  padding:28px 26px 24px;border-radius:20px;
+  background:rgba(16,24,43,.88);border:1px solid var(--line-soft);
+  box-shadow:0 24px 60px rgba(0,0,0,.45);backdrop-filter:blur(18px);
+  animation:popIn .22s var(--ease)
+}
+#loginCard .login-brand{
+  display:flex;flex-direction:column;align-items:flex-start;gap:14px;margin:0 0 22px
+}
+#loginCard .login-brand .mark{
+  width:48px;height:48px;border-radius:14px;font-size:20px
+}
+#loginCard .login-brand .brand-name{
+  margin:0;font-size:28px;line-height:1.05;letter-spacing:-.04em;font-weight:800
+}
+#loginCard .login-brand .brand-tag{
+  margin:6px 0 0;color:var(--muted);font-size:13px;font-weight:600;line-height:1.35
+}
+#loginCard h2{
+  margin:0 0 6px;font-size:15px;letter-spacing:.06em;text-transform:uppercase;
+  font-weight:750;color:var(--label);position:relative
+}
+#loginCard .sub{margin:0 0 16px;line-height:1.45;font-size:13px;color:var(--muted);position:relative}
+#loginCard .field{margin-bottom:12px;position:relative}
+#loginCard .field label{display:block;margin:0 0 6px;font-size:12px;font-weight:700;color:var(--label)}
+#loginCard .field input{
+  width:100%;min-height:46px;padding:11px 14px;border-radius:12px;
+  border:1px solid var(--line);background:var(--input);color:var(--text)
+}
+#loginCard .pw-wrap{position:relative}
+#loginCard .pw-wrap input{padding-right:72px}
+#loginCard .pw-toggle{
+  position:absolute;right:6px;top:50%;transform:translateY(-50%);
+  min-height:34px;padding:6px 10px;border:0;background:transparent;color:var(--muted);
+  font-size:12px;font-weight:700;border-radius:8px
+}
+#loginCard .pw-toggle:hover{color:var(--text);background:rgba(255,255,255,.04);border-color:transparent;transform:translateY(-50%)}
+#loginCard .hint{margin:0 0 14px!important;line-height:1.4;font-size:12px;color:var(--muted);position:relative}
+#loginCard button.primary{
+  width:100%;margin-top:2px;min-height:48px;font-size:15px;border-radius:12px;position:relative
+}
+.login-error{
+  display:none;margin:0 0 12px;padding:10px 12px;border-radius:10px;
+  border:1px solid #8b394b;color:#ffb5bf;background:rgba(139,57,75,.16);font-size:13px;position:relative
+}
 .login-error.show{display:block}
 .authbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .authbar .user{color:var(--muted);font-size:12px}
@@ -500,12 +592,12 @@ body.templates-mode .template-editor .row-actions{margin-top:4px}
 @media(max-width:900px){
   body.authed .sidebar{
     position:fixed;left:0;top:0;transform:translateX(-105%);transition:transform .22s var(--ease);
-    box-shadow:var(--shadow);display:flex;width:min(300px,88vw);flex:0 0 auto;height:100dvh;
+    box-shadow:var(--shadow);display:flex;width:min(280px,86vw);flex:0 0 auto;height:100dvh;max-height:100dvh;overflow:hidden;
   }
   body.authed.sidebar-open .sidebar{transform:translateX(0)}
-  /* Mobile denser nav: shorter labels, tighter groups */
-  .sidebar .nav-label{font-size:10px;letter-spacing:.04em;margin:10px 10px 4px}
-  .sidebar .app-nav button{padding:8px 10px;font-size:13px}
+  /* Keep denser spacing consistent with desktop; only hide tagline */
+  .sidebar .nav-label{margin:5px 8px 2px}
+  .sidebar .app-nav button{padding:8px 10px;min-height:36px}
   .sidebar-brand p{display:none}
   .nav-toggle{display:inline-flex}
   .profile-meta{display:none}
@@ -533,7 +625,8 @@ body.templates-mode .template-editor .row-actions{margin-top:4px}
   .task-row{flex-direction:column;align-items:flex-start}
   .sectionhead{align-items:flex-start}
   .report-bar{grid-template-columns:88px 1fr 36px}
-  #loginCard.login-card,#loginCard.auth-screen{margin:24px 12px}
+  #loginCard .login-panel{width:min(420px,calc(100% - 24px));padding:24px 18px 20px}
+  #loginCard .login-brand .brand-name{font-size:24px}
 }
 @media(max-width:640px){
   .fields{grid-template-columns:1fr}
@@ -585,34 +678,34 @@ body.templates-mode .template-editor .row-actions{margin-top:4px}
   <nav class="app-nav" id="appNav" aria-label="Main">
     <div class="nav-group">
       <div class="nav-label">Start</div>
-      <button type="button" data-app-panel="guide">How it works</button>
-      <button type="button" data-app-panel="dashboard">Dashboard</button>
+      <button type="button" data-app-panel="guide"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v5"/><path d="M12 16h.01"/></svg></span><span class="nav-txt">How it works</span></button>
+      <button type="button" data-app-panel="dashboard"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 13h7V4H4z"/><path d="M13 20h7v-9h-7z"/><path d="M4 20h7v-5H4z"/><path d="M13 11h7V4h-7z"/></svg></span><span class="nav-txt">Dashboard</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-label">Prospecting</div>
-      <button type="button" class="active" data-app-panel="leads">Discover</button>
-      <button type="button" data-app-panel="contactQueue">Contact queue</button>
-      <button type="button" data-app-panel="pipeline">Pipeline</button>
-      <button type="button" data-app-panel="prospects">Prospects</button>
+      <button type="button" class="active" data-app-panel="leads"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><span class="nav-txt">Discover</span></button>
+      <button type="button" data-app-panel="contactQueue"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span><span class="nav-txt">Contact queue</span></button>
+      <button type="button" data-app-panel="pipeline"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h6v12H4z"/><path d="M10 9h6v9h-6z"/><path d="M16 12h4v6h-4z"/></svg></span><span class="nav-txt">Pipeline</span></button>
+      <button type="button" data-app-panel="prospects"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="nav-txt">Prospects</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-label">Engage</div>
-      <button type="button" data-app-panel="tasks">Tasks</button>
-      <button type="button" data-app-panel="activities">Communication</button>
-      <button type="button" data-app-panel="demos">Demos</button>
-      <button type="button" data-app-panel="templates">Templates</button>
+      <button type="button" data-app-panel="tasks"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span><span class="nav-txt">Tasks</span></button>
+      <button type="button" data-app-panel="activities"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg></span><span class="nav-txt">Communication</span></button>
+      <button type="button" data-app-panel="demos"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9l5 3-5 3z"/></svg></span><span class="nav-txt">Demos</span></button>
+      <button type="button" data-app-panel="templates"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6"/><path d="M9 17h6"/></svg></span><span class="nav-txt">Templates</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-label">Close</div>
-      <button type="button" data-app-panel="deals">Deals</button>
-      <button type="button" data-app-panel="money">Money</button>
-      <button type="button" data-app-panel="reports">Reports</button>
+      <button type="button" data-app-panel="deals"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18 21l-6-4-6 4 1.5-7.5L2 9h7z"/></svg></span><span class="nav-txt">Deals</span></button>
+      <button type="button" data-app-panel="money"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01"/><path d="M18 12h.01"/></svg></span><span class="nav-txt">Money</span></button>
+      <button type="button" data-app-panel="reports"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-5"/><path d="M12 16V8"/><path d="M16 16v-8"/></svg></span><span class="nav-txt">Reports</span></button>
     </div>
     <div class="nav-group">
       <div class="nav-label">Workspace</div>
-      <button type="button" data-app-panel="appoinHive">AppointHive</button>
-      <button type="button" data-app-panel="paySetup">Pay setup</button>
-      <button type="button" data-app-panel="settings">Settings</button>
+      <button type="button" data-app-panel="appoinHive"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5"/><path d="M12 12v9"/><path d="M12 12L4 7.5"/></svg></span><span class="nav-txt">AppointHive</span></button>
+      <button type="button" data-app-panel="paySetup"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/><path d="M7 15h4"/></svg></span><span class="nav-txt">Pay setup</span></button>
+      <button type="button" data-app-panel="settings"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9c.3.6.9 1 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span><span class="nav-txt">Settings</span></button>
     </div>
   </nav>
   <div class="sidebar-foot">
@@ -622,7 +715,7 @@ body.templates-mode .template-editor .row-actions{margin-top:4px}
 <div class="main">
 <header class="topbar" id="topbar" aria-label="Workspace bar">
   <div class="topbar-left">
-    <button type="button" class="nav-toggle" id="navToggle" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false">Menu</button>
+    <button type="button" class="nav-toggle" id="navToggle" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false"><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" style="stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round"><path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/></svg><span>Menu</span></button>
     <div class="topbar-title">
       <strong id="topbarPageTitle">Discover</strong>
       <span id="topbarPageSub">Find and contact prospects</span>
@@ -660,23 +753,41 @@ body.templates-mode .template-editor .row-actions{margin-top:4px}
   </div>
 </header>
 <div class="wrap">
-<header class="top">
+<header class="top" aria-hidden="true">
   <div class="brand"><div class="mark">A</div><div><h1>AppointHive Sales</h1><p>Discover, pipeline, propose, and collect.</p></div></div>
   <div class="authbar">
     <span class="pill" id="headerPill">Sales OS · Places discover</span>
   </div>
 </header>
 
-<section class="login-card auth-screen card" id="loginCard">
-  <h2>Sign in</h2>
-  <p class="sub">Access your AppointHive sales workspace.</p>
-  <div class="login-error" id="loginError" role="alert"></div>
-  <form id="loginForm">
-    <div class="field"><label for="username">Email</label><input id="username" name="username" autocomplete="username" required placeholder="hello@appointhive.com or team email"></div>
-    <div class="field"><label for="password">Password</label><input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Your password"></div>
-    <p class="hint" style="margin-top:0">Team users sign in with email + personal password. Owner can use the shared login password until a personal password is set.</p>
-    <button class="primary" id="loginBtn" type="submit">Sign in</button>
-  </form>
+<section class="login-card auth-screen" id="loginCard" aria-label="Sign in">
+  <div class="login-panel">
+    <div class="login-brand">
+      <div class="mark" aria-hidden="true">A</div>
+      <div>
+        <p class="brand-name">AppointHive</p>
+        <p class="brand-tag">Sales OS — discover, pipeline, and collect</p>
+      </div>
+    </div>
+    <h2>Sign in</h2>
+    <p class="sub">Use your workspace email and password.</p>
+    <div class="login-error" id="loginError" role="alert"></div>
+    <form id="loginForm">
+      <div class="field">
+        <label for="username">Email</label>
+        <input id="username" name="username" type="email" inputmode="email" autocomplete="username" required placeholder="hello@appointhive.com">
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="pw-wrap">
+          <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="Enter password">
+          <button type="button" class="pw-toggle" id="pwToggle" aria-label="Show password">Show</button>
+        </div>
+      </div>
+      <p class="hint">Owner: workspace email + <code style="color:var(--accent)">LOGIN_PASSWORD</code>. Team: email + personal password.</p>
+      <button class="primary" id="loginBtn" type="submit">Sign in</button>
+    </form>
+  </div>
 </section>
 
 <div id="app" class="hidden">
@@ -1504,14 +1615,24 @@ async function loadProspects(){
     tb.innerHTML='<tr><td colspan="6"><div class="empty-card">No prospects match. Check city filter or run Discover with Fetch: All.</div></td></tr>';
     return;
   }
-  tb.innerHTML=rows.map(p=>`<tr data-open-prospect="${p.id}">
+  tb.innerHTML=rows.map(p=>{
+    const hasVal=p.deal_value!=null&&p.deal_value!=='';
+    const hasScore=p.qualification_score!=null&&p.qualification_score!=='';
+    const valHtml=hasVal
+      ?`<span class="value-pill has">${esc(p.currency||'AUD')} ${esc(p.deal_value)}</span>`
+      :`<span class="value-pill muted-dash">No value</span>`;
+    const scoreHtml=hasScore
+      ?`<span class="score-pill has">${esc(p.qualification_score)}/10</span>`
+      :`<span class="score-pill muted-dash">Not scored</span>`;
+    return `<tr data-open-prospect="${p.id}">
     <td><strong>${esc(p.name)}</strong></td>
     <td>${esc(p.city||'')}</td>
     <td>${esc((p.stage&&p.stage.name)||'—')}</td>
-    <td>${p.deal_value!=null?esc(p.currency||'')+' '+esc(p.deal_value):'—'}</td>
-    <td>${esc(p.qualification_score??'—')}</td>
+    <td>${valHtml}</td>
+    <td>${scoreHtml}</td>
     <td><div class="action-stack"><button type="button" data-open-prospect="${p.id}">Open</button></div></td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
   tb.querySelectorAll('[data-open-prospect]').forEach(el=>el.addEventListener('click',async ev=>{
     ev.stopPropagation();
     const id=el.dataset.openProspect||el.closest('[data-open-prospect]')?.dataset.openProspect;
@@ -2133,6 +2254,32 @@ async function loadSettings(){
 }
 
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function scoreOpts(b,key,fallback){
+  const crit=(b&&b.score_criteria)||{};
+  let cur=crit[key];
+  if(cur==null||cur==='') cur=fallback;
+  cur=Number(cur); if(![0,1,2].includes(cur)) cur=fallback;
+  const labels={0:'0 · none',1:'1 · partial',2:'2 · strong'};
+  return [0,1,2].map(n=>`<option value="${n}" ${n===cur?'selected':''}>${labels[n]}</option>`).join('');
+}
+function readScoreCriteria(){
+  const keys=['business_fit','operational_pain','buying_urgency','decision_maker_access','product_fit'];
+  const out={};
+  let total=0;
+  keys.forEach(k=>{
+    const el=document.querySelector(`[data-score-key="${k}"]`);
+    const v=el?Number(el.value||0):0;
+    out[k]=[0,1,2].includes(v)?v:0;
+    total+=out[k];
+  });
+  return {criteria:out,total};
+}
+function refreshScorePreview(){
+  const el=$('scorePreview'); if(!el) return;
+  const {total}=readScoreCriteria();
+  const band=total>=8?'Priority':total>=5?'Investigate':'Deprioritize';
+  el.textContent=`Preview ${total}/10 · ${band} · saves to Prospects Score column`;
+}
 
 async function loadDashboard(){
   const d=await api('/api/sales/dashboard?product_line=STANDALONE');
@@ -3486,6 +3633,7 @@ async function openDrawer(id){
   $('drawer').classList.remove('hidden');
   document.body.style.overflow='hidden';
   renderDrawer();
+  refreshScorePreview();
   paint();
   const scroll=$('drawerBody');
   if(scroll)scroll.scrollTop=0;
@@ -3518,7 +3666,11 @@ function renderDrawer(){
       <div class="sub">${b.rating!=null?`★ ${esc(b.rating)} · ${esc(b.reviews_count??'—')} reviews`:''}</div>
       <div class="sub">${b.editorial_summary?esc(b.editorial_summary):''}</div>
       <div class="sub">Labels · ${esc(b.search_labels||b.category||'—')}</div>
-      <div class="sub">Line · ${esc(b.product_line||'STANDALONE')} · Stage · ${esc(b.pipeline_stage_id||'—')} · Score · ${esc(b.qualification_score??'—')}</div>
+      <div class="sub" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px">
+        <span>Line · ${esc(b.product_line||'STANDALONE')}</span>
+        ${b.deal_value!=null?`<span class="value-pill has">${esc(b.currency||'AUD')} ${esc(b.deal_value)}</span>`:`<span class="value-pill muted-dash">No value</span>`}
+        ${b.qualification_score!=null?`<span class="score-pill has">${esc(b.qualification_score)}/10</span>`:`<span class="score-pill muted-dash">Not scored</span>`}
+      </div>
       <div class="sub" style="margin-top:8px">Place ID · ${esc(String(b.place_id||'').replace(/^places\//,''))}</div>
       <div class="links" style="margin-top:10px">${b.google_maps_url?`<a href="${esc(b.google_maps_url)}" target="_blank" rel="noopener noreferrer">Google Maps</a>`:''}</div>
       <div class="drawer-actions" style="margin-top:12px">
@@ -3536,14 +3688,31 @@ function renderDrawer(){
       <div class="drawer-actions"><button type="button" class="primary" id="saveDrawerBtn">Save contacts & flags</button><button type="button" id="enrichDrawerBtn">Enrich</button></div>
     </div>
     <div class="drawer-pane ${tab==='sales'?'active':''}" data-dpane="sales">
-      <div class="field"><label for="drawerDealValue">Deal value</label><input id="drawerDealValue" type="number" step="0.01" value="${esc(b.deal_value??'')}"></div>
+      <div class="field"><label for="drawerDealValue">Deal value</label><input id="drawerDealValue" type="number" step="0.01" value="${esc(b.deal_value??'')}" placeholder="e.g. 2500"></div>
       <div class="field"><label for="drawerCurrency">Currency</label><input id="drawerCurrency" value="${esc(b.currency||'AUD')}"></div>
       <div class="field"><label for="drawerNextAction">Next action</label><input id="drawerNextAction" value="${esc(b.next_action||'')}"></div>
       <div class="field"><label for="drawerLostReason">Lost reason</label><input id="drawerLostReason" value="${esc(b.lost_reason||'')}"></div>
       <label class="flag"><input type="checkbox" id="drawerOptOut" ${b.opt_out?'checked':''}> Opted out (blocks outreach)</label>
-      <div class="field" style="margin-top:8px"><label>Qualification</label>
-        <div class="snooze"><button type="button" id="scoreDrawerBtn">Save score 2/2/1/1/1</button></div>
-        <div class="hint">Saves score and auto-advances stage when ≥5 / ≥7. Re-ranks Contact queue.</div>
+      <div class="field" style="margin-top:10px"><label>Qualification score</label>
+        <div class="score-card" id="scoreCard">
+          <p class="score-live" id="scoreLiveHint">${b.qualification_score!=null?`Current · <strong style="color:var(--text)">${esc(b.qualification_score)}/10</strong> — adjust criteria then save`:`Not scored yet — rate each factor 0–2, then save`}</p>
+          <div class="score-grid">
+            <label for="scoreFit">Business fit</label>
+            <select id="scoreFit" data-score-key="business_fit">${scoreOpts(b,'business_fit',2)}</select>
+            <label for="scorePain">Operational pain</label>
+            <select id="scorePain" data-score-key="operational_pain">${scoreOpts(b,'operational_pain',2)}</select>
+            <label for="scoreUrgency">Buying urgency</label>
+            <select id="scoreUrgency" data-score-key="buying_urgency">${scoreOpts(b,'buying_urgency',1)}</select>
+            <label for="scoreAccess">Decision-maker access</label>
+            <select id="scoreAccess" data-score-key="decision_maker_access">${scoreOpts(b,'decision_maker_access',1)}</select>
+            <label for="scoreProduct">Product fit</label>
+            <select id="scoreProduct" data-score-key="product_fit">${scoreOpts(b,'product_fit',1)}</select>
+          </div>
+          <div class="score-actions">
+            <button type="button" class="primary" id="scoreDrawerBtn">Save score</button>
+            <span class="hint" style="margin:0" id="scorePreview">Total preview updates as you change selects</span>
+          </div>
+        </div>
       </div>
       <div class="field"><label for="drawerDiscoveryPain">Discovery · painful issue</label><textarea id="drawerDiscoveryPain" rows="3" placeholder="Most painful operational issue"></textarea></div>
       <div class="field"><label for="drawerDemoOutcome">Demo outcome</label><input id="drawerDemoOutcome" placeholder="positive / concerns / …"></div>
@@ -3605,11 +3774,13 @@ function renderDrawer(){
       <ul class="activity" id="activityList"><li class="sub">Loading…</li></ul>
     </div>`;
   $('drawerBody').querySelectorAll('[data-dtab]').forEach(btn=>btn.addEventListener('click',()=>{
-    drawerTab=btn.dataset.dtab; renderDrawer(); if(drawerTab==='activity'&&drawerLead) loadActivity(drawerLead.id);
+    drawerTab=btn.dataset.dtab; renderDrawer(); refreshScorePreview(); if(drawerTab==='activity'&&drawerLead) loadActivity(drawerLead.id);
   }));
   $('drawerBody').querySelectorAll('[data-dtab-jump]').forEach(btn=>btn.addEventListener('click',()=>{
-    drawerTab=btn.dataset.dtabJump; renderDrawer();
+    drawerTab=btn.dataset.dtabJump; renderDrawer(); refreshScorePreview();
   }));
+  $('drawerBody').querySelectorAll('select[data-score-key]').forEach(sel=>sel.addEventListener('change',refreshScorePreview));
+  refreshScorePreview();
   hydrateBeDrawer().catch(()=>{});
 }
 
@@ -4122,12 +4293,14 @@ $('drawerPanel').addEventListener('click',async e=>{
   if(e.target.id==='scoreDrawerBtn'){
     if(!drawerLead)return;
     try{
-      const res=await api('/api/sales/prospects/'+drawerLead.id+'/score',{method:'POST',body:{
-        business_fit:2,operational_pain:2,buying_urgency:1,decision_maker_access:1,product_fit:1
-      }});
+      const {criteria,total}=readScoreCriteria();
+      const res=await api('/api/sales/prospects/'+drawerLead.id+'/score',{method:'POST',body:criteria});
       drawerLead.qualification_score=res.computed_score;
-      toast('Score '+res.display_score+' · '+res.band);
+      drawerLead.score_criteria=res.criteria||criteria;
+      toast('Score '+res.display_score+'/10 · '+res.band);
       renderDrawer();
+      refreshScorePreview();
+      if(appPanel==='prospects') try{await loadProspects()}catch(_){}
     }catch(err){toast(err.message,true)}
     return;
   }
@@ -4372,14 +4545,23 @@ async function enterApp(username){
   await loadLocations();
   refreshNotifications().catch(()=>{});
 }
+$('pwToggle')&&$('pwToggle').addEventListener('click',()=>{
+  const input=$('password'); const btn=$('pwToggle'); if(!input||!btn) return;
+  const show=input.type==='password';
+  input.type=show?'text':'password';
+  btn.textContent=show?'Hide':'Show';
+  btn.setAttribute('aria-label', show?'Hide password':'Show password');
+});
 $('loginForm').addEventListener('submit',async e=>{
   e.preventDefault();
   const username=$('username').value.trim(),password=$('password').value;
   if(!username||!password)return;
   $('loginBtn').disabled=true;showLoginError('');
+  const prev=$('loginBtn').textContent;
+  $('loginBtn').innerHTML='<span class="loading" aria-hidden="true"></span>Signing in…';
   try{const d=await api('/api/login',{method:'POST',body:{username,password}});await enterApp(d.username||username)}
   catch(err){showLoginError(err.message)}
-  finally{$('loginBtn').disabled=false}
+  finally{$('loginBtn').disabled=false;$('loginBtn').textContent=prev||'Sign in'}
 });
 $('logoutBtn').addEventListener('click',async()=>{try{await api('/api/logout',{method:'POST'})}catch(e){}setLoggedOut()});
 (async function boot(){try{const d=await api('/api/me');await enterApp(d.username)}catch(e){setLoggedOut()}})();

@@ -673,6 +673,14 @@ def iso_or_empty(dt: Optional[datetime]) -> str:
     return dt.isoformat() if dt else ""
 
 
+def _score_criteria_dict(b: Business) -> dict:
+    try:
+        data = json.loads(getattr(b, "score_criteria_json", None) or "{}")
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 def business_dict(b: Business) -> dict:
     try:
         socials = json.loads(b.social_links_json or "{}")
@@ -723,6 +731,10 @@ def business_dict(b: Business) -> dict:
         "state": getattr(b, "state", None) or "",
         "postcode": getattr(b, "postcode", None) or "",
         "lead_source": getattr(b, "lead_source", None) or "",
+        "score_criteria": _score_criteria_dict(b),
+        "mrr": getattr(b, "mrr", None),
+        "linked_prospect_id": getattr(b, "linked_prospect_id", None),
+        "be_installation_id": getattr(b, "be_installation_id", None) or "",
     }
 
 
