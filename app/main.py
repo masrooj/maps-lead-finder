@@ -25,6 +25,7 @@ from app.routers import ops as ops_router
 from app.routers import sales as sales_router
 from app.services.pipeline import backfill_prospect_stages, init_new_prospect
 from app.services.seed import seed_sales_os
+from app.services.storage import uploads_root
 
 CHANNELS = ("email", "whatsapp", "instagram", "invoice")
 DEFAULT_TEMPLATES = {
@@ -176,10 +177,9 @@ ops_router.bind_auth(require_login)
 app.include_router(sales_router.router)
 app.include_router(ops_router.router)
 
-# Demo uploads + generated artifacts (local / Docker volume)
-_uploads = Path("uploads")
-_uploads.mkdir(parents=True, exist_ok=True)
-(_uploads / "demos").mkdir(parents=True, exist_ok=True)
+# Demo uploads StaticFiles mount.
+# Local/Docker: ./uploads. Vercel: /tmp (read-only deploy FS) — prefer Blob for real demos.
+_uploads = uploads_root()
 app.mount("/uploads", StaticFiles(directory=str(_uploads)), name="uploads")
 
 

@@ -30,10 +30,29 @@ def backend() -> str:
     return "local"
 
 
+def _default_uploads_dir() -> Path:
+    explicit = (os.getenv("UPLOADS_DIR") or "").strip()
+    return Path(explicit) if explicit else Path("uploads")
+
+
 def uploads_root() -> Path:
-    root = Path(os.getenv("UPLOADS_DIR") or "uploads")
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "demos").mkdir(parents=True, exist_ok=True)
+    """
+    Prefer the packaged ./uploads tree (committed with .gitkeep) so Vercel import
+    does not need mkdir on a read-only deploy FS. Only mkdir when dirs are missing
+    (local/Docker). Runtime demo bytes on Vercel should use Blob, not disk writes.
+    """
+    root = _default_uploads_dir()
+    demos = root / "demos"
+    if root.is_dir() and demos.is_dir():
+        return root
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        demos.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        raise RuntimeError(
+            f"uploads dir missing and not writable ({root}). "
+            "Commit uploads/.gitkeep + uploads/demos/.gitkeep, or set UPLOADS_DIR."
+        ) from exc
     return root
 
 

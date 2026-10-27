@@ -151,6 +151,19 @@ def test_storage_blob_preferred_over_s3(monkeypatch):
     assert storage.backend() == "blob"
 
 
+def test_uploads_root_uses_packaged_dir(monkeypatch):
+    """Packaged uploads/ + demos/ avoid mkdir on read-only Vercel FS."""
+    from pathlib import Path
+
+    from app.services import storage
+
+    monkeypatch.delenv("UPLOADS_DIR", raising=False)
+    root = storage.uploads_root()
+    assert root == Path("uploads")
+    assert root.is_dir()
+    assert (root / "demos").is_dir()
+
+
 def test_storage_blob_put_mocked(monkeypatch):
     from app.services import storage
 

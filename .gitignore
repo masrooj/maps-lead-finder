@@ -16,5 +16,10 @@ support/
 .cursor/
 qa/
 
-uploads/
+# Keep empty uploads tree in git (Vercel FS is read-only — mkdir would fail).
+uploads/*
+!uploads/.gitkeep
+!uploads/demos/
+uploads/demos/*
+!uploads/demos/.gitkeep
 *.pdf

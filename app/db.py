@@ -37,7 +37,12 @@ def adapt_migration_sql(statement: str) -> str:
 
 
 def apply_migrations() -> None:
-    MIGRATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        MIGRATIONS_DIR.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        # Packaged migrations already exist on read-only deploys (Vercel).
+        if not MIGRATIONS_DIR.is_dir():
+            raise
     with engine.begin() as conn:
         conn.execute(
             text(

@@ -626,20 +626,7 @@ async def booking_engine_webhook(request: Request, db=Depends(get_db)):
     from app.services.booking_engine.handoff import apply_be_webhook
     from app.services.billing.service import record_webhook_once
 
-    if not is_bridge_enabled(db=db) and get_connection_status(db=db) == "disconnected":
-        # Ignore quietly when fully off
-        return {"ok": True, "ignored": True, "reason": "bridge_disabled"}
-
-    secret = get_be_shared_secret(db=db)
-    if not secret:
-        raise HTTPException(503, "Booking Engine webhook secret not configured")
-    auth = (request.headers.get("authorization") or "").strip()
-    token = ""
-    if auth.lower().startswith("bearer "):
-        token = auth[7:].strip()
-    if not token or token != secret:
-        raise HTTPException(401, "Invalid webhook bearer")
-
+    # Read body first so auth failures still release the connection quickly.
     try:
         payload = await request.json()
     except Exception:
@@ -647,7 +634,27 @@ async def booking_engine_webhook(request: Request, db=Depends(get_db)):
     if not isinstance(payload, dict):
         raise HTTPException(400, "Expected object")
 
+    enabled = is_bridge_enabled(db=db)
+    status = get_connection_status(db=db)
+    if not enabled and status == "disconnected":
+        return {"ok": True, "ignored": True, "reason": "bridge_disabled"}
+
+    secret = get_be_shared_secret(db=db)
+    if not secret:
+        raise HTTPException(503, "Booking Engine webhook secret not configured")
+    auth = (request.headers.get("authorization") or "").strip()
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if not token or token != secret:
+        raise HTTPException(401, "Invalid webhook bearer")
+
     event = str(payload.get("event") or "unknown")
+    # Fast path: bridge ping must not block commercial webhook backlog.
+    if event == "crm.bridge.connected":
+        from app.services.booking_engine.connect import set_connection_status
+
+        set_connection_status(db, "connected")
+        return {"ok": True, "event": event, "connected": True}
+
     event_id = str(
         payload.get("eventId")
         or payload.get("id")
