@@ -810,6 +810,13 @@ body:not(.authed) .wrap{
 .lead-group-body{padding:10px 12px 4px}
 .money-pane.hidden,.comms-pane.hidden,.settings-pane.hidden,.ah-pane.hidden{display:none!important}
 .settings-pane,.ah-pane{min-height:120px}
+.ah-catalog-bar{
+  display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;margin:0 0 14px
+}
+.ah-catalog-bar .field{flex:1 1 180px;max-width:240px;margin:0}
+.ah-catalog-bar .ah-catalog-actions{display:flex;align-items:flex-end;gap:8px;flex:0 0 auto;padding-bottom:1px}
+.ah-connect-form{display:grid;gap:12px;max-width:560px}
+.ah-connect-form .field{margin:0}
 .provider-create-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
 .provider-create-row button{flex:1 1 auto;min-width:110px}
 .fields.filter-bar{grid-template-columns:repeat(auto-fit,minmax(160px,1fr)) auto;align-items:end}
@@ -1076,7 +1083,7 @@ body:not(.authed) .wrap{
     <h2>Sign in</h2>
     <p class="sub">Use your workspace email and password.</p>
     <div class="login-error" id="loginError" role="alert"></div>
-    <form id="loginForm">
+    <form id="loginForm" method="post" action="#" autocomplete="on">
       <div class="field">
         <label for="username">Email</label>
         <input id="username" name="username" type="email" inputmode="email" autocomplete="username" required placeholder="hello@appointhive.com">
@@ -1560,31 +1567,35 @@ body:not(.authed) .wrap{
       <div class="ah-pane" id="ahOverviewPane" data-ah-pane="overview">
         <p class="hint" style="margin-top:0">Workspace bridge to the Booking Engine: live STANDALONE prices, pay links, and Won mirroring. Product cash and ZIP stay on AppointHive. Per-lead Send to delivery lives on the prospect drawer <strong>Delivery / pay</strong> tab — not here.</p>
         <div id="beConnBanner" class="pay-status info">Loading connection…</div>
+        <h3 class="panel-title">Connection details</h3>
+        <p class="hint" style="margin-top:0">Read-only status. To pair or change URL/secret, open the <button type="button" class="chip ok" data-goto="appoinHive:connect">Connect</button> tab.</p>
+        <div id="beConnDetails" class="prov-card" style="margin-bottom:14px">Loading connection details…</div>
         <h3 class="panel-title">Live STANDALONE packages</h3>
         <p class="hint" style="margin-top:0">FINALIZED revisions used for Send to delivery (<code>/standalone/revisions</code>). For the full line catalog (STANDALONE/SAAS), open <strong>Pricing catalogs</strong>.</p>
         <div id="beRevisionsHost" class="hint">Connect first to load packages.</div>
       </div>
 
       <div class="ah-pane hidden" id="ahConnectPane" data-ah-pane="connect">
-        <h3 class="panel-title">Connection</h3>
-        <p class="hint" style="margin-top:0">Owner only: pair via code from AppointHive Super Admin, or paste base URL + shared secret. Test until status is Connected.</p>
-        <div id="beConnDetails" class="prov-card" style="margin-bottom:12px">Loading connection details…</div>
-        <div class="field"><label for="beBaseUrl">AppointHive base URL</label><input id="beBaseUrl" placeholder="http://127.0.0.1:3010" autocomplete="off"></div>
-        <div class="field"><label for="beSharedSecret">Shared secret (paste if not using pair code)</label><input id="beSharedSecret" type="password" placeholder="Leave blank to keep existing" autocomplete="off"></div>
-        <p class="hint hidden" id="beConnectOwnerHint" style="margin:0 0 8px">Connect / disconnect actions are owner-only. You can still view status above.</p>
-        <div class="pay-actions">
-          <button type="button" class="primary" id="beSaveManual">Save URL / secret</button>
-          <button type="button" id="beGenPair">Generate pairing code</button>
-          <button type="button" id="beTestConn">Test connection</button>
-          <button type="button" class="danger" id="beDisconnect">Disconnect</button>
+        <h3 class="panel-title">Connect</h3>
+        <p class="hint" style="margin-top:0">Owner only: pair via code from AppointHive Super Admin, or paste base URL + shared secret. Test until status is Connected. Status lives on <button type="button" class="chip ok" data-goto="appoinHive:overview">Overview</button>.</p>
+        <p class="hint hidden" id="beConnectOwnerHint" style="margin:0 0 10px">Connect / disconnect actions are owner-only. You can still view status on Overview.</p>
+        <div class="ah-connect-form">
+          <div class="field"><label for="beBaseUrl">AppointHive base URL</label><input id="beBaseUrl" placeholder="http://127.0.0.1:3010" autocomplete="off"></div>
+          <div class="field"><label for="beSharedSecret">Shared secret (paste if not using pair code)</label><input id="beSharedSecret" type="password" placeholder="Leave blank to keep existing" autocomplete="off"></div>
+          <div class="pay-actions" style="margin:0">
+            <button type="button" class="primary" id="beSaveManual">Save URL / secret</button>
+            <button type="button" id="beGenPair">Generate pairing code</button>
+            <button type="button" id="beTestConn">Test connection</button>
+            <button type="button" class="danger" id="beDisconnect">Disconnect</button>
+          </div>
+          <div id="bePairBox" class="hint" style="margin:0"></div>
         </div>
-        <div id="bePairBox" class="hint" style="margin-top:10px"></div>
       </div>
 
       <div class="ah-pane hidden" id="ahCatalogsPane" data-ah-pane="catalogs">
         <h3 class="panel-title">Pricing catalogs</h3>
         <p class="hint" style="margin-top:0">Full product catalog from AppointHive (<code>/catalog</code>), including SAAS. Different from Overview packages, which are FINALIZED STANDALONE revisions for delivery.</p>
-        <div class="fields filter-bar" style="margin:0 0 12px;max-width:420px">
+        <div class="ah-catalog-bar">
           <div class="field">
             <label for="beCatalogLine">Product line</label>
             <select id="beCatalogLine" aria-label="Catalog product line">
@@ -1592,7 +1603,7 @@ body:not(.authed) .wrap{
               <option value="SAAS">SAAS</option>
             </select>
           </div>
-          <div class="field" style="align-self:end">
+          <div class="ah-catalog-actions">
             <button type="button" class="primary" id="beCatalogRefresh">Load catalog</button>
           </div>
         </div>
@@ -2039,7 +2050,7 @@ function setAhTab(tab){
   if(ahTab==='catalogs') loadBeCatalog().catch(()=>{});
   if(ahTab==='connect') applyBeConnectOwnerGate();
 }
-function isOwnerRole(){ return String(currentRole||'').toLowerCase()==='owner';
+function isOwnerRole(){ return String(currentRole||'').toLowerCase()==='owner'; }
 function applyBeConnectOwnerGate(){
   const owner=isOwnerRole();
   ['beSaveManual','beGenPair','beTestConn','beDisconnect'].forEach(id=>{
@@ -2494,7 +2505,7 @@ function bindInvoiceCardActions(root, invoices, {onPaid, onVoided}={}){
     const payload=invoicePayload(inv);
     const w=window.open('','_blank','noopener,width=420,height=520');
     if(!w){ toast('Pop-up blocked',true); return; }
-    w.document.write(`<!doctype html><title>QR</title><body style="font-family:sans-serif;text-align:center;padding:24px"><h2>${esc(inv.provider||'')} · ${esc(inv.number||'')}</h2><img src="${esc(qrUrlFor(payload))}" width="220" height="220"><p style="word-break:break-all">${esc(payload)}</p><script>window.onload=()=>window.print()<\/script></body>`);
+    w.document.write(`<!doctype html><title>QR</title><body style="font-family:sans-serif;text-align:center;padding:24px"><h2>${esc(inv.provider||'')} · ${esc(inv.number||'')}</h2><img src="${esc(qrUrlFor(payload))}" width="220" height="220"><p style="word-break:break-all">${esc(payload)}</p>`+'<scr'+'ipt>window.onload=()=>window.print()</scr'+'ipt></body>');
     w.document.close();
   }));
   root.querySelectorAll('[data-inv-view]').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -3058,11 +3069,11 @@ function renderBeConnDetails(conn){
     ['Pairing', conn.pairing_code_active?(`active until ${conn.pairing_expires_at||'—'}`):'none'],
     ['Product', conn.product_name||'AppointHive Sales OS'],
   ];
-  host.innerHTML=`<strong>${conn.connected?'Connected details':'Connection details'}</strong>
+  host.innerHTML=`<strong>${conn.connected?'Connected':'Not connected'}</strong>
     <div class="sales-table-wrap" style="margin-top:8px"><table class="sales-table"><tbody>
       ${rows.map(([k,v])=>`<tr><td style="width:140px"><strong>${esc(k)}</strong></td><td>${esc(String(v))}</td></tr>`).join('')}
     </tbody></table></div>
-    ${conn.connected?'':'<div class="sub" style="margin-top:8px">Not connected — save URL/secret or pair, then Test connection.</div>'}`;
+    ${conn.connected?'':`<div class="sub" style="margin-top:8px">Not connected — open <button type="button" class="chip ok" data-goto="appoinHive:connect">Connect</button> to save URL/secret or pair, then Test connection.</div>`}`;
 }
 function beCatalogRows(data){
   if(!data || typeof data!=='object') return [];
@@ -3100,8 +3111,8 @@ async function loadBeCatalog(){
       host.innerHTML=`<div class="empty-card">No catalog rows for ${esc(line)}. Response keys: ${esc(keys||'—')}</div>`;
       return;
     }
-    host.innerHTML=`<div class="sales-table-wrap"><table class="sales-table"><thead><tr>
-      <th>Name</th><th>Edition / plan</th><th>Price</th><th>Revision / id</th><th>Line</th>
+    host.innerHTML=`<div class="sales-table-wrap"><table class="sales-table" style="table-layout:fixed;width:100%"><thead><tr>
+      <th style="width:28%">Name</th><th style="width:16%">Edition</th><th style="width:16%">Price</th><th style="width:28%">Revision / id</th><th style="width:12%">Line</th>
     </tr></thead><tbody>
       ${rows.map(r=>{
         const name=r.label||r.name||r.productName||r.product_name||r.title||r.productId||r.product_id||'—';
@@ -3112,7 +3123,7 @@ async function loadBeCatalog(){
           <td><strong>${esc(name)}</strong></td>
           <td>${esc(edition)}</td>
           <td>${esc(formatBePrice(r))}</td>
-          <td><code>${esc(String(id))}</code></td>
+          <td style="overflow:hidden;text-overflow:ellipsis"><code>${esc(String(id))}</code></td>
           <td>${esc(pl)}</td>
         </tr>`;
       }).join('')}
@@ -4404,7 +4415,7 @@ async function renderPaylinksHost(opts={}){
     const payload=paylinkPayload(row);
     const w=window.open('','_blank','noopener,width=420,height=520');
     if(!w){ toast('Pop-up blocked',true); return; }
-    w.document.write(`<!doctype html><title>QR</title><body style="font-family:sans-serif;text-align:center;padding:24px"><h2>${esc(row.provider)} · ${esc(row.number||'pay link')}</h2><img src="${esc(qrUrlFor(payload))}" width="220" height="220"><p style="word-break:break-all">${esc(payload)}</p><script>window.onload=()=>window.print()<\/script></body>`);
+    w.document.write(`<!doctype html><title>QR</title><body style="font-family:sans-serif;text-align:center;padding:24px"><h2>${esc(row.provider)} · ${esc(row.number||'pay link')}</h2><img src="${esc(qrUrlFor(payload))}" width="220" height="220"><p style="word-break:break-all">${esc(payload)}</p>`+'<scr'+'ipt>window.onload=()=>window.print()</scr'+'ipt></body>');
     w.document.close();
   }));
   host.querySelectorAll('[data-pl-del]').forEach(btn=>btn.addEventListener('click',async()=>{
