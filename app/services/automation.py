@@ -227,8 +227,10 @@ def rank_contact_queue(
     db,
     *,
     product_line: str = "STANDALONE",
-    limit: int = 100,
+    limit: int = 2000,
     mode: Optional[str] = None,
+    country: Optional[str] = None,
+    city: Optional[str] = None,
 ) -> dict:
     """Rank open prospects using a DB-backed ranking mode (CRUD)."""
     from app.services import ranking_modes as rm
@@ -238,13 +240,34 @@ def rank_contact_queue(
     filt = mode_meta.get("filter") or {}
     boost_cfg = mode_meta.get("boost") or {}
     stages = {s.id: s for s in list_stages(db, product_line)}
-    rows = db.scalars(
-        select(Business).where(
-            or_(Business.archived.is_(False), Business.archived.is_(None)),
-            or_(Business.opt_out.is_(False), Business.opt_out.is_(None)),
-            Business.product_line == product_line,
-        )
-    ).all()
+    country_f = (country or "").strip()
+    city_f = (city or "").strip()
+    base_clauses = [
+        or_(Business.archived.is_(False), Business.archived.is_(None)),
+        or_(Business.opt_out.is_(False), Business.opt_out.is_(None)),
+        Business.product_line == product_line,
+    ]
+    # Unscoped rows power the country/city filter menus (never collapse to the active filter).
+    all_rows = db.scalars(select(Business).where(*base_clauses)).all()
+    loc_map: dict[str, set[str]] = {}
+    for b in all_rows:
+        ctry = (b.country or "").strip() or "—"
+        cty = (b.city or "").strip()
+        loc_map.setdefault(ctry, set())
+        if cty:
+            loc_map[ctry].add(cty)
+    locations = {
+        ctry: sorted(cities, key=lambda x: x.lower())
+        for ctry, cities in sorted(loc_map.items(), key=lambda kv: kv[0].lower())
+    }
+    rows = all_rows
+    if country_f or city_f:
+        rows = [
+            b
+            for b in all_rows
+            if (not country_f or (b.country or "").strip().lower() == country_f.lower())
+            and (not city_f or (b.city or "").strip().lower() == city_f.lower())
+        ]
     ranked = []
     for b in rows:
         stage = stages.get(b.pipeline_stage_id) if b.pipeline_stage_id else None
@@ -329,8 +352,13 @@ def rank_contact_queue(
                 "why_parts": why,
             }
         )
-    ranked.sort(key=lambda r: (-r["rank_score"], r["name"] or ""))
-    out = ranked[: max(1, min(limit, 500))]
+    ranked.sort(key=lambda r: (-r["rank_score"], (r.get("country") or ""), (r.get("city") or ""), r["name"] or ""))
+    # limit<=0 means return every matching candidate (hard safety ceiling still applies)
+    hard_ceiling = 10000
+    if int(limit or 0) <= 0:
+        out = ranked[:hard_ceiling]
+    else:
+        out = ranked[: max(1, min(int(limit), hard_ceiling))]
     modes_ui = [
         {"id": m["slug"], "slug": m["slug"], "label": m["name"], "name": m["name"], "description": m["description"]}
         for m in rm.list_modes(db, active_only=True)
@@ -342,5 +370,8 @@ def rank_contact_queue(
         "mode_label": mode_meta.get("name") or active,
         "sample_size": len(out),
         "total_candidates": len(ranked),
+        "country": country_f,
+        "city": city_f,
+        "locations": locations,
         "leads": out,
     }

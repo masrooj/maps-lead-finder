@@ -94,7 +94,7 @@ def prospect_sales_dict(b: Business, stage=None) -> dict:
         "stage": stage_dict(stage) if stage else None,
         "owner_id": b.owner_id,
         "deal_value": b.deal_value,
-        "currency": b.currency or "AUD",
+        "currency": b.currency or "USD",
         "next_action": b.next_action or "",
         "lead_source": b.lead_source or "",
         "qualification_score": b.qualification_score,
@@ -181,7 +181,7 @@ class ProspectPatch(BaseModel):
 class ProposalBody(BaseModel):
     business_id: int
     title: str = ""
-    currency: str = "AUD"
+    currency: str = "USD"
     plan_id: Optional[int] = None
     line_items: list[dict[str, Any]] = Field(default_factory=list)
     discount_amount: float = 0
@@ -255,7 +255,7 @@ def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(requir
         items = [p for p in prospects if p.pipeline_stage_id == s.id]
         value = {}
         for p in items:
-            cur = (p.currency or "AUD").upper()
+            cur = (p.currency or "USD").upper()
             value[cur] = value.get(cur, 0.0) + float(p.deal_value or 0)
         columns.append(
             {
@@ -1156,7 +1156,7 @@ def sales_demos(limit: int = 50, _user: str = Depends(require_user), db=Depends(
 def _saas_mrr_by_currency(db) -> dict[str, float]:
     out: dict[str, float] = {}
     for b in db.scalars(select(Business).where(Business.product_line == "SAAS", Business.mrr.is_not(None))).all():
-        cur = (b.currency or "AUD").upper()
+        cur = (b.currency or "USD").upper()
         out[cur] = round(out.get(cur, 0.0) + float(b.mrr or 0), 2)
     return out
 
@@ -1274,8 +1274,10 @@ def sales_reports(product_line: str = "STANDALONE", _user: str = Depends(require
 @router.get("/contact-queue")
 def sales_contact_queue(
     product_line: str = "STANDALONE",
-    limit: int = 100,
+    limit: int = 2000,
     mode: str = "",
+    country: str = "",
+    city: str = "",
     _user: str = Depends(require_user),
     db=Depends(get_db),
 ):
@@ -1286,6 +1288,8 @@ def sales_contact_queue(
         product_line=product_line.upper(),
         limit=limit,
         mode=(mode or "").strip() or None,
+        country=(country or "").strip() or None,
+        city=(city or "").strip() or None,
     )
 
 
@@ -1299,6 +1303,52 @@ def sales_auto_setup_prospects(_user: str = Depends(require_user), db=Depends(ge
     result = backfill_prospect_stages(db)
     db.commit()
     return {"ok": True, **result}
+
+
+@router.post("/prospects/normalize-currency")
+def sales_normalize_currency(
+    from_currency: str = "AUD",
+    to_currency: str = "USD",
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Bulk-set prospects still on from_currency (default AUD) to to_currency (default USD).
+
+    Leaves every other currency untouched so EUR/GBP/etc. stay as-is.
+    Switch any prospect back via the currency select in Details.
+    """
+    from app.config import DEFAULT_CURRENCY
+    from app.services.authz import get_user_by_email, require_role
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    src = (from_currency or "AUD").strip().upper() or "AUD"
+    dst = (to_currency or DEFAULT_CURRENCY or "USD").strip().upper() or "USD"
+    if len(src) != 3 or len(dst) != 3:
+        raise HTTPException(422, "Currency codes must be 3 letters (e.g. AUD, USD)")
+    rows = db.scalars(select(Business)).all()
+    updated = 0
+    kept = 0
+    for b in rows:
+        cur = (b.currency or "").strip().upper()
+        if not cur or cur == src:
+            if cur != dst:
+                b.currency = dst
+                b.updated_at = datetime.now(timezone.utc)
+                updated += 1
+            else:
+                kept += 1
+        else:
+            kept += 1
+    db.commit()
+    return {
+        "ok": True,
+        "from_currency": src,
+        "to_currency": dst,
+        "updated": updated,
+        "kept": kept,
+        "total": len(rows),
+    }
 
 
 @router.post("/demo-data/wipe")

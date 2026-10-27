@@ -21,8 +21,8 @@ _CURRENCY_META = {
 }
 
 
-def format_money(amount: Any, currency: str = "AUD") -> str:
-    cur = (currency or "AUD").upper()
+def format_money(amount: Any, currency: str = "USD") -> str:
+    cur = (currency or "USD").upper()
     try:
         n = float(amount or 0)
     except Exception:
@@ -125,7 +125,7 @@ def build_invoice_pdf_bytes(payload: dict) -> bytes:
     pdf.cell(25, 7, "Qty", border=1)
     pdf.cell(35, 7, "Amount", border=1, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
     pdf.set_font("Helvetica", "", 10)
-    cur = payload.get("currency") or "AUD"
+    cur = payload.get("currency") or "USD"
     for row in payload.get("line_items") or []:
         name = str(row.get("name") or row.get("description") or "Item")[:48]
         qty = str(row.get("qty") or row.get("quantity") or 1)
@@ -163,7 +163,7 @@ def build_invoice_pdf_bytes(payload: dict) -> bytes:
 
 
 def _total_fmt(payload: dict) -> str:
-    return format_money(payload.get("total"), payload.get("currency") or "AUD")
+    return format_money(payload.get("total"), payload.get("currency") or "USD")
 
 
 def invoice_pay_block(payload: dict) -> str:
@@ -182,7 +182,7 @@ def invoice_template_vars(payload: dict) -> dict:
         "email": biz.get("email") or "",
         "invoice_number": payload.get("number") or "",
         "total_fmt": _total_fmt(payload),
-        "currency": payload.get("currency") or "AUD",
+        "currency": payload.get("currency") or "USD",
         "status": payload.get("status") or "",
         "pay_block": invoice_pay_block(payload),
         "pay_url": payload.get("hosted_url") or "",

@@ -197,7 +197,11 @@ def seed_plans(db) -> None:
         db.add(plan)
         db.flush()
         db.add(PlanPrice(plan_id=plan.id, currency=DEFAULT_CURRENCY, amount=amount, valid_from=_utcnow()))
-        db.add(PlanPrice(plan_id=plan.id, currency="USD", amount=round(amount * (0.65 if product_line == "STANDALONE" else 1.0), 2), valid_from=_utcnow()))
+        # Keep a second list price when default is not USD (legacy AU books); avoid duplicate USD rows.
+        if DEFAULT_CURRENCY != "USD":
+            db.add(PlanPrice(plan_id=plan.id, currency="USD", amount=round(amount * (0.65 if product_line == "STANDALONE" else 1.0), 2), valid_from=_utcnow()))
+        elif DEFAULT_CURRENCY != "AUD":
+            db.add(PlanPrice(plan_id=plan.id, currency="AUD", amount=amount, valid_from=_utcnow()))
         for key, label, included, limit in features:
             db.add(
                 PlanFeature(
@@ -284,8 +288,18 @@ def seed_compliance(db) -> None:
         )
 
 
+def upsert_setting(db, key: str, value: str) -> None:
+    row = db.scalar(select(AppSetting).where(AppSetting.key == key))
+    if row:
+        if row.value != value:
+            row.value = value
+            row.updated_at = _utcnow()
+        return
+    db.add(AppSetting(key=key, value=value, updated_at=_utcnow()))
+
+
 def seed_settings(db) -> None:
-    ensure_setting(db, "default_currency", DEFAULT_CURRENCY)
+    upsert_setting(db, "default_currency", DEFAULT_CURRENCY)
     ensure_setting(db, "default_timezone", DEFAULT_TIMEZONE)
     ensure_setting(db, "won_on", WON_ON)
     ensure_setting(db, "saas_enabled", "true" if SAAS_ENABLED else "false")

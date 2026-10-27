@@ -11,7 +11,7 @@ SESSION_COOKIE = "mlf_session"
 SESSION_DAYS = 14
 
 # Commercial defaults (overridable via app_settings table)
-DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "AUD").strip().upper() or "AUD"
+DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "USD").strip().upper() or "USD"
 DEFAULT_TIMEZONE = os.getenv("DEFAULT_TIMEZONE", "Australia/Sydney").strip() or "Australia/Sydney"
 WON_ON = os.getenv("WON_ON", "first_payment").strip() or "first_payment"  # first_payment | acceptance
 SAAS_ENABLED = os.getenv("SAAS_ENABLED", "false").lower() in ("1", "true", "yes")

@@ -167,7 +167,7 @@ def send_purchase(
     row.revision_id = str(res.get("revisionId") or product_revision_id)
     row.pay_url = pay_url
     row.quoted_amount_cents = int(res.get("priceCents") or 0)
-    row.currency = str(res.get("currency") or business.currency or "AUD")
+    row.currency = str(res.get("currency") or business.currency or "USD")
     row.crm_lead_id = lead
     row.status = "pending_payment" if pay_url else "sent"
     row.last_event_json = json.dumps({"send": res, "request": req, "crmProspect": prospect}, default=str)[:8000]
@@ -346,7 +346,7 @@ def send_upgrade(
     row.installation_id = install_id
     row.pay_url = pay_url
     row.quoted_amount_cents = int(quote.get("deltaCents") or quote.get("quoteCents") or quote.get("priceCents") or 0)
-    row.currency = str(quote.get("currency") or business.currency or "AUD")
+    row.currency = str(quote.get("currency") or business.currency or "USD")
     row.crm_lead_id = lead
     row.status = "pending_payment" if pay_url else "sent"
     row.last_event_json = json.dumps({"quote": quote, "request": req, "checkout": checkout}, default=str)[:8000]

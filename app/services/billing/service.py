@@ -48,7 +48,7 @@ def _utcnow() -> datetime:
 def _money_to_minor_units(amount: float, currency: str) -> int:
     """Stripe expects the smallest currency unit (cents for AUD/USD)."""
     zero_decimal = {"jpy", "krw", "vnd"}
-    cur = (currency or "aud").lower()
+    cur = (currency or "usd").lower()
     if cur in zero_decimal:
         return int(round(float(amount)))
     return int(round(float(amount) * 100))
@@ -81,7 +81,7 @@ def create_stripe_checkout_session(
         "cancel_url": cancel,
         "client_reference_id": reference[:200],
         "line_items[0][quantity]": "1",
-        "line_items[0][price_data][currency]": (currency or "aud").lower(),
+        "line_items[0][price_data][currency]": (currency or "usd").lower(),
         "line_items[0][price_data][unit_amount]": str(_money_to_minor_units(amount, currency)),
         "line_items[0][price_data][product_data][name]": (description or "AppointHive")[:120],
         "metadata[proposal_ref]": reference[:500],
@@ -166,7 +166,7 @@ def create_paypal_order(
                     "reference_id": reference[:127],
                     "description": (description or "AppointHive")[:127],
                     "amount": {
-                        "currency_code": (currency or "AUD").upper(),
+                        "currency_code": (currency or "USD").upper(),
                         "value": f"{float(amount):.2f}",
                     },
                 }
@@ -309,7 +309,7 @@ def create_invoice_from_proposal(
         is_test = sec.stripe_mode() != "live"
         provider_ref, hosted, instructions = create_stripe_checkout_session(
             amount=float(proposal.total),
-            currency=proposal.currency or "AUD",
+            currency=proposal.currency or "USD",
             description=f"AppointHive {proposal.reference}",
             reference=proposal.reference,
             customer_email=customer_email,
@@ -320,7 +320,7 @@ def create_invoice_from_proposal(
         is_test = sec.paypal_mode() != "live"
         provider_ref, hosted, instructions = create_paypal_order(
             amount=float(proposal.total),
-            currency=proposal.currency or "AUD",
+            currency=proposal.currency or "USD",
             description=f"AppointHive {proposal.reference}",
             reference=proposal.reference,
         )
@@ -328,7 +328,7 @@ def create_invoice_from_proposal(
         provider_ref = f"payoneer_{proposal.reference}"
         payee = sec.payoneer_payee_email() or "(set Payoneer payee email in Settings → Payment providers)"
         amount = float(proposal.total)
-        cur = proposal.currency or "AUD"
+        cur = proposal.currency or "USD"
         instructions = (
             f"Pay via Payoneer\n"
             f"Pay to: {payee}\n"
@@ -347,7 +347,7 @@ def create_invoice_from_proposal(
         else:
             pay_to = "(set Skrill pay-to email in Settings → Payment providers)"
         amount = float(proposal.total)
-        cur = proposal.currency or "AUD"
+        cur = proposal.currency or "USD"
         instructions = (
             f"Pay via Skrill\n"
             f"Pay to: {pay_to}\n"
@@ -566,7 +566,7 @@ def create_proposal(
         title=title or f"Proposal for {business.name}",
         reference=ref,
         status="draft",
-        currency=(currency or business.currency or "AUD").upper(),
+        currency=(currency or business.currency or "USD").upper(),
         subtotal=round(subtotal, 2),
         discount_amount=discount_amount,
         discount_reason=discount_reason or "",

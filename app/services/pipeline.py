@@ -40,8 +40,10 @@ def list_stages(db, product_line: str = "STANDALONE") -> list[PipelineStage]:
 
 def init_new_prospect(db, b: Business, *, lead_source: str = "google_places") -> None:
     """Set Sales OS defaults on a newly created business row."""
+    from app.config import DEFAULT_CURRENCY
+
     b.product_line = b.product_line or "STANDALONE"
-    b.currency = b.currency or "AUD"
+    b.currency = b.currency or DEFAULT_CURRENCY
     b.lead_source = b.lead_source or lead_source
     if not b.date_identified:
         b.date_identified = _utcnow()
@@ -77,7 +79,9 @@ def backfill_prospect_stages(db) -> dict:
             b.product_line = "STANDALONE"
             changed = True
         if not getattr(b, "currency", None):
-            b.currency = "AUD"
+            from app.config import DEFAULT_CURRENCY
+
+            b.currency = DEFAULT_CURRENCY
             changed = True
         if not b.pipeline_stage_id:
             slug = infer_slug_from_flags(b)

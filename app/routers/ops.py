@@ -298,7 +298,7 @@ def create_plan(body: PlanBody, _user: str = Depends(require_user), db=Depends(g
         db.add(
             PlanPrice(
                 plan_id=plan.id,
-                currency=str(p.get("currency") or "AUD").upper(),
+                currency=str(p.get("currency") or "USD").upper(),
                 amount=float(p.get("amount") or 0),
                 valid_from=datetime.now(timezone.utc),
             )
@@ -337,7 +337,7 @@ def patch_plan(plan_id: int, payload: dict[str, Any], _user: str = Depends(requi
             db.add(
                 PlanPrice(
                     plan_id=plan.id,
-                    currency=str(p.get("currency") or "AUD").upper(),
+                    currency=str(p.get("currency") or "USD").upper(),
                     amount=float(p.get("amount") or 0),
                     valid_from=now,
                 )

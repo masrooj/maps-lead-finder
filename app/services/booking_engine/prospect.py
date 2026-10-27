@@ -78,7 +78,7 @@ def build_crm_prospect(db, business: Business) -> dict[str, Any]:
             "mainPain": (business.main_pain or "")[:1000],
             "notes": (business.notes or "")[:1000],
             "productLine": business.product_line or "STANDALONE",
-            "currency": business.currency or "AUD",
+            "currency": business.currency or "USD",
             "dealValue": business.deal_value,
             "leadSource": business.lead_source or "",
             "installationId": getattr(business, "be_installation_id", "") or "",

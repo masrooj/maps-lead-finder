@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root{
+  color-scheme:dark;
   --bg:#070b16;--bg-glow:#152445;--panel:#10182b;--panel2:#162136;--panel-elev:#1a2740;
   --line:#2a3a56;--line-soft:#223149;--text:#eef3ff;--muted:#93a1bc;--label:#a9b7d1;
   --accent:#7ea2ff;--accent-2:#5ce0c0;--accent-soft:rgba(126,162,255,.14);
@@ -442,7 +443,19 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .pager .pager-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .pager .pager-actions button{min-height:36px;padding:7px 12px;font-size:12px}
 .pager .pager-actions button:disabled{opacity:.45;cursor:default}
-.pager select{min-height:36px;width:auto;min-width:72px;padding:6px 10px;font-size:12px}
+.pager select{
+  min-height:36px;width:auto;min-width:88px;padding:6px 32px 6px 10px;font-size:12px;
+  border:1px solid var(--line);border-radius:9px;outline:none;cursor:pointer;
+  background-color:var(--input);color:var(--text);-webkit-appearance:none;appearance:none;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%2393a1bc' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;background-size:12px 8px;
+}
+.pager select:hover{border-color:#3f5478;background-color:var(--input-hover)}
+.pager select:focus{
+  border-color:var(--accent);box-shadow:var(--focus-ring);background-color:var(--input-focus);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%237ea2ff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+}
+.pager select option{background:var(--panel);color:var(--text)}
 .lead:last-child,.queue-lead:last-child{border-bottom:0}
 .lead:hover,.queue-lead:hover{background:rgba(23,33,57,.85)}
 .lead.active{background:var(--accent-soft)}
@@ -656,6 +669,19 @@ body:not(.authed) .wrap{
 .compose-contact .value,.compose-contact a{color:#edf3ff;word-break:break-word}
 .compose-contact a{color:#bcd0ff}
 .channel-note{margin-top:8px;color:var(--muted);font-size:12px}
+.compose-return{
+  display:none;margin:0 0 12px;padding:12px 14px;border-radius:12px;
+  border:1px solid rgba(92,224,192,.45);background:rgba(22,53,44,.72);color:#b8f0d8;font-size:13px;line-height:1.45
+}
+.compose-return.show{display:block}
+.compose-return strong{color:#e8fff6;display:block;margin-bottom:4px;font-size:14px}
+#composeModal.confirm-ready .modal-foot{box-shadow:0 -10px 28px rgba(92,224,192,.12)}
+#composeModal.confirm-ready #confirmSentBtn,
+#composeModal.confirm-ready #confirmNextBtn{
+  background:linear-gradient(180deg,#8eafff 0%,var(--accent) 100%);border-color:transparent;color:#071022;font-weight:750
+}
+#composeModal.confirm-ready #copyComposeBtn,
+#composeModal.confirm-ready #openComposeBtn{opacity:.72}
 .activity{list-style:none;margin:0;padding:0}
 .activity li{padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:12px}
 .activity li:last-child{border-bottom:0}
@@ -1072,12 +1098,13 @@ body:not(.authed) .wrap{
         <h2>Prospects</h2>
         <div class="crud-toolbar" style="margin:0">
           <input id="prospectsQ" placeholder="Search name, email, city…">
-          <select id="prospectsCity"><option value="">All cities</option></select>
+          <select id="prospectsCountry" aria-label="Country"><option value="">All countries</option></select>
+          <select id="prospectsCity" aria-label="City"><option value="">All cities</option></select>
           <button type="button" id="prospectsRefresh">Refresh</button>
         </div>
       </div>
-      <p class="hint" id="prospectsMeta" style="margin-top:0">Showing book of business. Click a row to open details.</p>
-      <div class="sales-table-wrap"><table class="sales-table prospects-table" id="prospectsTable"><thead><tr><th>Name</th><th>City</th><th>Stage</th><th>Value</th><th>Score</th><th></th></tr></thead><tbody></tbody></table></div>
+      <p class="hint" id="prospectsMeta" style="margin-top:0">Filter by country, then city — lists stay city-scoped, never mixed.</p>
+      <div class="sales-table-wrap"><table class="sales-table prospects-table" id="prospectsTable"><thead><tr><th>Name</th><th>Country</th><th>City</th><th>Stage</th><th>Value</th><th>Score</th><th></th></tr></thead><tbody></tbody></table></div>
     </section>
   </div>
 
@@ -1106,14 +1133,22 @@ body:not(.authed) .wrap{
         <button type="button" role="tab" class="active" data-cq-tab="all" aria-selected="true">All <span class="tab-count" id="contactQueueAllCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="selected" aria-selected="false">To contact <span class="tab-count" id="contactQueueSelectedCount">0</span></button>
       </div>
-      <div class="fields" style="grid-template-columns:minmax(220px,1.4fr) auto;align-items:end;margin-bottom:10px">
+      <div class="fields" style="grid-template-columns:minmax(160px,1fr) minmax(160px,1fr) minmax(220px,1.4fr) auto;align-items:end;margin-bottom:10px">
+        <div class="field">
+          <label for="contactQueueCountry">Country</label>
+          <select id="contactQueueCountry" aria-label="Filter by country"><option value="">All countries</option></select>
+        </div>
+        <div class="field">
+          <label for="contactQueueCity">City</label>
+          <select id="contactQueueCity" aria-label="Filter by city"><option value="">All cities</option></select>
+        </div>
         <div class="field">
           <label for="contactQueueMode">Ranking mode</label>
           <select id="contactQueueMode" aria-describedby="contactQueueDef"></select>
         </div>
         <button type="button" id="contactQueueSaveMode">Save as default</button>
       </div>
-      <p class="hint" id="contactQueueDef" style="margin-top:0">Choose how leads are filtered and scored, then refresh.</p>
+      <p class="hint" id="contactQueueDef" style="margin-top:0">Pick a country and city to rank that market only — Balanced no longer truncates at 100.</p>
       <div class="queue-summary" id="contactQueueExplain"></div>
       <div class="queue-search" id="contactQueueSearchWrap" role="search">
         <span class="queue-search-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
@@ -1218,6 +1253,9 @@ body:not(.authed) .wrap{
       <h3 class="panel-title">Prospect auto-setup</h3>
       <p class="hint" style="margin-top:0">Assign product line, currency, pipeline stage, and follow-up tasks for leads missing Sales OS fields.</p>
       <button type="button" class="primary" id="autoSetupProspectsBtn">Run auto-setup now</button>
+      <h3 class="panel-title">Currency</h3>
+      <p class="hint" style="margin-top:0">Default is <strong>USD</strong>. Bulk-convert prospects still on AUD → USD. Other currencies (EUR, GBP, …) are left alone — switch any prospect back with the currency select in Details.</p>
+      <button type="button" class="primary" id="normalizeCurrencyBtn">Set AUD → USD now</button>
       <h3 class="panel-title">Users</h3>
       <div class="crud-toolbar">
         <button type="button" class="primary" id="userAddBtn">Add user</button>
@@ -1399,6 +1437,10 @@ body:not(.authed) .wrap{
       <h3 id="composeTitle">Send message</h3>
       <p class="sub" id="composeLead"></p>
       <div class="compose-contact"><span class="label" id="composeContactLabel">To</span><div class="value" id="composeContactValue"></div></div>
+      <div class="compose-return" id="composeReturnBanner" role="status" aria-live="polite">
+        <strong>Welcome back</strong>
+        <span id="composeReturnText">Did you send the message? Confirm below, or Confirm + next to keep working the list.</span>
+      </div>
     </div>
     <div class="modal-scroll">
       <div class="field"><label for="composeChannel">Channel</label><select id="composeChannel"></select></div>
@@ -1431,7 +1473,7 @@ body:not(.authed) .wrap{
     <div class="modal-foot">
       <div class="modal-actions">
         <button type="button" class="primary" id="copyComposeBtn">Copy message</button>
-        <button type="button" id="openComposeBtn" title="Optional — opens web app if you prefer">Open channel (optional)</button>
+        <button type="button" id="openComposeBtn" title="Opens Zoho Mail / WhatsApp / Instagram on this device">Open app</button>
         <button type="button" id="confirmSentBtn">Confirm sent</button>
         <button type="button" id="confirmNextBtn" title="Confirm sent and open next lead (N)">Confirm + next</button>
         <button type="button" id="skipNextBtn" title="Skip without confirming (S)">Skip → next</button>
@@ -1458,6 +1500,7 @@ body:not(.authed) .wrap{
 <script>
 const $=id=>document.getElementById(id);
 const CHANNELS=['email','whatsapp','instagram','invoice'];
+const CURRENCY_OPTIONS=['USD','AUD','EUR','GBP','NZD','CAD','AED','SAR','SGD','INR'];
 let rowsData=[];
 let locations={};
 let selectedIds=new Set();
@@ -1470,6 +1513,8 @@ let selectedTplId=null;
 let templatesStore=null;
 let viewMode='city'; // city | queue | due
 let openedChannel=null;
+let composeAwaitingReturn=false;
+let composeReturnArmedAt=0;
 let enriching=false;
 let lastUndo=null; // {type:'unarchive'|'restore', id, snapshot?}
 let loadSeq=0; // ignore stale responses when views/filters change quickly
@@ -1741,35 +1786,71 @@ async function openProspectById(id){
 }
 
 let prospectsCache=[];
+let prospectsLocCache={}; // country -> Set(cities) — full book, not filtered slice
 let activitiesCache=[];
 let tasksCache=[];
 let demosCache=[];
-function renderProspectsTable(){
+function prospectsScopeLabel(){
+  const country=($('prospectsCountry')&&$('prospectsCountry').value)||'';
   const city=($('prospectsCity')&&$('prospectsCity').value)||'';
+  if(country&&city) return `${city} · ${country}`;
+  if(city) return city;
+  if(country) return country;
+  return '';
+}
+function mergeProspectsLocCache(rows){
+  (rows||[]).forEach(p=>{
+    const ctry=(p.country||'').trim();
+    const cty=(p.city||'').trim();
+    if(!ctry) return;
+    if(!prospectsLocCache[ctry]) prospectsLocCache[ctry]=new Set();
+    if(cty) prospectsLocCache[ctry].add(cty);
+  });
+}
+function fillProspectsLocationFilters(keepCountry, keepCity){
+  const countrySel=$('prospectsCountry');
+  const citySel=$('prospectsCity');
+  if(!countrySel||!citySel) return;
+  const loc=prospectsLocCache||{};
+  const countries=Object.keys(loc).sort((a,b)=>a.localeCompare(b));
+  const curCountry=keepCountry!=null?keepCountry:(countrySel.value||'');
+  countrySel.innerHTML='<option value="">All countries</option>'+countries.map(c=>`<option value="${esc(c)}" ${c===curCountry?'selected':''}>${esc(c)}</option>`).join('');
+  if(curCountry && ![...countrySel.options].some(o=>o.value===curCountry)) countrySel.value='';
+  const activeCountry=countrySel.value;
+  const cities=activeCountry
+    ? [...(loc[activeCountry]||[])].sort((a,b)=>a.localeCompare(b))
+    : [...new Set(Object.values(loc).flatMap(s=>[...s]))].sort((a,b)=>a.localeCompare(b));
+  const curCity=keepCity!=null?keepCity:(citySel.value||'');
+  citySel.innerHTML='<option value="">All cities</option>'+cities.map(c=>`<option value="${esc(c)}" ${c===curCity?'selected':''}>${esc(c)}</option>`).join('');
+  if(curCity && ![...citySel.options].some(o=>o.value===curCity)) citySel.value='';
+}
+function renderProspectsTable(){
+  const scope=prospectsScopeLabel();
   const tb=$('prospectsTable').querySelector('tbody');
   const pagerHost=ensurePagerHost($('prospectsTable').closest('.sales-table-wrap'),'prospectsPager');
   const rows=prospectsCache||[];
   if(!rows.length){
-    if($('prospectsMeta')) $('prospectsMeta').textContent='No prospects match. Check city filter or run Discover with Fetch: All.';
-    tb.innerHTML='<tr><td colspan="6" data-label=""><div class="empty-card">No prospects match. Check city filter or run Discover with Fetch: All.</div></td></tr>';
+    if($('prospectsMeta')) $('prospectsMeta').textContent='No prospects match. Pick a country/city or run Discover with Fetch: All.';
+    tb.innerHTML='<tr><td colspan="7" data-label=""><div class="empty-card">No prospects match. Pick a country and city, or run Discover with Fetch: All.</div></td></tr>';
     if(pagerHost) pagerHost.innerHTML='';
     return;
   }
   const slice=pageSlice(rows,'prospects');
   if($('prospectsMeta')){
-    $('prospectsMeta').textContent=`${slice.total} prospects${city?' in '+city:''} · page ${slice.page}/${slice.pages}. Tap a card/row to open.`;
+    $('prospectsMeta').textContent=`${slice.total} prospects${scope?' in '+scope:''} · page ${slice.page}/${slice.pages}. Country and city stay separate columns.`;
   }
   tb.innerHTML=slice.items.map(p=>{
     const hasVal=p.deal_value!=null&&p.deal_value!=='';
     const hasScore=p.qualification_score!=null&&p.qualification_score!=='';
     const valHtml=hasVal
-      ?`<span class="value-pill has">${esc(p.currency||'AUD')} ${esc(p.deal_value)}</span>`
+      ?`<span class="value-pill has">${esc(p.currency||'USD')} ${esc(p.deal_value)}</span>`
       :`<span class="value-pill muted-dash">No value</span>`;
     const scoreHtml=hasScore
       ?`<span class="score-pill has">${esc(p.qualification_score)}/10</span>`
       :`<span class="score-pill muted-dash">Not scored</span>`;
     return `<tr data-open-prospect="${p.id}">
     <td data-label="Name"><strong>${esc(p.name)}</strong></td>
+    <td data-label="Country">${esc(p.country||'—')}</td>
     <td data-label="City">${esc(p.city||'—')}</td>
     <td data-label="Stage">${esc((p.stage&&p.stage.name)||'—')}</td>
     <td data-label="Value">${valHtml}</td>
@@ -1786,16 +1867,20 @@ function renderProspectsTable(){
 }
 async function loadProspects(){
   const q=($('prospectsQ')&&$('prospectsQ').value)||'';
+  const country=($('prospectsCountry')&&$('prospectsCountry').value)||'';
   const city=($('prospectsCity')&&$('prospectsCity').value)||'';
-  const data=await api('/api/sales/prospects?limit=2000&q='+encodeURIComponent(q)+'&city='+encodeURIComponent(city));
-  prospectsCache=data.prospects||[];
-  const cities=[...new Set(prospectsCache.map(p=>p.city).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const sel=$('prospectsCity');
-  if(sel){
-    const cur=sel.value;
-    sel.innerHTML='<option value="">All cities</option>'+cities.map(c=>`<option value="${esc(c)}" ${c===cur?'selected':''}>${esc(c)}</option>`).join('');
-    if(city && ![...sel.options].some(o=>o.value===city)) sel.value='';
+  // Seed full country/city menus once so filters never collapse to the active scope
+  if(!Object.keys(prospectsLocCache).length){
+    const seed=await api('/api/sales/prospects?limit=2000');
+    mergeProspectsLocCache(seed.prospects||[]);
   }
+  const qs=new URLSearchParams({limit:'2000',q});
+  if(country) qs.set('country',country);
+  if(city) qs.set('city',city);
+  const data=await api('/api/sales/prospects?'+qs.toString());
+  prospectsCache=data.prospects||[];
+  mergeProspectsLocCache(prospectsCache);
+  fillProspectsLocationFilters(country, city);
   if(pagerState.prospects) pagerState.prospects.page=1;
   renderProspectsTable();
 }
@@ -2216,7 +2301,7 @@ async function loadAppointHive(){
               ${rows.map(r=>`<tr>
                 <td><strong>${esc(r.label||r.productName||r.productId||'—')}</strong></td>
                 <td>${esc(r.edition||'')}</td>
-                <td>${esc(r.currency||'AUD')} ${(Number(r.priceCents||0)/100).toFixed(2)}</td>
+                <td>${esc(r.currency||'USD')} ${(Number(r.priceCents||0)/100).toFixed(2)}</td>
                 <td><code>${esc(r.productRevisionId||r.id||'')}</code></td>
               </tr>`).join('')}
             </tbody></table></div>`
@@ -2953,9 +3038,27 @@ let contactQueueModes=[];
 let contactQueueTab='all'; // all | selected
 let contactQueuePick=new Set(); // checkbox picks on All tab (before mark)
 let contactQueueQuery='';
+let contactQueueLocations={}; // country -> [cities] from API
 
 function contactQueueSelectedLeads(){
   return (contactQueueLeads||[]).filter(b=>b.marked_for_contact && !b.contacted && !b.opt_out);
+}
+function fillContactQueueLocationFilters(locations, keepCountry, keepCity){
+  const countrySel=$('contactQueueCountry');
+  const citySel=$('contactQueueCity');
+  if(!countrySel||!citySel) return;
+  contactQueueLocations=locations||{};
+  const countries=Object.keys(contactQueueLocations).sort((a,b)=>a.localeCompare(b));
+  const curCountry=keepCountry!=null?keepCountry:(countrySel.value||'');
+  countrySel.innerHTML='<option value="">All countries</option>'+countries.map(c=>`<option value="${esc(c)}" ${c===curCountry?'selected':''}>${esc(c)}</option>`).join('');
+  if(curCountry && ![...countrySel.options].some(o=>o.value===curCountry)) countrySel.value='';
+  const activeCountry=countrySel.value;
+  const cities=activeCountry
+    ? (contactQueueLocations[activeCountry]||[]).slice().sort((a,b)=>a.localeCompare(b))
+    : [...new Set(Object.values(contactQueueLocations).flat())].sort((a,b)=>a.localeCompare(b));
+  const curCity=keepCity!=null?keepCity:(citySel.value||'');
+  citySel.innerHTML='<option value="">All cities</option>'+cities.map(c=>`<option value="${esc(c)}" ${c===curCity?'selected':''}>${esc(c)}</option>`).join('');
+  if(curCity && ![...citySel.options].some(o=>o.value===curCity)) citySel.value='';
 }
 
 function contactQueueMatchQuery(b, q){
@@ -3014,7 +3117,7 @@ function renderContactQueueExplain(data){
       </div>
       <div style="display:flex;gap:18px;flex:0 0 auto">
         <div><div class="sub" style="margin:0">Showing</div><strong style="font-size:22px;letter-spacing:-.03em">${shown}</strong></div>
-        <div><div class="sub" style="margin:0">Candidates</div><strong style="font-size:22px;letter-spacing:-.03em">${total}</strong></div>
+        <div><div class="sub" style="margin:0">In scope</div><strong style="font-size:22px;letter-spacing:-.03em">${total}</strong></div>
       </div>
     </div>
     <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → pick → Mark to contact (bottom) → To contact → Message.</p>
@@ -3097,7 +3200,7 @@ function renderContactQueueList(){
       <div class="queue-rank meta" style="min-width:48px;align-items:flex-start"><strong style="font-size:18px">#${rankNo}</strong><span class="sub">${esc(String(b.rank_score))}</span></div>
       <div class="queue-body">
         <div class="biz">${esc(b.name||'—')}${already&&!isSelected?' <span class="badge queue">To contact</span>':''}</div>
-        <div class="sub">${esc(b.city||'')} · ${esc((b.stage&&b.stage.name)||'—')} · ${esc(reach)}</div>
+        <div class="sub"><span>${esc(b.country||'—')}</span> · <span>${esc(b.city||'—')}</span> · ${esc((b.stage&&b.stage.name)||'—')} · ${esc(reach)}</div>
         <div class="reach" style="margin-top:6px">${chips||`<span class="chip">${esc(b.why||'ranked')}</span>`}</div>
       </div>
       <div class="actions">${actions}
@@ -3157,12 +3260,20 @@ async function markContactQueueIds(ids, marked){
 async function loadContactQueue(opts={}){
   if(!opts.keepTab){ /* preserve tab when refreshing after mark */ }
   const mode=($('contactQueueMode')&&$('contactQueueMode').value)||'';
-  const qs=new URLSearchParams({product_line:'STANDALONE',limit:'100'});
+  const country=($('contactQueueCountry')&&$('contactQueueCountry').value)||'';
+  const city=($('contactQueueCity')&&$('contactQueueCity').value)||'';
+  const qs=new URLSearchParams({product_line:'STANDALONE',limit:'0'});
   if(mode) qs.set('mode', mode);
+  if(country) qs.set('country', country);
+  if(city) qs.set('city', city);
   const data=await api('/api/sales/contact-queue?'+qs.toString());
   fillContactQueueModes(data.modes||[], data.mode||'default');
+  fillContactQueueLocationFilters(data.locations||{}, country, city);
+  const scope=[country,city].filter(Boolean).join(' · ');
   if($('contactQueueDef')){
-    $('contactQueueDef').textContent=(data.definition||'')+` · Pick on All → Mark to contact → message from To contact.`;
+    $('contactQueueDef').textContent=(data.definition||'')
+      +(scope?` · Scoped to ${scope}.`:' · All countries/cities combined — pick a country then city to separate.')
+      +` · Pick on All → Mark to contact → message from To contact.`;
   }
   renderContactQueueExplain(data);
   contactQueueLeads=data.leads||[];
@@ -3172,6 +3283,7 @@ async function loadContactQueue(opts={}){
   if($('contactQueueSearch') && contactQueueQuery && $('contactQueueSearch').value!==contactQueueQuery){
     $('contactQueueSearch').value=contactQueueQuery;
   }
+  if(pagerState['contactQueue:'+contactQueueTab]) pagerState['contactQueue:'+contactQueueTab].page=1;
   syncContactQueueSearchUi();
   renderContactQueueList();
 }
@@ -3210,10 +3322,10 @@ async function createProposalInvoiceForProspect(businessId, {provider='manual', 
   const prop=await api('/api/sales/proposals',{method:'POST',body:{
     business_id:Number(businessId),
     title:form.title||(plan.name+' proposal'),
-    currency:'AUD',
+    currency:'USD',
     plan_id:Number(form.plan_id),
-    tax_rate:0.1,
-    tax_label:'GST',
+    tax_rate:0,
+    tax_label:'',
     terms_url:''
   }});
   await api('/api/sales/proposals/'+prop.id+'/send',{method:'POST',body:{}});
@@ -3458,23 +3570,126 @@ function instagramHandle(url){
     return part;
   }catch(e){return ''}
 }
+function isMobileClient(){
+  const ua=navigator.userAgent||'';
+  if(/Android|iPhone|iPad|iPod|Mobile|IEMobile|Opera Mini/i.test(ua)) return true;
+  try{ if(navigator.maxTouchPoints>1 && window.matchMedia('(max-width:920px)').matches) return true; }catch(e){}
+  return false;
+}
+function isAndroidClient(){ return /Android/i.test(navigator.userAgent||''); }
+function isIOSClient(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent||''); }
 function zohoComposeUrl(to,subject,body){
   // Zoho Mail web composer (mailto handler style) — fills To, Subject, Body
   const ct=`mailto:${to}?subject=${encodeURIComponent(subject||'')}&body=${encodeURIComponent(body||'')}`;
   return `https://mail.zoho.com/mail/compose.do?extsrc=mailto&mode=compose&ct=${encodeURIComponent(ct)}`;
 }
+function mailtoComposeUrl(to,subject,body){
+  // Opens the device mail app — set Zoho Mail as the default handler to land in Zoho
+  return `mailto:${to}?subject=${encodeURIComponent(subject||'')}&body=${encodeURIComponent(body||'')}`;
+}
 function whatsappWebUrl(phone,body){
   return `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(body||'')}`;
 }
+function whatsappAppUrl(phone,body){
+  const text=encodeURIComponent(body||'');
+  const waMe=`https://wa.me/${phone}?text=${text}`;
+  // Prefer WhatsApp Business on Android when installed; falls back to wa.me / personal WA
+  if(isAndroidClient()){
+    return `intent://send?phone=${phone}&text=${text}#Intent;scheme=whatsapp;package=com.whatsapp.w4b;S.browser_fallback_url=${encodeURIComponent(waMe)};end`;
+  }
+  // iOS / other: wa.me hands off to WhatsApp or WhatsApp Business (system chooser)
+  return waMe;
+}
+function instagramAppUrl(profileUrl, handle){
+  const h=(handle||'').replace(/^@/,'');
+  if(h){
+    if(isMobileClient()){
+      // App scheme first path via launchExternal; https ig.me opens DM in app when installed
+      return { app:`instagram://user?username=${encodeURIComponent(h)}`, web:`https://ig.me/m/${encodeURIComponent(h)}` };
+    }
+    return { app:'', web:`https://ig.me/m/${encodeURIComponent(h)}` };
+  }
+  return { app:'', web:profileUrl||'https://www.instagram.com/direct/inbox/' };
+}
+function launchExternal(url){
+  if(!url) return;
+  // Custom schemes + mailto hand off more reliably via <a> than window.open on mobile Safari/Chrome
+  try{
+    const a=document.createElement('a');
+    a.href=url;
+    a.target='_blank';
+    a.rel='noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }catch(e){
+    try{ window.open(url,'_blank','noopener,noreferrer'); }catch(err){ window.location.href=url; }
+  }
+}
+function launchAppWithFallback(appUrl, webUrl, waitMs){
+  if(appUrl && isMobileClient()){
+    const start=Date.now();
+    // Navigate to custom scheme; if the app isn't installed, bounce to https shortly after
+    try{ window.location.href=appUrl; }catch(e){}
+    setTimeout(()=>{
+      // If page is still visible, app likely didn't take over
+      if(document.visibilityState==='visible' && Date.now()-start>=(waitMs||700)){
+        launchExternal(webUrl);
+      }
+    }, waitMs||700);
+    return;
+  }
+  launchExternal(webUrl||appUrl);
+}
 function dateOnly(iso){if(!iso)return '';return String(iso).slice(0,10)}
 function fmtMoney(amount, currency){
-  const cur=(currency||'AUD').toUpperCase();
+  const cur=(currency||'USD').toUpperCase();
   const n=Number(amount);
   if(Number.isFinite(n)){
     try{return new Intl.NumberFormat(undefined,{style:'currency',currency:cur,currencyDisplay:'narrowSymbol'}).format(n)}
     catch(e){return cur+' '+n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}
   }
   return amount==null||amount===''?'—':String(amount);
+}
+function currencySelectHtml(selected, id){
+  const cur=((selected||'USD')+'').trim().toUpperCase()||'USD';
+  const opts=CURRENCY_OPTIONS.slice();
+  if(cur && !opts.includes(cur)) opts.unshift(cur);
+  // USD first as default, then the prospect's current (if not USD), then the rest
+  const ordered=[...new Set(['USD', cur, ...opts].filter(Boolean))];
+  return `<select id="${esc(id||'drawerCurrency')}" aria-label="Currency">${ordered.map(c=>`<option value="${esc(c)}" ${c===cur?'selected':''}>${esc(c)}${c==='USD'?' · default':''}</option>`).join('')}</select>`;
+}
+function clearComposeConfirmReturn(){
+  composeAwaitingReturn=false;
+  composeReturnArmedAt=0;
+  const modal=$('composeModal');
+  if(modal) modal.classList.remove('confirm-ready');
+  const banner=$('composeReturnBanner');
+  if(banner) banner.classList.remove('show');
+}
+function showComposeConfirmReturn(){
+  if(!composeLead) return;
+  const modal=$('composeModal');
+  if(!modal || modal.classList.contains('hidden')) return;
+  if(!composeAwaitingReturn) return;
+  // Ignore the brief blur that happens while launching the app
+  if(composeReturnArmedAt && Date.now()-composeReturnArmedAt<900) return;
+  composeAwaitingReturn=false;
+  modal.classList.add('confirm-ready');
+  const ch=openedChannel||($('composeChannel')&&$('composeChannel').value)||'message';
+  const banner=$('composeReturnBanner');
+  const text=$('composeReturnText');
+  if(text) text.textContent=`Looks like you returned from ${channelLabel(ch)}. If you sent it, tap Confirm sent (or Confirm + next).`;
+  if(banner) banner.classList.add('show');
+  const btn=$('confirmSentBtn');
+  if(btn){
+    try{ btn.focus({preventScroll:false}); }catch(e){ try{btn.focus()}catch(err){} }
+  }
+  try{
+    const foot=modal.querySelector('.modal-foot');
+    if(foot) foot.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(e){}
+  toast('Welcome back — confirm sent when ready');
 }
 function fmtDate(iso){
   if(!iso) return '—';
@@ -3769,9 +3984,23 @@ function availableComposeChannels(b){const c=contactChannels(b);return CHANNELS.
 
 function composeContactInfo(b,channel){
   const s=b.social_links||{};
-  if(channel==='email'){const emails=String(b.email||'').split(',').map(e=>e.trim()).filter(Boolean);return{label:'Email',html:emails.length?emails.map(e=>`<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>'):'No email'}}
-  if(channel==='whatsapp'){const display=b.international_phone||b.phone||'';return{label:'WhatsApp',html:display?esc(display):'No phone'}}
-  if(channel==='instagram'){return{label:'Instagram',html:s.instagram?`<a href="${esc(s.instagram)}" target="_blank" rel="noopener noreferrer">Open profile</a>`:'No Instagram'}}
+  if(channel==='email'){
+    const emails=String(b.email||'').split(',').map(e=>e.trim()).filter(Boolean);
+    return{label:'Email',html:emails.length?emails.map(e=>`<a href="mailto:${esc(e)}">${esc(e)}</a>`).join('<br>'):'No email'};
+  }
+  if(channel==='whatsapp'){
+    const display=b.international_phone||b.phone||'';
+    const phone=phoneDigits(b);
+    if(!display||!phone) return{label:'WhatsApp',html:'No phone'};
+    const href=isMobileClient()?`https://wa.me/${phone}`:whatsappWebUrl(phone,'');
+    return{label:'WhatsApp',html:`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(display)}</a>`};
+  }
+  if(channel==='instagram'){
+    if(!s.instagram) return{label:'Instagram',html:'No Instagram'};
+    const handle=instagramHandle(s.instagram);
+    const href=handle?`https://ig.me/m/${encodeURIComponent(handle)}`:s.instagram;
+    return{label:'Instagram',html:`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(handle?('@'+handle):'Open profile')}</a>`};
+  }
   return{label:'Contact',html:'—'};
 }
 
@@ -3881,12 +4110,25 @@ function applyComposeTemplate(){
   const info=composeContactInfo(composeLead,channel);
   $('composeContactLabel').textContent='Sending via '+channelLabel(channel);
   $('composeContactValue').innerHTML=info.html;
+  const mobile=isMobileClient();
   $('composeNote').textContent=channel==='email'
-    ?'Copy subject + body, paste into Zoho/Gmail (or use optional Open channel). Then Confirm sent.'
+    ?(mobile
+      ?'Open app launches your mail app (set Zoho Mail as default). Message is also copied — paste if needed, then Confirm sent.'
+      :'Copy subject + body, or Open Zoho web compose. Then Confirm sent.')
     :channel==='whatsapp'
-      ?'Copy message, paste into WhatsApp (phone or Web). Then Confirm sent.'
-      :'Copy message, paste into Instagram DM. Then Confirm sent.';
-  if($('openComposeBtn')) $('openComposeBtn').textContent=channel==='email'?'Open Zoho (optional)':channel==='whatsapp'?'Open WA Web (optional)':'Open IG Web (optional)';
+      ?(mobile
+        ?'Open app launches WhatsApp Business (or WhatsApp). Message is prefilled when possible — then Confirm sent.'
+        :'Copy message, or Open WhatsApp Web. Then Confirm sent.')
+      :(mobile
+        ?'Open app launches Instagram. Message is copied — paste into DM, then Confirm sent.'
+        :'Copy message, or Open Instagram web. Then Confirm sent.');
+  if($('openComposeBtn')){
+    $('openComposeBtn').textContent=channel==='email'
+      ?(mobile?'Open Zoho / Mail app':'Open Zoho Mail')
+      :channel==='whatsapp'
+        ?(mobile?'Open WhatsApp app':'Open WhatsApp Web')
+        :(mobile?'Open Instagram app':'Open Instagram');
+  }
 }
 async function copyComposeMessage(){
   if(!composeLead)return;
@@ -3925,14 +4167,20 @@ async function openCompose(b,preferred){
   $('composeFollowUp').value=dateOnly(b.next_follow_up_at)||'';
   $('composeFollowUp').dataset.touched='0';
   $('igCopyBox').classList.add('hidden');
+  clearComposeConfirmReturn();
   fillComposeTemplates(composePreferred);
   $('composeModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
   const scroll=$('composeModal').querySelector('.modal-scroll');
   if(scroll)scroll.scrollTop=0;
   $('composeBody').focus();
+  // On phones, tapping Email / WA / IG should hand off to the installed app right away
+  if(isMobileClient() && ['email','whatsapp','instagram'].includes(composePreferred)){
+    setTimeout(()=>{ openChannelApp().catch(()=>{}); }, 350);
+  }
 }
 function closeCompose(){
+  clearComposeConfirmReturn();
   $('composeModal').classList.add('hidden');
   composeLead=null;openedChannel=null;
   $('igCopyBox').classList.add('hidden');
@@ -3964,6 +4212,10 @@ function openNextLead(afterId){
   return true;
 }
 
+async function copyTextQuiet(text){
+  if(!text) return false;
+  try{ await navigator.clipboard.writeText(text); return true; }catch(e){ return false; }
+}
 async function openChannelApp(){
   if(!composeLead)return;
   const channel=$('composeChannel').value;
@@ -3971,34 +4223,58 @@ async function openChannelApp(){
   const subject=$('composeSubject').value.trim();
   const body=$('composeBody').value.trim();
   const s=b.social_links||{};
-  let url='';
+  const mobile=isMobileClient();
   let tip='';
   if(channel==='email'){
     const to=firstEmail(b);if(!to){toast('No email.',true);return}
-    url=zohoComposeUrl(to,subject,body);
-    tip='Opened Zoho Mail compose. Confirm sent when done.';
+    const clip=subject?`Subject: ${subject}\n\n${body}`:body;
+    const copied=await copyTextQuiet(clip);
+    if(mobile){
+      // mailto opens Zoho Mail when it is the device default email app
+      launchExternal(mailtoComposeUrl(to,subject,body));
+      tip=copied
+        ?'Mail app opened (use Zoho Mail as default). Message copied if compose fields are empty.'
+        :'Mail app opened. Set Zoho Mail as your default email app to open Zoho.';
+    }else{
+      launchExternal(zohoComposeUrl(to,subject,body));
+      tip='Opened Zoho Mail compose. Confirm sent when done.';
+    }
   }else if(channel==='whatsapp'){
     const phone=phoneDigits(b);if(!phone){toast('No phone.',true);return}
-    url=whatsappWebUrl(phone,body);
-    tip='Opened WhatsApp Web. Confirm sent when done.';
+    const copied=await copyTextQuiet(body);
+    if(mobile){
+      launchExternal(whatsappAppUrl(phone,body));
+      tip=copied
+        ?'WhatsApp / Business opening with message. Confirm sent when done.'
+        :'WhatsApp / Business opening. Paste message if it is blank, then Confirm sent.';
+    }else{
+      launchExternal(whatsappWebUrl(phone,body));
+      tip='Opened WhatsApp Web. Confirm sent when done.';
+    }
   }else if(channel==='instagram'){
     if(!s.instagram){toast('No Instagram.',true);return}
     $('igCopyBox').textContent=body||'(empty message)';
     $('igCopyBox').classList.remove('hidden');
-    try{
-      await navigator.clipboard.writeText(body);
-      tip='Message copied. Paste (⌘/Ctrl+V) into Instagram DM, then confirm sent.';
-    }catch(e){
-      tip='Clipboard blocked — copy from the box below, paste in Instagram DM.';
+    const copied=await copyTextQuiet(body);
+    if(!copied){
       try{const range=document.createRange();range.selectNodeContents($('igCopyBox'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range)}catch(err){}
     }
     const handle=instagramHandle(s.instagram);
-    if(handle)url=`https://ig.me/m/${encodeURIComponent(handle)}`;
-    else url=s.instagram||'https://www.instagram.com/direct/inbox/';
+    const links=instagramAppUrl(s.instagram, handle);
+    if(mobile && links.app){
+      launchAppWithFallback(links.app, links.web, 800);
+    }else{
+      launchExternal(links.web);
+    }
+    tip=copied
+      ?'Instagram opening. Paste the copied message into DM, then Confirm sent.'
+      :'Instagram opening. Copy from the box below, paste into DM, then Confirm sent.';
+  }else{
+    return;
   }
-  if(!url)return;
-  window.open(url,'_blank','noopener,noreferrer');
   openedChannel=channel;
+  composeAwaitingReturn=true;
+  composeReturnArmedAt=Date.now();
   toast(tip);
 }
 
@@ -4006,6 +4282,7 @@ async function confirmSent(opts={}){
   if(!composeLead)return;
   const channel=openedChannel||$('composeChannel').value;
   const currentId=composeLead.id;
+  clearComposeConfirmReturn();
   try{
     const body={channel};
     // Only change follow-up when the user set/cleared the date field intentionally via snooze or typing.
@@ -4090,7 +4367,7 @@ function renderDrawer(){
       <div class="sub">Labels · ${esc(b.search_labels||b.category||'—')}</div>
       <div class="sub" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px">
         <span>Line · ${esc(b.product_line||'STANDALONE')}</span>
-        ${b.deal_value!=null?`<span class="value-pill has">${esc(b.currency||'AUD')} ${esc(b.deal_value)}</span>`:`<span class="value-pill muted-dash">No value</span>`}
+        ${b.deal_value!=null?`<span class="value-pill has">${esc(b.currency||'USD')} ${esc(b.deal_value)}</span>`:`<span class="value-pill muted-dash">No value</span>`}
         ${b.qualification_score!=null?`<span class="score-pill has">${esc(b.qualification_score)}/10</span>`:`<span class="score-pill muted-dash">Not scored</span>`}
       </div>
       <div class="sub" style="margin-top:8px">Place ID · ${esc(String(b.place_id||'').replace(/^places\//,''))}</div>
@@ -4111,7 +4388,7 @@ function renderDrawer(){
     </div>
     <div class="drawer-pane ${tab==='sales'?'active':''}" data-dpane="sales">
       <div class="field"><label for="drawerDealValue">Deal value</label><input id="drawerDealValue" type="number" step="0.01" value="${esc(b.deal_value??'')}" placeholder="e.g. 2500"></div>
-      <div class="field"><label for="drawerCurrency">Currency</label><input id="drawerCurrency" value="${esc(b.currency||'AUD')}"></div>
+      <div class="field"><label for="drawerCurrency">Currency</label>${currencySelectHtml(b.currency||'USD','drawerCurrency')}<p class="hint" style="margin:6px 0 0">Default is USD. Switch to AUD/EUR/etc. only when this prospect needs a local currency.</p></div>
       <div class="field"><label for="drawerNextAction">Next action</label><input id="drawerNextAction" value="${esc(b.next_action||'')}"></div>
       <div class="field"><label for="drawerLostReason">Lost reason</label><input id="drawerLostReason" value="${esc(b.lost_reason||'')}"></div>
       <label class="flag"><input type="checkbox" id="drawerOptOut" ${b.opt_out?'checked':''}> Opted out (blocks outreach)</label>
@@ -4238,7 +4515,7 @@ async function hydrateBeDrawer(){
       if(prices){
         prices.innerHTML=beRevisionsCache.length
           ?`<div class="sub"><strong>Live packages</strong> (refetched on open)</div>`+beRevisionsCache.slice(0,6).map(r=>
-            `<div class="sub">${esc(r.label||r.productName||r.edition||'Package')} · ${esc(r.currency||'AUD')} ${(Number(r.priceCents||0)/100).toFixed(2)}</div>`
+            `<div class="sub">${esc(r.label||r.productName||r.edition||'Package')} · ${esc(r.currency||'USD')} ${(Number(r.priceCents||0)/100).toFixed(2)}</div>`
           ).join('')
           :'<div class="sub">No FINALIZED packages on AppointHive yet.</div>';
       }
@@ -4412,6 +4689,11 @@ $('tasksRefresh')&&$('tasksRefresh').addEventListener('click',()=>loadTasks().ca
 $('taskCreateBtn')&&$('taskCreateBtn').addEventListener('click',()=>createTaskFlow().catch(e=>toast(e.message,true)));
 $('prospectsRefresh')&&$('prospectsRefresh').addEventListener('click',()=>loadProspects().catch(e=>toast(e.message,true)));
 $('prospectsQ')&&$('prospectsQ').addEventListener('keydown',e=>{if(e.key==='Enter')loadProspects().catch(err=>toast(err.message,true))});
+$('prospectsCountry')&&$('prospectsCountry').addEventListener('change',()=>{
+  if($('prospectsCity')) $('prospectsCity').value='';
+  fillProspectsLocationFilters(($('prospectsCountry')&&$('prospectsCountry').value)||'', '');
+  loadProspects().catch(e=>toast(e.message,true));
+});
 $('prospectsCity')&&$('prospectsCity').addEventListener('change',()=>loadProspects().catch(e=>toast(e.message,true)));
 $('activitiesRefresh')&&$('activitiesRefresh').addEventListener('click',()=>loadActivitiesFeed().catch(e=>toast(e.message,true)));
 $('activityCreateBtn')&&$('activityCreateBtn').addEventListener('click',()=>createActivityFlow().catch(e=>toast(e.message,true)));
@@ -4485,6 +4767,12 @@ $('paySetupTabs')&&$('paySetupTabs').addEventListener('click',e=>{
 $('settingsRefresh')&&$('settingsRefresh').addEventListener('click',()=>loadSettings().catch(e=>toast(e.message,true)));
 $('contactQueueRefresh')&&$('contactQueueRefresh').addEventListener('click',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
 $('contactQueueMode')&&$('contactQueueMode').addEventListener('change',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
+$('contactQueueCountry')&&$('contactQueueCountry').addEventListener('change',()=>{
+  if($('contactQueueCity')) $('contactQueueCity').value='';
+  fillContactQueueLocationFilters(contactQueueLocations, ($('contactQueueCountry')&&$('contactQueueCountry').value)||'', '');
+  loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true));
+});
+$('contactQueueCity')&&$('contactQueueCity').addEventListener('change',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
 $('contactQueueSaveMode')&&$('contactQueueSaveMode').addEventListener('click',()=>saveContactQueueMode().catch(e=>toast(e.message,true)));
 $('contactQueueTabs')&&$('contactQueueTabs').addEventListener('click',e=>{
   const btn=e.target.closest('[data-cq-tab]');
@@ -4561,6 +4849,24 @@ $('autoSetupProspectsBtn')&&$('autoSetupProspectsBtn').addEventListener('click',
     toast(`Auto-setup done · updated ${res.updated||0} / ${res.total||0}`);
   }catch(e){ toast(e.message,true); }
 });
+$('normalizeCurrencyBtn')&&$('normalizeCurrencyBtn').addEventListener('click',async()=>{
+  const ok=await uiConfirm({
+    title:'Set AUD → USD?',
+    message:'Updates every prospect still on AUD (or blank) to USD. Prospects already on EUR, GBP, AUD-switched-back, etc. are left alone. You can change any prospect later in Details → Currency.',
+    confirmLabel:'Convert AUD → USD'
+  });
+  if(!ok) return;
+  try{
+    const res=await api('/api/sales/prospects/normalize-currency?from_currency=AUD&to_currency=USD',{method:'POST',body:{}});
+    toast(`Currency updated · ${res.updated||0} → USD · ${res.kept||0} kept · ${res.total||0} total`);
+    if(appPanel==='prospects') loadProspects().catch(()=>{});
+  }catch(e){ toast(e.message,true); }
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible') showComposeConfirmReturn();
+});
+window.addEventListener('pageshow',()=>showComposeConfirmReturn());
+window.addEventListener('focus',()=>showComposeConfirmReturn());
 $('saveSaasFlag')&&$('saveSaasFlag').addEventListener('click',async()=>{
   try{
     const on=$('saasEnabledToggle').checked;
@@ -4728,7 +5034,7 @@ $('drawerPanel').addEventListener('click',async e=>{
     try{
       const body={
         deal_value:$('drawerDealValue').value===''?null:Number($('drawerDealValue').value),
-        currency:$('drawerCurrency').value.trim()||'AUD',
+        currency:$('drawerCurrency').value.trim()||'USD',
         next_action:$('drawerNextAction').value.trim(),
         lost_reason:$('drawerLostReason').value.trim(),
         opt_out:!!$('drawerOptOut').checked,
@@ -4807,7 +5113,7 @@ $('drawerPanel').addEventListener('click',async e=>{
         message:'Pay-ready handover. AppointHive owns cash + ZIP. Share the pay URL with the prospect.',
         confirmLabel:'Send',
         fields:[{name:'revision_id', label:'Package revision', type:'select', required:true, value:String(rows[0].productRevisionId||rows[0].id),
-          options:rows.map(r=>({value:String(r.productRevisionId||r.id), label:`${r.label||r.productName||r.edition} · ${(Number(r.priceCents||0)/100).toFixed(2)} ${r.currency||'AUD'}`}))}]
+          options:rows.map(r=>({value:String(r.productRevisionId||r.id), label:`${r.label||r.productName||r.edition} · ${(Number(r.priceCents||0)/100).toFixed(2)} ${r.currency||'USD'}`}))}]
       });
       if(!form) return;
       const res=await api('/api/sales/be/send-to-delivery',{method:'POST',body:{business_id:drawerLead.id, product_revision_id:form.revision_id}});
@@ -4842,7 +5148,7 @@ $('drawerPanel').addEventListener('click',async e=>{
         message:'Requires installation id from a prior paid install. Quote + checkout stay on AppointHive.',
         confirmLabel:'Send upgrade',
         fields:[{name:'revision_id', label:'Target revision', type:'select', required:true, value:String(rows[0].productRevisionId||rows[0].id),
-          options:rows.map(r=>({value:String(r.productRevisionId||r.id), label:`${r.label||r.productName||r.edition} · ${(Number(r.priceCents||0)/100).toFixed(2)} ${r.currency||'AUD'}`}))}]
+          options:rows.map(r=>({value:String(r.productRevisionId||r.id), label:`${r.label||r.productName||r.edition} · ${(Number(r.priceCents||0)/100).toFixed(2)} ${r.currency||'USD'}`}))}]
       });
       if(!form) return;
       const res=await api('/api/sales/be/send-upgrade',{method:'POST',body:{business_id:drawerLead.id, to_revision_id:form.revision_id}});
@@ -4900,7 +5206,7 @@ $('drawerPanel').addEventListener('click',async e=>{
       if(!form) return;
       const plan=list.find(p=>String(p.id)===String(form.plan_id))||growth;
       const prop=await api('/api/sales/proposals',{method:'POST',body:{
-        business_id:drawerLead.id,title:plan.name+' for '+drawerLead.name,currency:drawerLead.currency||'AUD',plan_id:plan.id,tax_rate:0.1,tax_label:'GST',terms_url:''
+        business_id:drawerLead.id,title:plan.name+' for '+drawerLead.name,currency:drawerLead.currency||'USD',plan_id:plan.id,tax_rate:0,tax_label:'',terms_url:''
       }});
       await api('/api/sales/proposals/'+prop.id+'/send',{method:'POST',body:{}});
       const inv=await api('/api/sales/invoices',{method:'POST',body:{proposal_id:prop.id,provider:form.provider||'manual'}});

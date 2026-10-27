@@ -722,7 +722,7 @@ def business_dict(b: Business) -> dict:
         "product_line": getattr(b, "product_line", None) or "STANDALONE",
         "pipeline_stage_id": getattr(b, "pipeline_stage_id", None),
         "deal_value": getattr(b, "deal_value", None),
-        "currency": getattr(b, "currency", None) or "AUD",
+        "currency": getattr(b, "currency", None) or "USD",
         "next_action": getattr(b, "next_action", None) or "",
         "qualification_score": getattr(b, "qualification_score", None),
         "opt_out": bool(getattr(b, "opt_out", False)),

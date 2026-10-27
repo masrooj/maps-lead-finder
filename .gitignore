@@ -23,3 +23,7 @@ uploads/*
 uploads/demos/*
 !uploads/demos/.gitkeep
 *.pdf
+
+# Local deploy backups / URLs (support plane sibling)
+.deploy/
+docs/qa/
