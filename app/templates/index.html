@@ -56,6 +56,18 @@ button:focus-visible,a:focus-visible,.stat:focus-visible,.guide-step:focus-visib
   outline:2px solid var(--accent);outline-offset:2px
 }
 .shell{display:flex;min-height:100dvh;align-items:stretch;width:100%;max-width:100%;overflow-x:hidden}
+/* Authed: lock shell — only .main scrolls; sidebar stays fixed and scrolls its own nav */
+body.authed{overflow:hidden;height:100dvh}
+body.authed .shell{height:100dvh;min-height:0;overflow:hidden}
+body.authed .sidebar{
+  position:fixed;left:0;top:0;bottom:0;width:232px;flex:none;
+  height:100dvh;max-height:100dvh;overflow:hidden;z-index:var(--z-sidebar);
+}
+body.authed .main{
+  margin-left:232px;width:calc(100% - 232px);min-width:0;min-height:0;
+  height:100dvh;overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+}
 .sidebar{
   width:232px;flex:0 0 232px;display:none;flex-direction:column;gap:0;
   padding:calc(10px + var(--safe-t)) 8px calc(10px + var(--safe-b));
@@ -421,11 +433,28 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .queue-search-clear:hover{color:var(--text)}
 .queue-search.has-query .queue-search-clear{display:flex}
 .queue-footbar{margin-top:12px;margin-bottom:0;position:sticky;bottom:8px;z-index:3}
+.pager{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  margin:12px 0 4px;padding:10px 12px;border:1px solid var(--line-soft);border-radius:12px;
+  background:rgba(11,19,36,.55)
+}
+.pager .pager-meta{font-size:12px;color:var(--muted);font-weight:650}
+.pager .pager-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pager .pager-actions button{min-height:36px;padding:7px 12px;font-size:12px}
+.pager .pager-actions button:disabled{opacity:.45;cursor:default}
+.pager select{min-height:36px;width:auto;min-width:72px;padding:6px 10px;font-size:12px}
 .lead:last-child,.queue-lead:last-child{border-bottom:0}
 .lead:hover,.queue-lead:hover{background:rgba(23,33,57,.85)}
 .lead.active{background:var(--accent-soft)}
 .lead-head{cursor:default;background:rgba(22,33,54,.95);font-size:12px;color:var(--muted);font-weight:700;position:sticky;top:0;z-index:2;border-radius:10px 10px 0 0}
 .lead-head:hover{background:rgba(22,33,54,.95)}
+.list-shell{padding:2px;background:transparent;border:0;box-shadow:none}
+.list-shell .queue-lead,.list-shell .lead,.list-shell .task-row{
+  border:1px solid var(--line-soft);border-radius:14px;margin:0 0 10px;padding:14px;background:rgba(16,24,43,.78)
+}
+.list-shell .queue-lead:last-child,.list-shell .lead:last-child,.list-shell .task-row:last-child{margin-bottom:0}
+.list-shell .queue-lead:hover,.list-shell .lead:hover,.list-shell .task-row:hover{background:rgba(23,33,57,.92)}
+.task-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;border-bottom:0}
 .lead .checkcol,.lead .starcol,.lead-biz,.lead-reach,.lead-meta,.lead-actions{min-width:0}
 .lead .checkcol{display:flex;align-items:center;justify-content:center}
 .lead .checkcol input{accent-color:var(--accent);width:16px;height:16px;margin:0}
@@ -648,6 +677,7 @@ body:not(.authed) .wrap{
   .stats{grid-template-columns:repeat(2,1fr)}
 }
 @media(max-width:900px){
+  body.authed .main{margin-left:0;width:100%;height:100dvh}
   body.authed .sidebar{
     position:fixed;left:0;top:0;transform:translateX(-105%);transition:transform .22s var(--ease);
     box-shadow:var(--shadow);display:flex;width:min(280px,86vw);flex:0 0 auto;height:100dvh;max-height:100dvh;overflow:hidden;
@@ -693,29 +723,65 @@ body:not(.authed) .wrap{
   .stats{grid-template-columns:1fr 1fr;gap:8px}
   .stat{padding:12px}
   .stat strong{font-size:18px}
+  .leads{padding:0;overflow:visible;background:transparent;border:0;box-shadow:none}
+  .lead-head{display:none!important}
   .lead-row{
     grid-template-columns:32px 32px minmax(0,1fr);
     grid-template-areas:"check star biz" "reach reach reach" "meta meta meta" "actions actions actions";
-    gap:8px;padding:14px 10px;align-items:start;
+    gap:10px;padding:14px;align-items:start;
+    border:1px solid var(--line-soft);border-radius:14px;margin:0 0 10px;background:rgba(16,24,43,.88);
   }
-  .lead-row .lead-actions{justify-content:flex-start}
-  .lead-row .lead-actions button{flex:1 1 auto;min-height:38px}
-  .queue-lead{grid-template-columns:28px 44px minmax(0,1fr);grid-template-areas:"check rank" "body body" "actions actions";gap:8px;padding:14px 10px;align-items:start}
-  .queue-lead.no-check{grid-template-columns:44px minmax(0,1fr);grid-template-areas:"rank body" "actions actions"}
+  .lead-row .lead-actions{justify-content:flex-start;display:flex;flex-wrap:wrap;gap:8px}
+  .lead-row .lead-actions button{flex:1 1 calc(50% - 8px);min-height:40px}
+  .queue-lead{
+    grid-template-columns:28px 52px minmax(0,1fr);
+    grid-template-areas:"check rank body-top" "body body body" "actions actions actions";
+    gap:10px;padding:14px;align-items:start;
+    border:1px solid var(--line-soft);border-radius:14px;margin:0 0 10px;background:rgba(16,24,43,.88);
+  }
+  .queue-lead.no-check{grid-template-columns:52px minmax(0,1fr);grid-template-areas:"rank body" "actions actions"}
   .queue-lead .checkcol{grid-area:check}
-  .queue-lead .queue-rank{grid-area:rank}.queue-lead .queue-body{grid-area:body}
-  .queue-lead .actions{grid-area:actions;justify-content:flex-start}
-  .queue-lead .actions button{flex:1 1 auto;min-height:38px}
+  .queue-lead .queue-rank{grid-area:rank}
+  .queue-lead .queue-body{grid-area:body}
+  .queue-lead .actions{grid-area:actions;justify-content:stretch;display:flex;flex-wrap:wrap;gap:8px;width:100%}
+  .queue-lead .actions button{flex:1 1 calc(50% - 8px);min-height:40px}
+  .queue-lead .queue-rank strong{font-size:16px}
   .toolbar input,.crud-toolbar input,.crud-toolbar select,.toolbar select{flex:1 1 100%}
   .views{gap:6px}
   .views button{flex:1 1 auto;text-align:center}
   .toast-wrap{left:calc(12px + var(--safe-l));right:calc(12px + var(--safe-r));max-width:none}
-  .sales-table{min-width:460px;font-size:12px}
-  .sales-table th,.sales-table td{padding:8px 10px}
+  /* Tables → stacked detail cards on mobile */
+  .sales-table-wrap{border:0;background:transparent;overflow:visible;border-radius:0}
+  .sales-table{min-width:0;width:100%;border-collapse:separate;border-spacing:0 10px;font-size:13px}
+  .sales-table thead{display:none}
+  .sales-table tbody{display:block}
+  .sales-table tr{
+    display:block;padding:14px;margin:0;border:1px solid var(--line-soft);border-radius:14px;
+    background:rgba(16,24,43,.92);box-shadow:0 1px 0 rgba(255,255,255,.03) inset
+  }
+  .sales-table th:first-child,.sales-table td:first-child{position:static;box-shadow:none;background:transparent}
+  .sales-table td{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+    padding:7px 0;border-bottom:1px dashed rgba(42,58,86,.55);text-align:right
+  }
+  .sales-table td:last-child{border-bottom:0;padding-bottom:0}
+  .sales-table td:first-child{padding-top:0}
+  .sales-table td::before{
+    content:attr(data-label);flex:0 0 auto;max-width:42%;text-align:left;
+    color:var(--muted);font-size:11px;font-weight:750;text-transform:uppercase;letter-spacing:.04em
+  }
+  .sales-table td:empty{display:none}
+  .sales-table .action-stack{width:100%;justify-content:stretch}
+  .sales-table .action-stack button{flex:1 1 auto;min-height:40px}
+  .pager{padding:10px;gap:8px}
+  .pager .pager-actions{width:100%;justify-content:space-between}
   .chip{max-width:100%}
   .brand h1{font-size:18px}
   .head-actions{width:100%}
   .head-actions select,.head-actions button{flex:1 1 auto}
+  .task-row{flex-direction:column;align-items:stretch}
+  .task-row .action-stack{width:100%}
+  .task-row .action-stack button{flex:1 1 calc(50% - 8px);min-height:40px}
 }
 @media(max-width:420px){
   .stats{grid-template-columns:1fr}
@@ -1674,27 +1740,26 @@ async function openProspectById(id){
   catch(e){ toast(e.message,true); }
 }
 
-async function loadProspects(){
-  const q=($('prospectsQ')&&$('prospectsQ').value)||'';
+let prospectsCache=[];
+let activitiesCache=[];
+let tasksCache=[];
+let demosCache=[];
+function renderProspectsTable(){
   const city=($('prospectsCity')&&$('prospectsCity').value)||'';
-  const data=await api('/api/sales/prospects?limit=2000&q='+encodeURIComponent(q)+'&city='+encodeURIComponent(city));
-  const rows=data.prospects||[];
-  const cities=[...new Set(rows.map(p=>p.city).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
-  const sel=$('prospectsCity');
-  if(sel){
-    const cur=sel.value;
-    sel.innerHTML='<option value="">All cities</option>'+cities.map(c=>`<option value="${esc(c)}" ${c===cur?'selected':''}>${esc(c)}</option>`).join('');
-    if(city && ![...sel.options].some(o=>o.value===city)) sel.value='';
-  }
-  if($('prospectsMeta')){
-    $('prospectsMeta').textContent=`Showing ${rows.length} of ${data.total!=null?data.total:rows.length} prospects${city?' in '+city:''}. Click a row to open.`;
-  }
   const tb=$('prospectsTable').querySelector('tbody');
+  const pagerHost=ensurePagerHost($('prospectsTable').closest('.sales-table-wrap'),'prospectsPager');
+  const rows=prospectsCache||[];
   if(!rows.length){
-    tb.innerHTML='<tr><td colspan="6"><div class="empty-card">No prospects match. Check city filter or run Discover with Fetch: All.</div></td></tr>';
+    if($('prospectsMeta')) $('prospectsMeta').textContent='No prospects match. Check city filter or run Discover with Fetch: All.';
+    tb.innerHTML='<tr><td colspan="6" data-label=""><div class="empty-card">No prospects match. Check city filter or run Discover with Fetch: All.</div></td></tr>';
+    if(pagerHost) pagerHost.innerHTML='';
     return;
   }
-  tb.innerHTML=rows.map(p=>{
+  const slice=pageSlice(rows,'prospects');
+  if($('prospectsMeta')){
+    $('prospectsMeta').textContent=`${slice.total} prospects${city?' in '+city:''} · page ${slice.page}/${slice.pages}. Tap a card/row to open.`;
+  }
+  tb.innerHTML=slice.items.map(p=>{
     const hasVal=p.deal_value!=null&&p.deal_value!=='';
     const hasScore=p.qualification_score!=null&&p.qualification_score!=='';
     const valHtml=hasVal
@@ -1704,26 +1769,49 @@ async function loadProspects(){
       ?`<span class="score-pill has">${esc(p.qualification_score)}/10</span>`
       :`<span class="score-pill muted-dash">Not scored</span>`;
     return `<tr data-open-prospect="${p.id}">
-    <td><strong>${esc(p.name)}</strong></td>
-    <td>${esc(p.city||'')}</td>
-    <td>${esc((p.stage&&p.stage.name)||'—')}</td>
-    <td>${valHtml}</td>
-    <td>${scoreHtml}</td>
-    <td><div class="action-stack"><button type="button" data-open-prospect="${p.id}">Open</button></div></td>
+    <td data-label="Name"><strong>${esc(p.name)}</strong></td>
+    <td data-label="City">${esc(p.city||'—')}</td>
+    <td data-label="Stage">${esc((p.stage&&p.stage.name)||'—')}</td>
+    <td data-label="Value">${valHtml}</td>
+    <td data-label="Score">${scoreHtml}</td>
+    <td data-label="Actions"><div class="action-stack"><button type="button" data-open-prospect="${p.id}">Open</button></div></td>
   </tr>`;
   }).join('');
+  renderPager(pagerHost, slice, renderProspectsTable);
   tb.querySelectorAll('[data-open-prospect]').forEach(el=>el.addEventListener('click',async ev=>{
     ev.stopPropagation();
     const id=el.dataset.openProspect||el.closest('[data-open-prospect]')?.dataset.openProspect;
     if(id) await openProspectById(id);
   }));
 }
+async function loadProspects(){
+  const q=($('prospectsQ')&&$('prospectsQ').value)||'';
+  const city=($('prospectsCity')&&$('prospectsCity').value)||'';
+  const data=await api('/api/sales/prospects?limit=2000&q='+encodeURIComponent(q)+'&city='+encodeURIComponent(city));
+  prospectsCache=data.prospects||[];
+  const cities=[...new Set(prospectsCache.map(p=>p.city).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const sel=$('prospectsCity');
+  if(sel){
+    const cur=sel.value;
+    sel.innerHTML='<option value="">All cities</option>'+cities.map(c=>`<option value="${esc(c)}" ${c===cur?'selected':''}>${esc(c)}</option>`).join('');
+    if(city && ![...sel.options].some(o=>o.value===city)) sel.value='';
+  }
+  if(pagerState.prospects) pagerState.prospects.page=1;
+  renderProspectsTable();
+}
 
-async function loadActivitiesFeed(){
-  const data=await api('/api/sales/activities?limit=100');
-  const list=data.activities||[];
-  $('activitiesFeed').innerHTML=list.length?list.map(a=>`
-    <div class="task-row">
+function renderActivitiesFeed(){
+  const list=activitiesCache||[];
+  const feed=$('activitiesFeed');
+  const pagerHost=ensurePagerHost(feed,'activitiesPager');
+  if(!list.length){
+    feed.innerHTML='<div class="empty-card">No activities yet. Log a call or message outcome.</div>';
+    if(pagerHost) pagerHost.innerHTML='';
+    return;
+  }
+  const slice=pageSlice(list,'activities');
+  feed.innerHTML=slice.items.map(a=>`
+    <article class="task-row">
       <div>
         <div class="biz">${esc(a.activity_type)} · #${a.business_id}</div>
         <div class="sub">${esc(a.summary||'')} ${a.outcome?'· '+esc(a.outcome):''} · ${esc(fmtDateTime(a.created_at||''))}</div>
@@ -1732,32 +1820,42 @@ async function loadActivitiesFeed(){
         <button type="button" data-open-prospect="${a.business_id}">Open</button>
         <button type="button" class="danger" data-del-activity="${a.id}">Delete</button>
       </div>
-    </div>`).join(''):'<div class="empty-card">No activities yet. Log a call or message outcome.</div>';
-  $('activitiesFeed').querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',()=>openProspectById(btn.dataset.openProspect)));
-  $('activitiesFeed').querySelectorAll('[data-del-activity]').forEach(btn=>btn.addEventListener('click',async()=>{
+    </article>`).join('');
+  renderPager(pagerHost, slice, renderActivitiesFeed);
+  feed.querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',()=>openProspectById(btn.dataset.openProspect)));
+  feed.querySelectorAll('[data-del-activity]').forEach(btn=>btn.addEventListener('click',async()=>{
     const ok=await uiConfirm({title:'Delete activity?', message:'This removes the log entry only.', confirmLabel:'Delete', danger:true});
     if(!ok) return;
     await api('/api/sales/activities/'+btn.dataset.delActivity,{method:'DELETE'});
     toast('Activity deleted'); await loadActivitiesFeed();
   }));
 }
+async function loadActivitiesFeed(){
+  const data=await api('/api/sales/activities?limit=200');
+  activitiesCache=data.activities||[];
+  if(pagerState.activities) pagerState.activities.page=1;
+  renderActivitiesFeed();
+}
 
-async function loadDemos(){
-  const data=await api('/api/sales/demos?limit=100');
-  const rows=data.demos||[];
+function renderDemosTable(){
+  const rows=demosCache||[];
   const tb=$('demosTable').querySelector('tbody');
+  const pagerHost=ensurePagerHost($('demosTable').closest('.sales-table-wrap'),'demosPager');
   if(!rows.length){
-    tb.innerHTML='<tr><td colspan="6"><div class="empty-card">No demos yet. Log one after a discovery call.</div></td></tr>';
+    tb.innerHTML='<tr><td colspan="6" data-label=""><div class="empty-card">No demos yet. Log one after a discovery call.</div></td></tr>';
+    if(pagerHost) pagerHost.innerHTML='';
     return;
   }
-  tb.innerHTML=rows.map(d=>`<tr>
-    <td>${d.id}</td>
-    <td><button type="button" data-open-prospect="${d.business_id}">#${d.business_id}</button></td>
-    <td>${esc(d.outcome||'')}</td>
-    <td>${esc(d.agreed_next_step||'')}</td>
-    <td>${esc(fmtDateTime(d.demo_at||d.created_at||''))}</td>
-    <td><button type="button" class="danger" data-del-demo="${d.id}">Delete</button></td>
+  const slice=pageSlice(rows,'demos');
+  tb.innerHTML=slice.items.map(d=>`<tr>
+    <td data-label="ID">${d.id}</td>
+    <td data-label="Prospect"><button type="button" data-open-prospect="${d.business_id}">#${d.business_id}</button></td>
+    <td data-label="Outcome">${esc(d.outcome||'—')}</td>
+    <td data-label="Next step">${esc(d.agreed_next_step||'—')}</td>
+    <td data-label="When">${esc(fmtDateTime(d.demo_at||d.created_at||''))}</td>
+    <td data-label="Actions"><button type="button" class="danger" data-del-demo="${d.id}">Delete</button></td>
   </tr>`).join('');
+  renderPager(pagerHost, slice, renderDemosTable);
   tb.querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',()=>openProspectById(btn.dataset.openProspect)));
   tb.querySelectorAll('[data-del-demo]').forEach(btn=>btn.addEventListener('click',async()=>{
     const ok=await uiConfirm({title:'Delete demo note?', confirmLabel:'Delete', danger:true});
@@ -1765,6 +1863,12 @@ async function loadDemos(){
     await api('/api/sales/demos/'+btn.dataset.delDemo,{method:'DELETE'});
     toast('Demo deleted'); await loadDemos();
   }));
+}
+async function loadDemos(){
+  const data=await api('/api/sales/demos?limit=200');
+  demosCache=data.demos||[];
+  if(pagerState.demos) pagerState.demos.page=1;
+  renderDemosTable();
   await loadDemoAssets().catch(()=>{});
 }
 
@@ -2333,6 +2437,65 @@ async function loadSettings(){
 }
 
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+const PAGE_SIZE_DEFAULT=25;
+const pagerState={};
+function pageSlice(items,key,size){
+  const list=Array.isArray(items)?items:[];
+  const st=pagerState[key]||(pagerState[key]={page:1,size:size||PAGE_SIZE_DEFAULT});
+  if(size) st.size=size;
+  const total=list.length;
+  const pages=Math.max(1, Math.ceil(total/Math.max(1,st.size))||1);
+  if(st.page>pages) st.page=pages;
+  if(st.page<1) st.page=1;
+  const start=(st.page-1)*st.size;
+  return {items:list.slice(start,start+st.size), page:st.page, pages, total, start, size:st.size, key};
+}
+function renderPager(host, slice, onChange){
+  if(!host) return;
+  if(!slice || slice.total<=slice.size){
+    if(slice && slice.total){
+      host.innerHTML=`<div class="pager"><span class="pager-meta">${slice.total} item${slice.total===1?'':'s'}</span></div>`;
+    }else{
+      host.innerHTML='';
+    }
+    return;
+  }
+  const from=slice.start+1;
+  const to=Math.min(slice.start+slice.size, slice.total);
+  host.innerHTML=`<div class="pager" data-pager="${esc(slice.key)}">
+    <span class="pager-meta">${from}–${to} of ${slice.total}</span>
+    <div class="pager-actions">
+      <button type="button" data-pager-act="prev" ${slice.page<=1?'disabled':''}>Prev</button>
+      <span class="pager-meta">Page ${slice.page}/${slice.pages}</span>
+      <button type="button" data-pager-act="next" ${slice.page>=slice.pages?'disabled':''}>Next</button>
+      <select data-pager-size aria-label="Rows per page">
+        ${[10,25,50,100].map(n=>`<option value="${n}" ${n===slice.size?'selected':''}>${n}/page</option>`).join('')}
+      </select>
+    </div>
+  </div>`;
+  host.querySelectorAll('[data-pager-act]').forEach(btn=>btn.addEventListener('click',()=>{
+    const st=pagerState[slice.key]||(pagerState[slice.key]={page:1,size:slice.size});
+    if(btn.dataset.pagerAct==='prev') st.page=Math.max(1,st.page-1);
+    if(btn.dataset.pagerAct==='next') st.page=Math.min(slice.pages,st.page+1);
+    onChange&&onChange();
+  }));
+  const sel=host.querySelector('[data-pager-size]');
+  if(sel) sel.addEventListener('change',()=>{
+    const st=pagerState[slice.key]||(pagerState[slice.key]={page:1,size:slice.size});
+    st.size=Number(sel.value)||PAGE_SIZE_DEFAULT;
+    st.page=1;
+    onChange&&onChange();
+  });
+}
+function ensurePagerHost(afterEl, id){
+  let host=$(id);
+  if(host) return host;
+  if(!afterEl||!afterEl.parentNode) return null;
+  host=document.createElement('div');
+  host.id=id;
+  afterEl.insertAdjacentElement('afterend', host);
+  return host;
+}
 function scoreOpts(b,key,fallback){
   const crit=(b&&b.score_criteria)||{};
   let cur=crit[key];
@@ -2496,12 +2659,18 @@ async function loadPipeline(){
   });
 }
 
-async function loadTasks(){
-  const data=await api('/api/sales/tasks');
-  const tasks=data.tasks||[];
-  if(!tasks.length){ $('tasksList').innerHTML='<div class="empty-card">No open tasks. Create one or complete work from Pipeline.</div>'; return; }
-  $('tasksList').innerHTML=tasks.map(t=>`
-    <div class="task-row ${t.overdue?'overdue':''}">
+function renderTasksList(){
+  const tasks=tasksCache||[];
+  const list=$('tasksList');
+  const pagerHost=ensurePagerHost(list,'tasksPager');
+  if(!tasks.length){
+    list.innerHTML='<div class="empty-card">No open tasks. Create one or complete work from Pipeline.</div>';
+    if(pagerHost) pagerHost.innerHTML='';
+    return;
+  }
+  const slice=pageSlice(tasks,'tasks');
+  list.innerHTML=slice.items.map(t=>`
+    <article class="task-row ${t.overdue?'overdue':''}">
       <div>
         <div class="biz">${esc(t.title)}</div>
         <div class="sub">${t.overdue?'Overdue · ':''}Due ${esc(t.due_at||'—')} · priority ${esc(t.priority||'normal')} · prospect #${t.business_id||'—'}</div>
@@ -2512,13 +2681,14 @@ async function loadTasks(){
         <button type="button" class="primary" data-complete="${t.id}">Done</button>
         <button type="button" class="danger" data-del-task="${t.id}">Delete</button>
       </div>
-    </div>`).join('');
-  $('tasksList').querySelectorAll('[data-complete]').forEach(btn=>btn.addEventListener('click',async()=>{
+    </article>`).join('');
+  renderPager(pagerHost, slice, renderTasksList);
+  list.querySelectorAll('[data-complete]').forEach(btn=>btn.addEventListener('click',async()=>{
     await api('/api/sales/tasks/'+btn.dataset.complete+'/complete',{method:'POST',body:{}});
     toast('Task completed'); await loadTasks(); refreshNotifications().catch(()=>{});
   }));
-  $('tasksList').querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',()=>openProspectById(btn.dataset.openProspect)));
-  $('tasksList').querySelectorAll('[data-reschedule]').forEach(btn=>btn.addEventListener('click',async()=>{
+  list.querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',()=>openProspectById(btn.dataset.openProspect)));
+  list.querySelectorAll('[data-reschedule]').forEach(btn=>btn.addEventListener('click',async()=>{
     const form=await uiForm({
       title:'Reschedule task',
       confirmLabel:'Save',
@@ -2531,12 +2701,18 @@ async function loadTasks(){
     await api('/api/sales/tasks/'+btn.dataset.reschedule+'/reschedule',{method:'POST',body:{title:form.title, due_at:form.due_at||null}});
     toast('Task updated'); await loadTasks();
   }));
-  $('tasksList').querySelectorAll('[data-del-task]').forEach(btn=>btn.addEventListener('click',async()=>{
+  list.querySelectorAll('[data-del-task]').forEach(btn=>btn.addEventListener('click',async()=>{
     const ok=await uiConfirm({title:'Delete task?', confirmLabel:'Delete', danger:true});
     if(!ok) return;
     await api('/api/sales/tasks/'+btn.dataset.delTask,{method:'DELETE'});
     toast('Task deleted'); await loadTasks(); refreshNotifications().catch(()=>{});
   }));
+}
+async function loadTasks(){
+  const data=await api('/api/sales/tasks');
+  tasksCache=data.tasks||[];
+  if(pagerState.tasks) pagerState.tasks.page=1;
+  renderTasksList();
 }
 
 async function createTaskFlow(){
@@ -2645,10 +2821,13 @@ async function loadMoney(){
   bindDashKpis($('moneyStats'));
   const invoices=inv.invoices||[];
   const tb=$('invoicesTable').querySelector('tbody');
+  const moneyInvPager=ensurePagerHost($('invoicesTable').closest('.sales-table-wrap'),'moneyInvoicesPager');
+  const moneyInvSlice=pageSlice(invoices,'moneyInvoices');
   if(!invoices.length){
-    tb.innerHTML='<tr><td colspan="5"><div class="empty-card">No invoices yet. Create one from a prospect drawer (Create proposal).</div></td></tr>';
+    tb.innerHTML='<tr><td colspan="5" data-label=""><div class="empty-card">No invoices yet. Create one from a prospect drawer (Create proposal).</div></td></tr>';
+    if(moneyInvPager) moneyInvPager.innerHTML='';
   }else{
-    tb.innerHTML=invoices.map(i=>{
+    tb.innerHTML=moneyInvSlice.items.map(i=>{
       const liveLink=i.hosted_url&&!String(i.hosted_url).includes('/placeholder/');
       const link=liveLink
         ?`<a class="chip ok" href="${esc(i.hosted_url)}" target="_blank" rel="noopener">Open pay link</a>`
@@ -2663,13 +2842,14 @@ async function loadMoney(){
         ?`<button type="button" class="primary" data-pay="${i.id}" data-number="${esc(i.number)}" data-total="${esc(String(i.total))}" data-currency="${esc(i.currency||'')}">Confirm paid</button>`
         :'';
       return `<tr>
-      <td><strong>${esc(i.number)}</strong></td>
-      <td><span class="status-pill ${esc(i.status)}">${esc(i.status)}</span></td>
-      <td>${esc(i.provider)}</td>
-      <td>${esc(fmtMoney(i.total,i.currency))}${i.is_test_mode?' <span class="hint">test</span>':''}</td>
-      <td><div class="action-stack">${docs}${link||''}${copyPay||''}${payBtn||''}</div></td>
+      <td data-label="Number"><strong>${esc(i.number)}</strong></td>
+      <td data-label="Status"><span class="status-pill ${esc(i.status)}">${esc(i.status)}</span></td>
+      <td data-label="Provider">${esc(i.provider)}</td>
+      <td data-label="Total">${esc(fmtMoney(i.total,i.currency))}${i.is_test_mode?' <span class="hint">test</span>':''}</td>
+      <td data-label="Actions"><div class="action-stack">${docs}${link||''}${copyPay||''}${payBtn||''}</div></td>
     </tr>`;
     }).join('');
+    renderPager(moneyInvPager, moneyInvSlice, ()=>loadMoney());
   }
   const invById=Object.fromEntries(invoices.map(i=>[String(i.id), i]));
   tb.querySelectorAll('[data-copy-inv]').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -2731,17 +2911,21 @@ async function loadMoney(){
   }));
   const payments=pay.payments||[];
   const pt=$('paymentsTable').querySelector('tbody');
+  const payPager=ensurePagerHost($('paymentsTable').closest('.sales-table-wrap'),'moneyPaymentsPager');
+  const paySlice=pageSlice(payments,'moneyPayments');
   if(!payments.length){
-    pt.innerHTML='<tr><td colspan="6"><div class="empty-card">No payments yet. Confirmed invoices appear here.</div></td></tr>';
+    pt.innerHTML='<tr><td colspan="6" data-label=""><div class="empty-card">No payments yet. Confirmed invoices appear here.</div></td></tr>';
+    if(payPager) payPager.innerHTML='';
   }else{
-    pt.innerHTML=payments.map(p=>`<tr>
-      <td>${p.id}</td>
-      <td>${esc(fmtMoney(p.amount,p.currency))}${p.is_test_mode?' <span class="hint">test</span>':''}</td>
-      <td><span class="status-pill ${esc(p.status)}">${esc(p.status)}</span></td>
-      <td>${esc(p.provider)}</td>
-      <td>${esc(fmtDateTime(p.paid_at))}</td>
-      <td>${p.status==='succeeded'?`<button type="button" class="danger" data-refund="${p.id}" data-amount="${esc(String(p.amount))}" data-currency="${esc(p.currency||'')}">Refund</button>`:'—'}</td>
+    pt.innerHTML=paySlice.items.map(p=>`<tr>
+      <td data-label="ID">${p.id}</td>
+      <td data-label="Amount">${esc(fmtMoney(p.amount,p.currency))}${p.is_test_mode?' <span class="hint">test</span>':''}</td>
+      <td data-label="Status"><span class="status-pill ${esc(p.status)}">${esc(p.status)}</span></td>
+      <td data-label="Provider">${esc(p.provider)}</td>
+      <td data-label="Paid at">${esc(fmtDateTime(p.paid_at))}</td>
+      <td data-label="Actions">${p.status==='succeeded'?`<button type="button" class="danger" data-refund="${p.id}" data-amount="${esc(String(p.amount))}" data-currency="${esc(p.currency||'')}">Refund</button>`:'—'}</td>
     </tr>`).join('');
+    renderPager(payPager, paySlice, ()=>loadMoney());
   }
   pt.querySelectorAll('[data-refund]').forEach(btn=>btn.addEventListener('click',async()=>{
     const form=await uiForm({
@@ -2874,6 +3058,7 @@ function renderContactQueueList(){
   const isSelected=contactQueueTab==='selected';
   const leads=contactQueueVisibleLeads();
   const q=(contactQueueQuery||'').trim();
+  const pagerHost=ensurePagerHost(list,'contactQueuePager');
   if(!leads.length){
     if(q){
       list.innerHTML=`<div class="empty-card">No matches for “${esc(q)}” on <strong>${isSelected?'To contact':'All'}</strong>.</div>`;
@@ -2882,9 +3067,11 @@ function renderContactQueueList(){
         ? '<div class="empty-card">Nothing marked to contact yet. On <strong>All</strong>, pick leads and use <strong>Mark to contact</strong> at the bottom.</div>'
         : '<div class="empty-card">No leads match this ranking mode. Try Balanced, or Discover + star prospects first.</div>';
     }
+    if(pagerHost) pagerHost.innerHTML='';
     return;
   }
-  list.innerHTML=leads.map((b,i)=>{
+  const slice=pageSlice(leads, 'contactQueue:'+contactQueueTab);
+  list.innerHTML=slice.items.map((b,i)=>{
     const whyParts=(b.why_parts&&b.why_parts.length)?b.why_parts:String(b.why||'').split(',').map(s=>s.trim()).filter(Boolean);
     const chips=whyParts.map(w=>`<span class="chip ok">${esc(w)}</span>`).join('');
     const ch=b.channels||{};
@@ -2896,6 +3083,7 @@ function renderContactQueueList(){
     ].filter(Boolean).join(' · ')||'No channels';
     const picked=contactQueuePick.has(String(b.id));
     const already=!!b.marked_for_contact;
+    const rankNo=slice.start+i+1;
     const checkCell=isSelected?'':`<div class="checkcol"><input type="checkbox" data-cq-pick="${b.id}" ${picked?'checked':''} aria-label="Pick ${esc(b.name||'lead')}"></div>`;
     const actions=isSelected?`
         <button type="button" class="primary" data-compose-queue="${b.id}">Message</button>
@@ -2904,9 +3092,9 @@ function renderContactQueueList(){
         <button type="button" class="primary" data-cq-mark="${b.id}" ${already?'disabled':''}>${already?'On To contact':'Mark to contact'}</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>`;
     return `
-    <div class="queue-lead ${isSelected?'no-check':''}" data-row="${b.id}">
+    <article class="queue-lead ${isSelected?'no-check':''}" data-row="${b.id}">
       ${checkCell}
-      <div class="queue-rank meta" style="min-width:48px;align-items:flex-start"><strong style="font-size:18px">#${i+1}</strong><span class="sub">${esc(String(b.rank_score))}</span></div>
+      <div class="queue-rank meta" style="min-width:48px;align-items:flex-start"><strong style="font-size:18px">#${rankNo}</strong><span class="sub">${esc(String(b.rank_score))}</span></div>
       <div class="queue-body">
         <div class="biz">${esc(b.name||'—')}${already&&!isSelected?' <span class="badge queue">To contact</span>':''}</div>
         <div class="sub">${esc(b.city||'')} · ${esc((b.stage&&b.stage.name)||'—')} · ${esc(reach)}</div>
@@ -2914,8 +3102,9 @@ function renderContactQueueList(){
       </div>
       <div class="actions">${actions}
       </div>
-    </div>`;
+    </article>`;
   }).join('');
+  renderPager(pagerHost, slice, renderContactQueueList);
   list.querySelectorAll('[data-cq-pick]').forEach(inp=>inp.addEventListener('change',()=>{
     const id=String(inp.dataset.cqPick);
     if(inp.checked) contactQueuePick.add(id); else contactQueuePick.delete(id);
@@ -3103,16 +3292,19 @@ async function loadDeals(){
   const ptb=$('dealsProposalsTable')&&$('dealsProposalsTable').querySelector('tbody');
   if(ptb){
     const rows=props.proposals||[];
-    ptb.innerHTML=rows.length?rows.map(p=>`<tr>
-      <td><strong>${esc(p.reference)}</strong></td>
-      <td><button type="button" data-open-prospect="${p.business_id}">#${p.business_id}</button></td>
-      <td><span class="status-pill ${esc(p.status)}">${esc(p.status)}</span></td>
-      <td>${esc(p.currency)} ${esc(String(p.total))}</td>
-      <td><div class="action-stack">
+    const propPager=ensurePagerHost($('dealsProposalsTable').closest('.sales-table-wrap'),'dealsProposalsPager');
+    const pSlice=pageSlice(rows,'dealsProposals');
+    ptb.innerHTML=rows.length?pSlice.items.map(p=>`<tr>
+      <td data-label="Ref"><strong>${esc(p.reference)}</strong></td>
+      <td data-label="Prospect"><button type="button" data-open-prospect="${p.business_id}">#${p.business_id}</button></td>
+      <td data-label="Status"><span class="status-pill ${esc(p.status)}">${esc(p.status)}</span></td>
+      <td data-label="Total">${esc(p.currency)} ${esc(String(p.total))}</td>
+      <td data-label="Actions"><div class="action-stack">
         ${p.status!=='sent'&&p.status!=='accepted'?`<button type="button" data-send-prop="${p.id}">Mark sent</button>`:''}
         <button type="button" class="primary" data-inv-prop="${p.id}" data-bid="${p.business_id}">Create pay link</button>
       </div></td>
-    </tr>`).join(''):'<tr><td colspan="5"><div class="empty-card">No proposals yet. Use New proposal + pay link.</div></td></tr>';
+    </tr>`).join(''):'<tr><td colspan="5" data-label=""><div class="empty-card">No proposals yet. Use New proposal + pay link.</div></td></tr>';
+    renderPager(propPager, pSlice, ()=>loadDeals());
     ptb.querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',()=>openProspectById(btn.dataset.openProspect)));
     ptb.querySelectorAll('[data-send-prop]').forEach(btn=>btn.addEventListener('click',async()=>{
       await api('/api/sales/proposals/'+btn.dataset.sendProp+'/send',{method:'POST',body:{}});
@@ -3150,7 +3342,9 @@ async function loadDeals(){
   const itb=$('dealsInvoicesTable')&&$('dealsInvoicesTable').querySelector('tbody');
   if(itb){
     const invoices=inv.invoices||[];
-    itb.innerHTML=invoices.length?invoices.map(i=>{
+    const invPager=ensurePagerHost($('dealsInvoicesTable').closest('.sales-table-wrap'),'dealsInvoicesPager');
+    const iSlice=pageSlice(invoices,'dealsInvoices');
+    itb.innerHTML=invoices.length?iSlice.items.map(i=>{
       const liveLink=i.hosted_url&&!String(i.hosted_url).includes('/placeholder/');
       const link=liveLink?`<a class="chip ok" href="${esc(i.hosted_url)}" target="_blank" rel="noopener">Pay link</a>`:'';
       const copyPay=(i.pay_instructions&&['payoneer','skrill','manual'].includes(String(i.provider||'').toLowerCase()))
@@ -3158,8 +3352,15 @@ async function loadDeals(){
       const actions=i.status==='open'
         ?`<div class="action-stack">${link}${copyPay}<button type="button" class="primary" data-confirm-close="${i.id}" data-number="${esc(i.number)}" data-total="${esc(String(i.total))}" data-currency="${esc(i.currency||'')}">Confirm close / paid</button></div>`
         :'—';
-      return `<tr><td><strong>${esc(i.number)}</strong></td><td>${esc(i.status)}</td><td>${esc(i.provider)}</td><td>${esc(i.currency)} ${esc(String(i.total))}</td><td>${actions}</td></tr>`;
-    }).join(''):'<tr><td colspan="5"><div class="empty-card">No invoices yet.</div></td></tr>';
+      return `<tr>
+        <td data-label="Number"><strong>${esc(i.number)}</strong></td>
+        <td data-label="Status">${esc(i.status)}</td>
+        <td data-label="Provider">${esc(i.provider)}</td>
+        <td data-label="Total">${esc(i.currency)} ${esc(String(i.total))}</td>
+        <td data-label="Actions">${actions}</td>
+      </tr>`;
+    }).join(''):'<tr><td colspan="5" data-label=""><div class="empty-card">No invoices yet.</div></td></tr>';
+    renderPager(invPager, iSlice, ()=>loadDeals());
     const dealInvById=Object.fromEntries(invoices.map(i=>[String(i.id), i]));
     itb.querySelectorAll('[data-deal-copy-inv]').forEach(btn=>btn.addEventListener('click',async()=>{
       const text=(dealInvById[btn.dataset.dealCopyInv]||{}).pay_instructions||'';
@@ -3419,6 +3620,7 @@ function actionButtons(b){
 
 function paint(){
   const body=$('rows');
+  const pagerHost=ensurePagerHost($('leads'),'leadsPager');
   if(viewMode==='queue'||viewMode==='due')$('statTotal').textContent=String(rowsData.length);
   if(!rowsData.length){
     const waiting=viewMode==='city'&&(!$('country').value.trim()||!$('city').value.trim());
@@ -3427,10 +3629,12 @@ function paint(){
     else if(viewMode==='queue')msg='Global queue is empty. Star (★) leads in City leads first, then come back here.';
     else if(viewMode==='due')msg='No due / overdue follow-ups yet. Set a follow-up date when you confirm sent.';
     body.innerHTML=`<div class="empty">${msg}</div>`;
+    if(pagerHost) pagerHost.innerHTML='';
     updateSelectedCount();
     return;
   }
-  body.innerHTML=rowsData.map(b=>{
+  const slice=pageSlice(rowsData,'discover');
+  body.innerHTML=slice.items.map(b=>{
     const checked=selectedIds.has(String(b.id))?'checked':'';
     const starred=b.marked_for_contact?'on':'';
     const follow=b.next_follow_up_at?`<div class="sub">Follow up · ${esc(dateOnly(b.next_follow_up_at))}</div>`:'';
@@ -3444,6 +3648,7 @@ function paint(){
       ${actionButtons(b)}
     </div>`;
   }).join('');
+  renderPager(pagerHost, slice, paint);
   updateSelectedCount();
 }
 
@@ -3459,6 +3664,7 @@ async function load(){
     const data=await api('/api/businesses?'+queryParams());
     if(seq!==loadSeq)return; // a newer load() won the race
     rowsData=data.results||[];
+    if(pagerState.discover) pagerState.discover.page=1;
     paint();
     await Promise.all([loadStats(),loadCategories()]);
   }catch(e){
