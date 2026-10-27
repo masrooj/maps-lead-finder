@@ -36,6 +36,21 @@ def test_crm_lead_id_format():
     assert crm_lead_id_for(42) == "business:42"
 
 
+def test_rewrite_be_base_url_for_docker(monkeypatch):
+    from app.services.booking_engine import connect as be_connect
+
+    monkeypatch.setattr(be_connect, "_running_in_docker", lambda: True)
+    assert be_connect.rewrite_be_base_url_for_runtime("http://127.0.0.1:3010") == "http://host.docker.internal:3010"
+    assert be_connect.rewrite_be_base_url_for_runtime("http://localhost:3010/") == "http://host.docker.internal:3010"
+    assert be_connect.rewrite_be_base_url_for_runtime("http://be.example:3010") == "http://be.example:3010"
+    monkeypatch.setattr(be_connect, "_running_in_docker", lambda: False)
+    assert be_connect.rewrite_be_base_url_for_runtime("http://127.0.0.1:3010") == "http://127.0.0.1:3010"
+    assert (
+        be_connect.rewrite_be_base_url_for_runtime("http://host.docker.internal:3010")
+        == "http://127.0.0.1:3010"
+    )
+
+
 def test_connect_gate_blocks_catalog(auth_client):
     db = SessionLocal()
     try:

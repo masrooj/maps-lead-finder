@@ -21,6 +21,10 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgresql+psycopg://mapsleads:${POSTGRES_PASSWORD:-change-this-password}@db:5432/mapsleads
+      RUNNING_IN_DOCKER: "1"
+    # Reach BE / other host services published on the Mac (e.g. :3010).
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:

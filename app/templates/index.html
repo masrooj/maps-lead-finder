@@ -815,6 +815,9 @@ body:not(.authed) .wrap{
 }
 .ah-catalog-bar .field{flex:1 1 180px;max-width:240px;margin:0}
 .ah-catalog-bar .ah-catalog-actions{display:flex;align-items:flex-end;gap:8px;flex:0 0 auto;padding-bottom:1px}
+.ah-catalog-sep td{
+  padding:14px 10px 8px;border-top:1px solid var(--line);color:var(--muted);font-size:12px;letter-spacing:.04em;text-transform:uppercase;background:transparent
+}
 .ah-connect-form{display:grid;gap:12px;max-width:560px}
 .ah-connect-form .field{margin:0}
 .provider-create-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
@@ -1580,7 +1583,7 @@ body:not(.authed) .wrap{
         <p class="hint" style="margin-top:0">Owner only: pair via code from AppointHive Super Admin, or paste base URL + shared secret. Test until status is Connected. Status lives on <button type="button" class="chip ok" data-goto="appoinHive:overview">Overview</button>.</p>
         <p class="hint hidden" id="beConnectOwnerHint" style="margin:0 0 10px">Connect / disconnect actions are owner-only. You can still view status on Overview.</p>
         <div class="ah-connect-form">
-          <div class="field"><label for="beBaseUrl">AppointHive base URL</label><input id="beBaseUrl" placeholder="http://127.0.0.1:3010" autocomplete="off"></div>
+          <div class="field"><label for="beBaseUrl">AppointHive base URL</label><input id="beBaseUrl" placeholder="http://host.docker.internal:3010" autocomplete="off"><p class="hint" style="margin:6px 0 0">If Sales OS runs in Docker and BE on this Mac, use <code>http://host.docker.internal:3010</code> — not <code>127.0.0.1</code> (that’s inside the container).</p></div>
           <div class="field"><label for="beSharedSecret">Shared secret (paste if not using pair code)</label><input id="beSharedSecret" type="password" placeholder="Leave blank to keep existing" autocomplete="off"></div>
           <div class="pay-actions" style="margin:0">
             <button type="button" class="primary" id="beSaveManual">Save URL / secret</button>
@@ -3075,8 +3078,43 @@ function renderBeConnDetails(conn){
     </tbody></table></div>
     ${conn.connected?'':`<div class="sub" style="margin-top:8px">Not connected — open <button type="button" class="chip ok" data-goto="appoinHive:connect">Connect</button> to save URL/secret or pair, then Test connection.</div>`}`;
 }
+function beCatalogIsPlan(sku){
+  const t=String((sku&&sku.productType)||'').toUpperCase();
+  return t==='EDITION' || t==='PLAN' || t==='PACKAGE';
+}
 function beCatalogRows(data){
   if(!data || typeof data!=='object') return [];
+  // BE /catalog returns { productLine, skus:[{ name, productKey, productType, options:[{ priceCents, ...}] }] }
+  const skus=data.skus;
+  if(Array.isArray(skus) && skus.length){
+    const flat=[];
+    for(const sku of skus){
+      const isPlan=beCatalogIsPlan(sku);
+      const planName=sku.name||sku.productName||sku.productKey||'';
+      const opts=Array.isArray(sku.options)?sku.options:[];
+      const active=opts.filter(o=>o && o.active!==false);
+      const use=active.length?active:(opts.length?opts:[{}]);
+      for(const opt of use){
+        flat.push({
+          ...sku,
+          ...opt,
+          _isPlan:isPlan,
+          label:planName,
+          name:planName,
+          // Edition column: plan display name only — never addon productKey/codes
+          edition:isPlan?planName:'',
+          productLine:sku.catalogKind||sku.productLine||data.productLine||'',
+          productRevisionId:opt.optionId||sku.productRevisionId||sku.id||'',
+          priceCents:opt.priceCents!=null?opt.priceCents:sku.priceCents,
+          currency:opt.currency||sku.currency||'USD',
+          billingInterval:opt.billingInterval||opt.purchaseType||'',
+        });
+      }
+    }
+    // Plans first, then addons (stable within each group)
+    flat.sort((a,b)=>Number(!!b._isPlan)-Number(!!a._isPlan));
+    return flat;
+  }
   const candidates=[data.items, data.packages, data.products, data.catalog, data.revisions, data.rows];
   for(const c of candidates){ if(Array.isArray(c) && c.length) return c; }
   if(Array.isArray(data)) return data;
@@ -3090,9 +3128,36 @@ function formatBePrice(row){
   const cents=row.priceCents!=null?Number(row.priceCents):(row.price_cents!=null?Number(row.price_cents):null);
   const amount=row.price!=null?Number(row.price):(row.amount!=null?Number(row.amount):null);
   const cur=row.currency||row.Currency||'USD';
-  if(cents!=null && !Number.isNaN(cents)) return `${cur} ${(cents/100).toFixed(2)}`;
-  if(amount!=null && !Number.isNaN(amount)) return `${cur} ${amount.toFixed(2)}`;
-  return '—';
+  const interval=(row.billingInterval||row.purchaseType||'').toString().replace(/_/g,' ');
+  let price='—';
+  if(cents!=null && !Number.isNaN(cents)) price=`${cur} ${(cents/100).toFixed(2)}`;
+  else if(amount!=null && !Number.isNaN(amount)) price=`${cur} ${amount.toFixed(2)}`;
+  if(price!=='—' && interval) return `${price} · ${interval}`;
+  return price;
+}
+function renderBeCatalogBody(rows, line){
+  const parts=[];
+  let sawAddonSep=false;
+  const hasPlans=rows.some(r=>r._isPlan);
+  const hasAddons=rows.some(r=>r && r._isPlan===false);
+  for(const r of rows){
+    if(hasPlans && hasAddons && r._isPlan===false && !sawAddonSep){
+      sawAddonSep=true;
+      parts.push(`<tr class="ah-catalog-sep"><td colspan="5"><strong>Add-ons</strong></td></tr>`);
+    }
+    const name=r.label||r.name||r.productName||r.product_name||r.title||r.productId||r.product_id||'—';
+    const edition=r._isPlan ? (r.edition||r.name||'') : '';
+    const id=r.productRevisionId||r.optionId||r.product_revision_id||r.revisionId||r.id||r.sku||'';
+    const pl=r.productLine||r.catalogKind||r.product_line||line;
+    parts.push(`<tr>
+      <td><strong>${esc(name)}</strong></td>
+      <td>${esc(edition)}</td>
+      <td>${esc(formatBePrice(r))}</td>
+      <td style="overflow:hidden;text-overflow:ellipsis"><code>${esc(String(id))}</code></td>
+      <td>${esc(pl)}</td>
+    </tr>`);
+  }
+  return parts.join('');
 }
 async function loadBeCatalog(){
   const host=$('beCatalogHost');
@@ -3112,21 +3177,9 @@ async function loadBeCatalog(){
       return;
     }
     host.innerHTML=`<div class="sales-table-wrap"><table class="sales-table" style="table-layout:fixed;width:100%"><thead><tr>
-      <th style="width:28%">Name</th><th style="width:16%">Edition</th><th style="width:16%">Price</th><th style="width:28%">Revision / id</th><th style="width:12%">Line</th>
+      <th style="width:28%">Name</th><th style="width:16%">Edition</th><th style="width:20%">Price</th><th style="width:24%">Option id</th><th style="width:12%">Line</th>
     </tr></thead><tbody>
-      ${rows.map(r=>{
-        const name=r.label||r.name||r.productName||r.product_name||r.title||r.productId||r.product_id||'—';
-        const edition=r.edition||r.plan||r.tier||r.sku||'';
-        const id=r.productRevisionId||r.product_revision_id||r.revisionId||r.id||r.sku||'';
-        const pl=r.productLine||r.product_line||line;
-        return `<tr>
-          <td><strong>${esc(name)}</strong></td>
-          <td>${esc(edition)}</td>
-          <td>${esc(formatBePrice(r))}</td>
-          <td style="overflow:hidden;text-overflow:ellipsis"><code>${esc(String(id))}</code></td>
-          <td>${esc(pl)}</td>
-        </tr>`;
-      }).join('')}
+      ${renderBeCatalogBody(rows, line)}
     </tbody></table></div>`;
   }catch(e){
     host.innerHTML=`<div class="pay-status err">${esc(e.message||'Failed to load catalog')}</div>`;

@@ -1,9 +1,12 @@
 """CRM connect-first: pairing codes, encrypted BE settings, connection status."""
 from __future__ import annotations
 
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse, urlunparse
 
 from fastapi import HTTPException
 
@@ -20,8 +23,45 @@ def crm_lead_id_for(business_id: int) -> str:
     return f"business:{int(business_id)}"
 
 
+def _running_in_docker() -> bool:
+    if (os.environ.get("RUNNING_IN_DOCKER") or "").strip() in ("1", "true", "yes"):
+        return True
+    try:
+        return Path("/.dockerenv").exists()
+    except Exception:
+        return False
+
+
+def rewrite_be_base_url_for_runtime(url: str) -> str:
+    """Map BE URL to the current runtime network.
+
+    - In Docker: 127.0.0.1/localhost → host.docker.internal (host-published BE).
+    - On host: host.docker.internal → 127.0.0.1 (URL saved while Sales OS was in Docker).
+    """
+    raw = (url or "").strip().rstrip("/")
+    if not raw:
+        return raw
+    try:
+        parsed = urlparse(raw)
+    except Exception:
+        return raw
+    host = (parsed.hostname or "").lower()
+    port = parsed.port
+    scheme = parsed.scheme or "http"
+    in_docker = _running_in_docker()
+    if in_docker and host in ("127.0.0.1", "localhost", "0.0.0.0"):
+        netloc = f"host.docker.internal:{port}" if port else "host.docker.internal"
+        return urlunparse((scheme, netloc, parsed.path or "", "", "", "")).rstrip("/")
+    if (not in_docker) and host == "host.docker.internal":
+        netloc = f"127.0.0.1:{port}" if port else "127.0.0.1"
+        return urlunparse((scheme, netloc, parsed.path or "", "", "", "")).rstrip("/")
+    return raw
+
+
 def get_be_base_url(db=None) -> str:
-    return resolve_secret("be.base_url", "APPOINTHIVE_BASE_URL", db=db).rstrip("/")
+    return rewrite_be_base_url_for_runtime(
+        resolve_secret("be.base_url", "APPOINTHIVE_BASE_URL", db=db).rstrip("/")
+    )
 
 
 def get_be_shared_secret(db=None) -> str:
@@ -161,7 +201,17 @@ def test_be_connection(db) -> dict:
         health = client.health()
     except BeClientError as exc:
         set_connection_status(db, "error", health_at=_utcnow().isoformat())
-        return {"ok": False, "connected": False, "message": str(exc), "connection": be_connection_public(db=db)}
+        msg = str(exc)
+        # Sales OS in Docker: 127.0.0.1 is the container, not the host where BE runs.
+        low = msg.lower()
+        hostish = "127.0.0.1" in base or "localhost" in base.lower()
+        if hostish and ("connection refused" in low or "unreachable" in low or "connecterror" in low):
+            msg = (
+                f"{msg}. Sales OS is likely in Docker — use http://host.docker.internal:3010 "
+                "(Mac/Windows) instead of http://127.0.0.1:3010, then Save and Test again. "
+                "BE ‘Connect’ success only proves BE→Sales OS; this test is Sales OS→BE."
+            )
+        return {"ok": False, "connected": False, "message": msg, "connection": be_connection_public(db=db)}
     status = (health.get("status") or "").lower()
     enabled = health.get("crmBridgeEnabled")
     secret_ok = health.get("secretConfigured")
