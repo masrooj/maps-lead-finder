@@ -25,6 +25,9 @@ def test_index_has_21_item_markers(auth_client):
     assert 'id="notifClearAll"' in html
     assert "data-notif-dismiss" in html
     assert "contactQueueIsParked" in html
+    assert 'id="settingsTabs"' in html
+    assert "setSettingsTab" in html
+    assert 'data-settings-tab="general"' in html
 
 
 def test_contact_queue_exposes_maps_and_booking(auth_client):

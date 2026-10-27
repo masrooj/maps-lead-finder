@@ -1372,10 +1372,10 @@ def sales_normalize_currency(
     _user: str = Depends(require_user),
     db=Depends(get_db),
 ):
-    """Bulk-set prospects still on from_currency (default AUD) to to_currency (default USD).
+    """Bulk-set prospect currencies.
 
-    Leaves every other currency untouched so EUR/GBP/etc. stay as-is.
-    Switch any prospect back via the currency select in Details.
+    - from_currency=AUD (etc.): only that code + blank → to_currency
+    - from_currency=ALL|*: every prospect not already on to_currency → to_currency
     """
     from app.config import DEFAULT_CURRENCY
     from app.services.authz import get_user_by_email, require_role
@@ -1384,26 +1384,30 @@ def sales_normalize_currency(
     require_role(actor, "owner", "sales")
     src = (from_currency or "AUD").strip().upper() or "AUD"
     dst = (to_currency or DEFAULT_CURRENCY or "USD").strip().upper() or "USD"
-    if len(src) != 3 or len(dst) != 3:
-        raise HTTPException(422, "Currency codes must be 3 letters (e.g. AUD, USD)")
+    convert_all = src in ("*", "ALL", "ANY")
+    if not convert_all and len(src) != 3:
+        raise HTTPException(422, "from_currency must be a 3-letter code or ALL")
+    if len(dst) != 3:
+        raise HTTPException(422, "to_currency must be a 3-letter code (e.g. USD)")
     rows = db.scalars(select(Business)).all()
     updated = 0
     kept = 0
     for b in rows:
         cur = (b.currency or "").strip().upper()
-        if not cur or cur == src:
-            if cur != dst:
-                b.currency = dst
-                b.updated_at = datetime.now(timezone.utc)
-                updated += 1
-            else:
-                kept += 1
+        if convert_all:
+            match = cur != dst
+        else:
+            match = (not cur) or cur == src
+        if match and cur != dst:
+            b.currency = dst
+            b.updated_at = datetime.now(timezone.utc)
+            updated += 1
         else:
             kept += 1
     db.commit()
     return {
         "ok": True,
-        "from_currency": src,
+        "from_currency": "ALL" if convert_all else src,
         "to_currency": dst,
         "updated": updated,
         "kept": kept,
@@ -1902,8 +1906,12 @@ def put_mail_setting(body: PaymentSettingBody, _user: str = Depends(require_user
 
 
 # —— Invoice view / PDF / compose helpers ——
-@router.get("/invoices/{invoice_id}/view")
-def invoice_view(invoice_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+def _invoice_logo_url(db) -> str:
+    row = db.scalar(select(AppSetting).where(AppSetting.key == "brand_logo_url"))
+    return (row.value or "").strip() if row else ""
+
+
+def _invoice_context(db, invoice_id: int):
     from app.models import BillingEntity, Proposal
     from app.services.invoices_pdf import invoice_view_payload
 
@@ -1915,24 +1923,22 @@ def invoice_view(invoice_id: int, _user: str = Depends(require_user), db=Depends
         select(BillingEntity).where(BillingEntity.active.is_(True))
     )
     prop = db.get(Proposal, inv.proposal_id) if inv.proposal_id else None
-    return invoice_view_payload(inv, b, ent, prop)
+    payload = invoice_view_payload(inv, b, ent, prop, logo_url=_invoice_logo_url(db))
+    return inv, payload
+
+
+@router.get("/invoices/{invoice_id}/view")
+def invoice_view(invoice_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    _inv, payload = _invoice_context(db, invoice_id)
+    return payload
 
 
 @router.get("/invoices/{invoice_id}/pdf")
 def invoice_pdf(invoice_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     from fastapi.responses import Response
-    from app.models import BillingEntity, Proposal
-    from app.services.invoices_pdf import build_invoice_pdf_bytes, invoice_view_payload
+    from app.services.invoices_pdf import build_invoice_pdf_bytes
 
-    inv = db.get(Invoice, invoice_id)
-    if not inv:
-        raise HTTPException(404, "Invoice not found")
-    b = db.get(Business, inv.business_id)
-    ent = db.get(BillingEntity, inv.billing_entity_id) if inv.billing_entity_id else db.scalar(
-        select(BillingEntity).where(BillingEntity.active.is_(True))
-    )
-    prop = db.get(Proposal, inv.proposal_id) if inv.proposal_id else None
-    payload = invoice_view_payload(inv, b, ent, prop)
+    inv, payload = _invoice_context(db, invoice_id)
     try:
         pdf = build_invoice_pdf_bytes(payload)
     except Exception as exc:
@@ -1953,16 +1959,11 @@ def invoice_compose_copy(
     db=Depends(get_db),
 ):
     """Message body for copy/paste outreach; PDF is downloaded separately (clipboard cannot attach files)."""
-    from app.models import BillingEntity, MessageTemplate, Proposal
-    from app.services.invoices_pdf import invoice_email_body, invoice_view_payload
+    from app.models import MessageTemplate
+    from app.services.invoices_pdf import invoice_email_body
 
-    inv = db.get(Invoice, invoice_id)
-    if not inv:
-        raise HTTPException(404, "Invoice not found")
+    inv, payload = _invoice_context(db, invoice_id)
     b = db.get(Business, inv.business_id)
-    ent = db.get(BillingEntity, inv.billing_entity_id) if inv.billing_entity_id else None
-    prop = db.get(Proposal, inv.proposal_id) if inv.proposal_id else None
-    payload = invoice_view_payload(inv, b, ent, prop)
     tpl = None
     if template_id:
         tpl = db.get(MessageTemplate, template_id)
@@ -2013,22 +2014,17 @@ def invoice_send_email(
     db=Depends(get_db),
 ):
     """Send invoice email with PDF attachment via SMTP."""
-    from app.models import BillingEntity, MessageTemplate, Proposal, Activity
+    from app.models import Activity, MessageTemplate
     from app.services.authz import get_user_by_email, require_role
-    from app.services.invoices_pdf import build_invoice_pdf_bytes, invoice_email_body, invoice_view_payload
+    from app.services.invoices_pdf import build_invoice_pdf_bytes, invoice_email_body
     from app.services.mail import send_email, smtp_configured
 
     actor = get_user_by_email(db, _user)
     require_role(actor, "owner", "sales")
     if not smtp_configured():
         raise HTTPException(503, "SMTP not configured — set Mail settings (host + from) under Money")
-    inv = db.get(Invoice, invoice_id)
-    if not inv:
-        raise HTTPException(404, "Invoice not found")
+    inv, payload = _invoice_context(db, invoice_id)
     b = db.get(Business, inv.business_id)
-    ent = db.get(BillingEntity, inv.billing_entity_id) if inv.billing_entity_id else None
-    prop = db.get(Proposal, inv.proposal_id) if inv.proposal_id else None
-    payload = invoice_view_payload(inv, b, ent, prop)
     tpl = None
     if body.template_id:
         tpl = db.get(MessageTemplate, body.template_id)

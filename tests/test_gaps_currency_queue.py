@@ -67,6 +67,45 @@ def test_normalize_currency_aud_to_usd_keeps_other(auth_client):
         db.commit()
 
 
+def test_normalize_currency_all_to_target(auth_client):
+    with SessionLocal() as db:
+        rows = [
+            Business(place_id="gap/cur-all-aud", name="All AUD", currency="AUD", city="Sydney", country="Australia"),
+            Business(place_id="gap/cur-all-eur", name="All EUR", currency="EUR", city="Berlin", country="DE"),
+            Business(place_id="gap/cur-all-usd", name="Already USD", currency="USD", city="Austin", country="US"),
+        ]
+        for b in rows:
+            db.add(b)
+            db.flush()
+            init_new_prospect(db, b)
+        by = {b.place_id: b for b in db.scalars(select(Business).where(Business.place_id.like("gap/cur-all-%"))).all()}
+        by["gap/cur-all-aud"].currency = "AUD"
+        by["gap/cur-all-eur"].currency = "EUR"
+        by["gap/cur-all-usd"].currency = "USD"
+        db.commit()
+        ids = [b.id for b in by.values()]
+
+    r = auth_client.post("/api/sales/prospects/normalize-currency?from_currency=ALL&to_currency=USD")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["ok"] is True
+    assert body["from_currency"] == "ALL"
+    assert body["to_currency"] == "USD"
+    assert body["updated"] >= 2
+
+    with SessionLocal() as db:
+        by_place = {
+            b.place_id: b
+            for b in db.scalars(select(Business).where(Business.id.in_(ids))).all()
+        }
+        assert by_place["gap/cur-all-aud"].currency == "USD"
+        assert by_place["gap/cur-all-eur"].currency == "USD"
+        assert by_place["gap/cur-all-usd"].currency == "USD"
+        for b in by_place.values():
+            db.delete(b)
+        db.commit()
+
+
 def test_contact_queue_country_city_and_limit_zero(auth_client):
     with SessionLocal() as db:
         a = Business(

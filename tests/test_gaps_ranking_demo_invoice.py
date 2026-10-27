@@ -127,13 +127,23 @@ def test_invoice_view_pdf_compose(auth_client):
 
     view = auth_client.get(f"/api/sales/invoices/{iid}/view")
     assert view.status_code == 200, view.text
-    assert view.json()["number"] == "INV-QA-001"
-    assert view.json()["total"] == 100.0
+    body = view.json()
+    assert body["number"] == "INV-QA-001"
+    assert body["total"] == 100.0
+    assert "logo_url" in body
+    assert body.get("total_fmt")
+    assert body.get("subtotal_fmt")
+    assert body.get("billing_entity", {}).get("legal_name")
+    assert body.get("business", {}).get("name") == "Invoice QA Co"
+    assert body.get("line_items")
+    assert body["line_items"][0].get("line_total") == 100.0
+    assert body["line_items"][0].get("line_total_fmt")
 
     pdf = auth_client.get(f"/api/sales/invoices/{iid}/pdf")
     assert pdf.status_code == 200, pdf.text
     assert pdf.headers.get("content-type", "").startswith("application/pdf")
     assert pdf.content[:4] == b"%PDF"
+    assert len(pdf.content) > 800
 
     compose = auth_client.get(f"/api/sales/invoices/{iid}/compose-copy")
     assert compose.status_code == 200, compose.text

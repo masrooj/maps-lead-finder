@@ -326,13 +326,61 @@ body.sidebar-open .sidebar-backdrop{display:block}
 input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus,textarea:-webkit-autofill,select:-webkit-autofill{
   -webkit-text-fill-color:var(--text);box-shadow:0 0 0 1000px var(--input) inset;transition:background-color 9999s ease-in-out 0s
 }
+/* Themed checkboxes (replace native browser chrome everywhere) */
+input[type=checkbox]{
+  -webkit-appearance:none;appearance:none;
+  width:18px;height:18px;margin:0;flex:0 0 auto;
+  border:1.5px solid var(--line);border-radius:5px;
+  background:var(--input);cursor:pointer;vertical-align:middle;
+  transition:border-color .15s var(--ease),background .15s var(--ease),box-shadow .15s var(--ease);
+  background-position:center;background-repeat:no-repeat;background-size:12px 12px;
+}
+input[type=checkbox]:hover{border-color:#3f5478;background-color:var(--input-hover)}
+input[type=checkbox]:focus-visible{outline:none;border-color:var(--accent);box-shadow:var(--focus-ring)}
+input[type=checkbox]:checked{
+  border-color:var(--accent);background-color:var(--accent);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 6.2L4.8 8.5L9.5 3.5' stroke='%23081026' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+}
+input[type=checkbox]:disabled{opacity:.45;cursor:not-allowed}
+input[type=radio]{
+  -webkit-appearance:none;appearance:none;
+  width:18px;height:18px;margin:0;flex:0 0 auto;
+  border:1.5px solid var(--line);border-radius:50%;
+  background:var(--input);cursor:pointer;vertical-align:middle;
+  transition:border-color .15s var(--ease),background .15s var(--ease),box-shadow .15s var(--ease)
+}
+input[type=radio]:hover{border-color:#3f5478;background:var(--input-hover)}
+input[type=radio]:focus-visible{outline:none;border-color:var(--accent);box-shadow:var(--focus-ring)}
+input[type=radio]:checked{border-color:var(--accent);background:radial-gradient(circle at center,#081026 0 35%,var(--accent) 36% 100%)}
+/* Themed file uploads */
+input[type=file]:not([hidden]){
+  width:100%;max-width:420px;min-height:var(--control-h);padding:8px 10px;border-radius:var(--control-radius);
+  border:1px solid var(--line);background:var(--input);color:var(--muted);font:inherit;font-size:13px;font-weight:600;
+  cursor:pointer;transition:border-color .15s var(--ease),background .15s var(--ease),box-shadow .15s var(--ease)
+}
+input[type=file]:not([hidden]):hover{border-color:#3f5478;background:var(--input-hover);color:var(--text)}
+input[type=file]:not([hidden]):focus{outline:none;border-color:var(--accent);box-shadow:var(--focus-ring);background:var(--input-focus)}
+input[type=file]::file-selector-button{
+  margin:0 12px 0 0;padding:8px 12px;min-height:28px;border:1px solid var(--line);border-radius:8px;
+  background:var(--panel2);color:var(--text);font:inherit;font-size:12px;font-weight:700;cursor:pointer;
+  transition:border-color .15s var(--ease),background .15s var(--ease)
+}
+input[type=file]::file-selector-button:hover{border-color:#3d5278;background:var(--panel-elev)}
+label.file-btn,label.pill:has(input[type=file]){
+  display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+  border:1px solid var(--line);border-radius:var(--radius-sm);padding:10px 14px;min-height:40px;
+  background:var(--panel2);color:var(--text);font-size:13px;font-weight:650;
+  transition:border-color .15s var(--ease),background .15s var(--ease)
+}
+label.file-btn:hover,label.pill:has(input[type=file]):hover{border-color:#3d5278;background:var(--panel-elev)}
+label.file-btn input[type=file],label.pill input[type=file][hidden]{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 .flag{
   display:inline-flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--control-radius);
   border:1px solid var(--line);background:var(--input);color:var(--text);font-size:13px;font-weight:600;
   cursor:pointer;user-select:none;min-height:var(--control-h);box-sizing:border-box
 }
 .flag:hover{border-color:#3f5478;background:var(--input-hover)}
-.flag input{width:16px;height:16px;margin:0;flex:0 0 auto;accent-color:var(--accent)}
+.flag input[type=checkbox]{width:18px;height:18px;margin:0;flex:0 0 auto}
 .prospect-picker{position:relative}
 .prospect-picker-list{
   position:absolute;left:0;right:0;top:calc(100% + 6px);max-height:240px;overflow:auto;z-index:5;
@@ -390,7 +438,7 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .lead-row{grid-template-columns:36px 34px minmax(0,1.35fr) minmax(0,1fr) minmax(88px,auto) minmax(0,auto)}
 .queue-lead{grid-template-columns:36px 56px minmax(0,1fr) auto;cursor:default}
 .queue-lead .checkcol{display:flex;align-items:center;justify-content:center}
-.queue-lead .checkcol input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.queue-lead .checkcol input[type=checkbox]{width:18px;height:18px;margin:0}
 .queue-lead.no-check{grid-template-columns:56px minmax(0,1fr) auto}
 .queue-tabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
 .queue-tabs button{
@@ -482,7 +530,7 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .task-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px;border-bottom:0}
 .lead .checkcol,.lead .starcol,.lead-biz,.lead-reach,.lead-meta,.lead-actions{min-width:0}
 .lead .checkcol{display:flex;align-items:center;justify-content:center}
-.lead .checkcol input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.lead .checkcol input[type=checkbox]{width:18px;height:18px;margin:0}
 .lead .starcol{display:flex;align-items:center;justify-content:center}
 .starbtn{border:0;background:transparent;padding:4px;font-size:18px;color:#4b5a75;line-height:1;min-height:0}
 .starbtn.on{color:var(--star)}
@@ -732,6 +780,25 @@ body:not(.authed) .wrap{
 .ch-tag.web{border-color:#334766;color:#bcd0ff}
 .queue-lead{cursor:pointer}
 .brand-logo-preview{max-width:160px;max-height:64px;border-radius:10px;border:1px solid var(--line);background:#0b1324;object-fit:contain;display:block;margin-top:8px}
+.invoice-preview{font-size:13px;line-height:1.45;color:var(--text)}
+.invoice-preview .inv-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;margin-bottom:14px}
+.invoice-preview .inv-logo{max-width:140px;max-height:56px;object-fit:contain;border-radius:8px;background:#fff;padding:4px}
+.invoice-preview .inv-title{text-align:right}
+.invoice-preview .inv-title strong{display:block;font-size:22px;letter-spacing:.04em}
+.invoice-preview .inv-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:12px 0 16px}
+.invoice-preview .inv-cols h5{margin:0 0 6px;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.invoice-preview .inv-cols p{margin:0;white-space:pre-line}
+.invoice-preview .inv-meta{display:flex;flex-wrap:wrap;gap:8px 14px;margin:0 0 12px;color:var(--muted);font-size:12px}
+.invoice-preview table{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0 12px}
+.invoice-preview th{text-align:left;padding:8px 6px;border-bottom:1px solid var(--line);color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.04em}
+.invoice-preview td{padding:8px 6px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+.invoice-preview td.num,.invoice-preview th.num{text-align:right;font-variant-numeric:tabular-nums}
+.invoice-preview .inv-totals{margin-left:auto;width:min(260px,100%);display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:13px}
+.invoice-preview .inv-totals .grand{font-weight:800;font-size:15px;padding-top:6px;border-top:1px solid var(--line);margin-top:4px}
+.invoice-preview .inv-pay{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-soft)}
+.invoice-preview .inv-pay h5{margin:0 0 6px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.invoice-preview .inv-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+@media(max-width:640px){.invoice-preview .inv-cols{grid-template-columns:1fr}}
 .paylink-qr{width:140px;height:140px;border-radius:12px;border:1px solid var(--line);background:#fff;padding:8px;flex:0 0 auto;object-fit:contain}
 .paylink-card{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;padding:14px;border:1px solid var(--line-soft);border-radius:14px;background:rgba(11,19,36,.55);margin:0 0 12px}
 .paylink-card .paylink-meta{flex:1;min-width:min(100%,200px)}
@@ -741,7 +808,8 @@ body:not(.authed) .wrap{
 .lead-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line-soft);background:rgba(16,24,43,.75)}
 .lead-group-head strong{font-size:14px;font-weight:750}
 .lead-group-body{padding:10px 12px 4px}
-.money-pane.hidden,.comms-pane.hidden{display:none!important}
+.money-pane.hidden,.comms-pane.hidden,.settings-pane.hidden,.ah-pane.hidden{display:none!important}
+.settings-pane,.ah-pane{min-height:120px}
 .provider-create-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
 .provider-create-row button{flex:1 1 auto;min-width:110px}
 .fields.filter-bar{grid-template-columns:repeat(auto-fit,minmax(160px,1fr)) auto;align-items:end}
@@ -799,6 +867,7 @@ body:not(.authed) .wrap{
     max-width:100%;min-width:0;width:100%;flex:1 1 calc(50% - 8px);box-sizing:border-box
   }
   .modal{max-height:min(94dvh,100%);width:min(560px,100%);border-radius:16px}
+.ui-dialog-backdrop .modal{width:min(720px,100%)}
   .drawer{width:min(100vw,100%);max-height:min(92dvh,100%);border-left:0;border-radius:18px 18px 0 0;height:auto}
   .drawer-backdrop{align-items:flex-end}
   .kanban{padding-bottom:4px;gap:8px}
@@ -1125,7 +1194,7 @@ body:not(.authed) .wrap{
       <button type="button" id="refreshBtn">Refresh</button>
       <button type="button" id="enrichBtn" title="Find email & social from websites">Enrich contacts</button>
       <div class="spacer"></div>
-      <label class="pill" style="cursor:pointer">Import CSV<input type="file" id="importFile" accept=".csv,text/csv" hidden></label>
+      <label class="file-btn" for="importFile">Import CSV<input type="file" id="importFile" accept=".csv,text/csv" hidden></label>
       <button type="button" id="exportBtn">Export filtered</button>
     </section>
 
@@ -1337,7 +1406,7 @@ body:not(.authed) .wrap{
       <p class="hint" style="margin-top:0">Paste a Loom/YouTube/Drive URL or upload a video to copy into client messages.</p>
       <div class="crud-toolbar">
         <button type="button" class="primary" id="demoAssetAddBtn">Add link / URL</button>
-        <label class="pill" style="cursor:pointer">Upload video<input type="file" id="demoAssetFile" accept="video/*,.mp4,.mov,.webm" hidden></label>
+        <label class="file-btn" for="demoAssetFile">Upload video<input type="file" id="demoAssetFile" accept="video/*,.mp4,.mov,.webm" hidden></label>
         <button type="button" id="demoAssetsRefresh">Refresh library</button>
       </div>
       <div id="demoAssetsPanel" class="hint">Loading…</div>
@@ -1365,77 +1434,170 @@ body:not(.authed) .wrap{
   <div class="panel-page hidden" id="settingsPanel">
     <section class="panel card">
       <div class="sectionhead"><h2>Settings</h2><button type="button" id="settingsRefresh">Refresh</button></div>
-      <div class="queue-grid" id="settingsMeta"></div>
-      <div class="field" style="max-width:420px;margin-top:12px">
-        <label class="flag"><input type="checkbox" id="saasEnabledToggle"> Enable SaaS pipeline</label>
-        <p class="hint">When off, Pipeline still lists SaaS stages in API but UI defaults to Standalone. Standalone history is untouched.</p>
-        <button type="button" class="primary" id="saveSaasFlag">Save SaaS flag</button>
+      <div class="queue-tabs" id="settingsTabs" role="tablist" aria-label="Settings sections" style="margin-bottom:14px">
+        <button type="button" class="active" data-settings-tab="general" role="tab" aria-selected="true">General</button>
+        <button type="button" data-settings-tab="team" role="tab" aria-selected="false">Team</button>
+        <button type="button" data-settings-tab="ranking" role="tab" aria-selected="false">Ranking</button>
+        <button type="button" data-settings-tab="jobs" role="tab" aria-selected="false">Jobs &amp; audit</button>
+        <button type="button" data-settings-tab="views" role="tab" aria-selected="false">Saved views</button>
       </div>
-      <h3 class="panel-title">Prospect auto-setup</h3>
-      <p class="hint" style="margin-top:0">Assign product line, currency, pipeline stage, and follow-up tasks for leads missing Sales OS fields.</p>
-      <button type="button" class="primary" id="autoSetupProspectsBtn">Run auto-setup now</button>
-      <h3 class="panel-title">Currency</h3>
-      <p class="hint" style="margin-top:0">Default is <strong>USD</strong>. Bulk-convert prospects still on AUD → USD. Other currencies (EUR, GBP, …) are left alone — switch any prospect back with the currency select in Details.</p>
-      <button type="button" class="primary" id="normalizeCurrencyBtn">Set AUD → USD now</button>
-      <h3 class="panel-title">Brand logo (email signature)</h3>
-      <p class="hint" style="margin-top:0">Upload a logo used in email signatures when you copy / open Zoho. Stored under uploads.</p>
-      <div class="crud-toolbar" style="margin:0">
-        <input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-label="Upload logo">
-        <button type="button" id="brandLogoClear">Remove logo</button>
+
+      <div class="settings-pane" id="settingsGeneralPane" data-settings-pane="general">
+        <div class="queue-grid" id="settingsMeta"></div>
+        <h3 class="panel-title">Product line</h3>
+        <div class="field" style="max-width:420px;margin-top:8px">
+          <label class="flag"><input type="checkbox" id="saasEnabledToggle"> Enable SaaS pipeline</label>
+          <p class="hint">When off, Pipeline still lists SaaS stages in API but UI defaults to Standalone. Standalone history is untouched.</p>
+          <button type="button" class="primary" id="saveSaasFlag">Save SaaS flag</button>
+        </div>
+        <h3 class="panel-title">Prospect auto-setup</h3>
+        <p class="hint" style="margin-top:0">Assign product line, currency, pipeline stage, and follow-up tasks for leads missing Sales OS fields.</p>
+        <button type="button" class="primary" id="autoSetupProspectsBtn">Run auto-setup now</button>
+        <h3 class="panel-title">Currency</h3>
+        <p class="hint" style="margin-top:0">Default for new prospects is <strong>USD</strong>. Bulk-convert any source currency (or all) to a target. Per-prospect overrides stay in the drawer <strong>Sales</strong> tab → Currency.</p>
+        <div class="fields filter-bar" style="margin:0 0 10px;max-width:520px">
+          <div class="field">
+            <label for="currencyNormalizeFrom">From</label>
+            <select id="currencyNormalizeFrom" aria-label="Source currency">
+              <option value="ALL">All currencies</option>
+              <option value="AUD" selected>AUD (+ blank)</option>
+              <option value="USD">USD (+ blank)</option>
+              <option value="EUR">EUR (+ blank)</option>
+              <option value="GBP">GBP (+ blank)</option>
+              <option value="NZD">NZD (+ blank)</option>
+              <option value="CAD">CAD (+ blank)</option>
+              <option value="AED">AED (+ blank)</option>
+              <option value="SAR">SAR (+ blank)</option>
+              <option value="SGD">SGD (+ blank)</option>
+              <option value="INR">INR (+ blank)</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="currencyNormalizeTo">To</label>
+            <select id="currencyNormalizeTo" aria-label="Target currency">
+              <option value="USD" selected>USD</option>
+              <option value="AUD">AUD</option>
+              <option value="EUR">EUR</option>
+              <option value="GBP">GBP</option>
+              <option value="NZD">NZD</option>
+              <option value="CAD">CAD</option>
+              <option value="AED">AED</option>
+              <option value="SAR">SAR</option>
+              <option value="SGD">SGD</option>
+              <option value="INR">INR</option>
+            </select>
+          </div>
+        </div>
+        <button type="button" class="primary" id="normalizeCurrencyBtn">Bulk convert currencies</button>
+        <h3 class="panel-title">Brand logo (email &amp; invoices)</h3>
+        <p class="hint" style="margin-top:0">Used in email signatures and invoice View/PDF. Stored under uploads.</p>
+        <div class="crud-toolbar" style="margin:0">
+          <label class="file-btn" for="brandLogoFile">Choose logo<input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden aria-label="Upload logo"></label>
+          <span class="hint" id="brandLogoFileName">No file chosen</span>
+          <button type="button" id="brandLogoClear">Remove logo</button>
+        </div>
+        <img id="brandLogoPreview" class="brand-logo-preview hidden" alt="Brand logo preview">
       </div>
-      <img id="brandLogoPreview" class="brand-logo-preview hidden" alt="Brand logo preview">
-      <h3 class="panel-title">Users</h3>
-      <div class="crud-toolbar">
-        <button type="button" class="primary" id="userAddBtn">Add user</button>
+
+      <div class="settings-pane hidden" id="settingsTeamPane" data-settings-pane="team">
+        <h3 class="panel-title">Users</h3>
+        <p class="hint" style="margin-top:0">Owner / Sales / Viewer. Set passwords so each person can sign in with their email.</p>
+        <div class="crud-toolbar">
+          <button type="button" class="primary" id="userAddBtn">Add user</button>
+        </div>
+        <div id="usersTerritories" class="hint">Loading…</div>
+        <h3 class="panel-title">Territories</h3>
+        <p class="hint" style="margin-top:0">Country scopes for ownership. Auto-assign unowned prospects into a territory.</p>
+        <div class="crud-toolbar">
+          <button type="button" class="primary" id="territoryAddBtn">Add territory</button>
+        </div>
+        <div id="territoriesPanel" class="hint">Loading…</div>
       </div>
-      <div id="usersTerritories" class="hint">Loading…</div>
-      <h3 class="panel-title">Territories</h3>
-      <div class="crud-toolbar">
-        <button type="button" class="primary" id="territoryAddBtn">Add territory</button>
+
+      <div class="settings-pane hidden" id="settingsRankingPane" data-settings-pane="ranking">
+        <h3 class="panel-title">Contact queue ranking modes</h3>
+        <p class="hint" style="margin-top:0">CRUD filter/boost presets (not hardcoded). Edit with Yes / No / Any for each channel flag — no JSON required.</p>
+        <div class="crud-toolbar">
+          <button type="button" class="primary" id="rankingModeAddBtn">Add ranking mode</button>
+          <button type="button" id="rankingModesRefresh">Refresh</button>
+        </div>
+        <div id="rankingModesPanel" class="hint">Loading…</div>
       </div>
-      <div id="territoriesPanel" class="hint">Loading…</div>
-      <h3 class="panel-title">Contact queue ranking modes</h3>
-      <p class="hint" style="margin-top:0">CRUD filter/boost presets (not hardcoded). Edit with Yes / No / Any for each channel flag — no JSON required.</p>
-      <div class="crud-toolbar">
-        <button type="button" class="primary" id="rankingModeAddBtn">Add ranking mode</button>
-        <button type="button" id="rankingModesRefresh">Refresh</button>
+
+      <div class="settings-pane hidden" id="settingsJobsPane" data-settings-pane="jobs">
+        <h3 class="panel-title">Background jobs</h3>
+        <p class="hint" style="margin-top:0">Enrich selected Discover leads in batches (avoids long request timeouts).</p>
+        <button type="button" id="enrichJobBtn">Start enrich job for starred / selected</button>
+        <h3 class="panel-title">Audit (Owner)</h3>
+        <p class="hint" style="margin-top:0">Recent Owner/ops actions. Cron: <code>POST /api/cron/unpaid-invoices</code> with header <code>X-Cron-Secret</code> (or Owner session).</p>
+        <div class="sales-table-wrap" style="max-height:360px"><table class="sales-table" id="auditTable"><thead><tr><th>When</th><th>Action</th><th>Entity</th></tr></thead><tbody></tbody></table></div>
       </div>
-      <div id="rankingModesPanel" class="hint">Loading…</div>
-      <h3 class="panel-title">Background jobs</h3>
-      <p class="hint" style="margin-top:0">Enrich selected Discover leads in batches (avoids long request timeouts).</p>
-      <button type="button" id="enrichJobBtn">Start enrich job for starred / selected</button>
-      <h3 class="panel-title">Audit (Owner)</h3>
-      <div class="sales-table-wrap" style="max-height:280px"><table class="sales-table" id="auditTable"><thead><tr><th>When</th><th>Action</th><th>Entity</th></tr></thead><tbody></tbody></table></div>
-      <h3 class="panel-title">Saved views</h3>
-      <div class="crud-toolbar">
-        <input id="savedViewName" placeholder="Name this filter set" aria-label="Saved view name">
-        <button type="button" class="primary" id="saveViewBtn">Save view</button>
+
+      <div class="settings-pane hidden" id="settingsViewsPane" data-settings-pane="views">
+        <h3 class="panel-title">Saved views</h3>
+        <p class="hint" style="margin-top:0">Name the current Discover / pipeline filters so you can re-apply them later.</p>
+        <div class="crud-toolbar">
+          <input id="savedViewName" placeholder="Name this filter set" aria-label="Saved view name">
+          <button type="button" class="primary" id="saveViewBtn">Save view</button>
+        </div>
+        <div id="savedViewsList" class="hint">Loading…</div>
       </div>
-      <div id="savedViewsList" class="hint">Loading…</div>
-      <p class="hint" style="margin-top:12px">Cron: POST /api/cron/unpaid-invoices with header X-Cron-Secret (or Owner session).</p>
     </section>
   </div>
 
   <div class="panel-page hidden" id="appoinHivePanel">
     <section class="panel card">
       <div class="sectionhead">
-        <h2>AppointHive connection</h2>
+        <h2>AppointHive</h2>
         <button type="button" id="beConnRefresh">Refresh</button>
       </div>
-      <p class="hint" style="margin-top:0">Connect AppointHive Sales OS to the Booking Engine for live STANDALONE prices, pay links, and Won mirroring. Product cash and ZIP stay on AppointHive — this app never marks paid for bridged sales.</p>
-      <div id="beConnBanner" class="pay-status info">Loading connection…</div>
-      <div class="field"><label for="beBaseUrl">AppointHive base URL</label><input id="beBaseUrl" placeholder="http://127.0.0.1:3010" autocomplete="off"></div>
-      <div class="field"><label for="beSharedSecret">Shared secret (paste if not using pair code)</label><input id="beSharedSecret" type="password" placeholder="Leave blank to keep existing" autocomplete="off"></div>
-      <div class="pay-actions">
-        <button type="button" class="primary" id="beSaveManual">Save URL / secret</button>
-        <button type="button" id="beGenPair">Generate pairing code</button>
-        <button type="button" id="beTestConn">Test connection</button>
-        <button type="button" class="danger" id="beDisconnect">Disconnect</button>
+      <div class="queue-tabs" id="ahTabs" role="tablist" aria-label="AppointHive sections" style="margin-bottom:14px">
+        <button type="button" class="active" data-ah-tab="overview" role="tab" aria-selected="true">Overview</button>
+        <button type="button" data-ah-tab="connect" role="tab" aria-selected="false">Connect</button>
+        <button type="button" data-ah-tab="catalogs" role="tab" aria-selected="false">Pricing catalogs</button>
       </div>
-      <div id="bePairBox" class="hint" style="margin-top:10px"></div>
-      <h3 class="panel-title">Live STANDALONE packages</h3>
-      <p class="hint" style="margin-top:0">Prices come from AppointHive revisions — never from seeded Sales OS PlanPrice when connected.</p>
-      <div id="beRevisionsHost" class="hint">Connect first to load packages.</div>
+
+      <div class="ah-pane" id="ahOverviewPane" data-ah-pane="overview">
+        <p class="hint" style="margin-top:0">Workspace bridge to the Booking Engine: live STANDALONE prices, pay links, and Won mirroring. Product cash and ZIP stay on AppointHive. Per-lead Send to delivery lives on the prospect drawer <strong>Delivery / pay</strong> tab — not here.</p>
+        <div id="beConnBanner" class="pay-status info">Loading connection…</div>
+        <h3 class="panel-title">Live STANDALONE packages</h3>
+        <p class="hint" style="margin-top:0">FINALIZED revisions used for Send to delivery (<code>/standalone/revisions</code>). For the full line catalog (STANDALONE/SAAS), open <strong>Pricing catalogs</strong>.</p>
+        <div id="beRevisionsHost" class="hint">Connect first to load packages.</div>
+      </div>
+
+      <div class="ah-pane hidden" id="ahConnectPane" data-ah-pane="connect">
+        <h3 class="panel-title">Connection</h3>
+        <p class="hint" style="margin-top:0">Owner only: pair via code from AppointHive Super Admin, or paste base URL + shared secret. Test until status is Connected.</p>
+        <div id="beConnDetails" class="prov-card" style="margin-bottom:12px">Loading connection details…</div>
+        <div class="field"><label for="beBaseUrl">AppointHive base URL</label><input id="beBaseUrl" placeholder="http://127.0.0.1:3010" autocomplete="off"></div>
+        <div class="field"><label for="beSharedSecret">Shared secret (paste if not using pair code)</label><input id="beSharedSecret" type="password" placeholder="Leave blank to keep existing" autocomplete="off"></div>
+        <p class="hint hidden" id="beConnectOwnerHint" style="margin:0 0 8px">Connect / disconnect actions are owner-only. You can still view status above.</p>
+        <div class="pay-actions">
+          <button type="button" class="primary" id="beSaveManual">Save URL / secret</button>
+          <button type="button" id="beGenPair">Generate pairing code</button>
+          <button type="button" id="beTestConn">Test connection</button>
+          <button type="button" class="danger" id="beDisconnect">Disconnect</button>
+        </div>
+        <div id="bePairBox" class="hint" style="margin-top:10px"></div>
+      </div>
+
+      <div class="ah-pane hidden" id="ahCatalogsPane" data-ah-pane="catalogs">
+        <h3 class="panel-title">Pricing catalogs</h3>
+        <p class="hint" style="margin-top:0">Full product catalog from AppointHive (<code>/catalog</code>), including SAAS. Different from Overview packages, which are FINALIZED STANDALONE revisions for delivery.</p>
+        <div class="fields filter-bar" style="margin:0 0 12px;max-width:420px">
+          <div class="field">
+            <label for="beCatalogLine">Product line</label>
+            <select id="beCatalogLine" aria-label="Catalog product line">
+              <option value="STANDALONE" selected>STANDALONE</option>
+              <option value="SAAS">SAAS</option>
+            </select>
+          </div>
+          <div class="field" style="align-self:end">
+            <button type="button" class="primary" id="beCatalogRefresh">Load catalog</button>
+          </div>
+        </div>
+        <div id="beCatalogHost" class="hint">Loading…</div>
+      </div>
     </section>
   </div>
 
@@ -1679,6 +1841,9 @@ let _uiDialogResolver=null;
 let moneyTab='ledger'; // ledger | invoices | settings
 let commsTab='outreach'; // outreach | invoices
 let dealsTab='proposals'; // proposals | paylinks
+let settingsTab='general'; // general | team | ranking | jobs | views
+let ahTab='overview'; // overview | connect | catalogs
+let currentRole='owner';
 let moneyInvoicesCache=[];
 let commsInvoicesCache=[];
 
@@ -1768,9 +1933,9 @@ const PANEL_META={
   deals:{title:'Deals',sub:'Proposals, pay links, confirm close'},
   money:{title:'Money',sub:'Cash provenance, providers, ledger'},
   paySetup:{title:'Pay setup',sub:'Configure Stripe, PayPal, Payoneer, Skrill + validate'},
-  appoinHive:{title:'AppointHive',sub:'Connect Booking Engine · live prices · pay links'},
+  appoinHive:{title:'AppointHive',sub:'Workspace bridge · Connect · Catalogs (drawer has Delivery / pay)'},
   reports:{title:'Reports',sub:'Funnel, scores, win rate, sources'},
-  settings:{title:'Settings',sub:'Users, auto-setup, SaaS, views'},
+  settings:{title:'Settings',sub:'General · Team · Ranking · Jobs · Views'},
   templates:{title:'Templates',sub:'Email, WhatsApp, and Instagram messages'}
 };
 const APP_PANELS=Object.keys(PANEL_META);
@@ -1789,7 +1954,7 @@ function closeTopMenus(){
 function setAppPanel(panel, opts){
   const allowed=APP_PANELS;
   const o=opts||{};
-  // Allow "money:invoices" / "activities:invoices" shorthand from KPI data-goto
+  // Allow "money:invoices" / "activities:invoices" / "appoinHive:connect" shorthand from KPI data-goto
   let target=panel;
   let tabHint='';
   if(typeof panel==='string' && panel.includes(':')){
@@ -1797,15 +1962,20 @@ function setAppPanel(panel, opts){
     target=parts[0];
     tabHint=parts[1]||'';
   }
+  // Alias common misspelling appointHive → appoinHive (panel id)
+  if(target==='appointHive' || target==='appointHIve') target='appoinHive';
   appPanel=allowed.includes(target)?target:'leads';
   if(tabHint){
     if(appPanel==='money') moneyTab=['ledger','invoices','settings'].includes(tabHint)?tabHint:moneyTab;
     if(appPanel==='activities') commsTab=tabHint==='invoices'?'invoices':'outreach';
     if(appPanel==='deals') dealsTab=tabHint==='paylinks'?'paylinks':'proposals';
+    if(appPanel==='appoinHive') ahTab=['overview','connect','catalogs'].includes(tabHint)?tabHint:ahTab;
+    if(appPanel==='settings') settingsTab=['general','team','ranking','jobs','views'].includes(tabHint)?tabHint:settingsTab;
   }
   if(o.moneyTab) moneyTab=o.moneyTab;
   if(o.commsTab) commsTab=o.commsTab;
   if(o.dealsTab) dealsTab=o.dealsTab;
+  if(o.ahTab) ahTab=o.ahTab;
   allowed.forEach(p=>{
     const el=$(p+'Panel');
     if(el) el.classList.toggle('hidden',appPanel!==p);
@@ -1844,9 +2014,54 @@ function setAppPanel(panel, opts){
   }
   if(appPanel==='money'){ refreshBeConnBanners().catch(()=>{}); loadMoney().catch(e=>toast(e.message,true)); }
   if(appPanel==='paySetup') loadPaySetup().catch(e=>toast(e.message,true));
-  if(appPanel==='appoinHive') loadAppointHive().catch(e=>toast(e.message,true));
+  if(appPanel==='appoinHive'){
+    setAhTab(ahTab);
+    loadAppointHive().catch(e=>toast(e.message,true));
+  }
   if(appPanel==='reports') loadReports().catch(e=>toast(e.message,true));
-  if(appPanel==='settings') loadSettings().catch(e=>toast(e.message,true));
+  if(appPanel==='settings'){
+    setSettingsTab(settingsTab);
+    loadSettings().catch(e=>toast(e.message,true));
+  }
+}
+
+function setAhTab(tab){
+  const allowed=['overview','connect','catalogs'];
+  ahTab=allowed.includes(tab)?tab:'overview';
+  document.querySelectorAll('#ahTabs [data-ah-tab]').forEach(b=>{
+    const on=b.dataset.ahTab===ahTab;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', on?'true':'false');
+  });
+  document.querySelectorAll('#appoinHivePanel [data-ah-pane]').forEach(pane=>{
+    pane.classList.toggle('hidden', pane.dataset.ahPane!==ahTab);
+  });
+  if(ahTab==='catalogs') loadBeCatalog().catch(()=>{});
+  if(ahTab==='connect') applyBeConnectOwnerGate();
+}
+function isOwnerRole(){ return String(currentRole||'').toLowerCase()==='owner';
+function applyBeConnectOwnerGate(){
+  const owner=isOwnerRole();
+  ['beSaveManual','beGenPair','beTestConn','beDisconnect'].forEach(id=>{
+    const el=$(id); if(!el) return;
+    el.disabled=!owner;
+    el.title=owner?'':'Owner only — ask an owner to connect or disconnect';
+  });
+  const hint=$('beConnectOwnerHint');
+  if(hint) hint.classList.toggle('hidden', owner);
+}
+
+function setSettingsTab(tab){
+  const allowed=['general','team','ranking','jobs','views'];
+  settingsTab=allowed.includes(tab)?tab:'general';
+  document.querySelectorAll('#settingsTabs [data-settings-tab]').forEach(b=>{
+    const on=b.dataset.settingsTab===settingsTab;
+    b.classList.toggle('active',on);
+    b.setAttribute('aria-selected', on?'true':'false');
+  });
+  document.querySelectorAll('#settingsPanel [data-settings-pane]').forEach(pane=>{
+    pane.classList.toggle('hidden', pane.dataset.settingsPane!==settingsTab);
+  });
 }
 
 function wireProspectPicker(root, hiddenName, labelText){
@@ -2011,12 +2226,14 @@ async function loadProfileBar(username){
     name=(me.user&&me.user.name)||email.split('@')[0]||'Account';
     role=(me.user&&me.user.role)||'owner';
   }catch(e){ /* keep defaults */ }
+  currentRole=role||'owner';
   const initials=(name||email||'A').trim().charAt(0).toUpperCase()||'A';
   if($('profileAvatar')) $('profileAvatar').textContent=initials;
   if($('profileName')) $('profileName').textContent=name;
   if($('profileRole')) $('profileRole').textContent=role;
   if($('profileMenuEmail')) $('profileMenuEmail').textContent=email;
   if($('profileMenuRole')) $('profileMenuRole').textContent=role;
+  applyBeConnectOwnerGate();
 }
 
 function bindDashKpis(root){
@@ -2176,6 +2393,45 @@ function invoicePayload(i){
   if(url && !String(url).includes('/placeholder/') && String(url).startsWith('http')) return url;
   return i.pay_instructions||url||'';
 }
+function invoicePreviewHtml(v){
+  const ent=v.billing_entity||{};
+  const biz=v.business||{};
+  const from=(ent.lines&&ent.lines.length)?ent.lines:( [ent.legal_name,ent.address,ent.tax_id?('Tax ID: '+ent.tax_id):''].filter(Boolean));
+  const to=(biz.lines&&biz.lines.length)?biz.lines:( [biz.name,biz.address,[biz.city,biz.country].filter(Boolean).join(', '),biz.email,biz.phone].filter(Boolean));
+  const rows=(v.line_items||[]).map(li=>{
+    const qty=li.qty!=null?li.qty:(li.quantity!=null?li.quantity:1);
+    const unit=li.unit_fmt||fmtMoney(li.unit_amount!=null?li.unit_amount:li.amount,v.currency);
+    const tot=li.line_total_fmt||fmtMoney(li.line_total!=null?li.line_total:(Number(li.amount||0)*Number(qty||1)),v.currency);
+    return `<tr><td>${esc(li.name||li.description||'Item')}</td><td class="num">${esc(String(qty))}</td><td class="num">${esc(unit)}</td><td class="num">${esc(tot)}</td></tr>`;
+  }).join('')||`<tr><td colspan="4" class="sub">No line items</td></tr>`;
+  const issued=(v.created_at||'').slice(0,19).replace('T',' ');
+  const due=(v.expires_at||'').slice(0,19).replace('T',' ');
+  const logo=v.logo_url?`<img class="inv-logo" src="${esc(v.logo_url)}" alt="Logo">`:'';
+  let totals=`<div>Subtotal</div><div class="num">${esc(v.subtotal_fmt||fmtMoney(v.subtotal,v.currency))}</div>`;
+  if(Number(v.discount_amount||0)>0) totals+=`<div>${esc(v.discount_reason||'Discount')}</div><div class="num">−${esc(v.discount_fmt||fmtMoney(v.discount_amount,v.currency))}</div>`;
+  if(Number(v.tax_amount||0)>0 || v.tax_rate){
+    let tl=v.tax_label||'Tax';
+    if(v.tax_rate!=null) tl+=` (${(Number(v.tax_rate)*100).toFixed(1)}%)`;
+    totals+=`<div>${esc(tl)}</div><div class="num">${esc(v.tax_fmt||fmtMoney(v.tax_amount,v.currency))}</div>`;
+  }
+  totals+=`<div class="grand">Total</div><div class="grand num">${esc(v.total_fmt||fmtMoney(v.total,v.currency))}</div>`;
+  const payBits=[];
+  if(v.hosted_url&&!String(v.hosted_url).includes('/placeholder/')) payBits.push(`<div><a class="chip ok" href="${esc(v.hosted_url)}" target="_blank" rel="noopener">Open pay link</a></div>`);
+  if(v.pay_instructions) payBits.push(`<pre style="white-space:pre-wrap;margin:6px 0 0;font:12px/1.45 ui-monospace,monospace">${esc(v.pay_instructions)}</pre>`);
+  return `<div class="invoice-preview">
+    <div class="inv-top">${logo}<div class="inv-title"><strong>INVOICE</strong><span>#${esc(v.number||'')}</span><div class="sub"><span class="status-pill ${esc(v.status||'')}">${esc(v.status||'')}</span>${v.is_test_mode?' · test':''}</div></div></div>
+    <div class="inv-cols"><div><h5>From</h5><p>${esc(from.join('\n'))}</p></div><div><h5>Bill to</h5><p>${esc(to.join('\n'))}</p></div></div>
+    <div class="inv-meta">${issued?`<span>Issued ${esc(issued)}</span>`:''}${due?`<span>Due ${esc(due)}</span>`:''}${v.proposal_reference?`<span>Proposal ${esc(v.proposal_reference)}</span>`:''}${v.provider?`<span>${esc(v.provider)}</span>`:''}</div>
+    ${v.proposal_title?`<p class="sub" style="margin:0 0 8px">Re: ${esc(v.proposal_title)}</p>`:''}
+    <table><thead><tr><th>Description</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Amount</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="inv-totals">${totals}</div>
+    ${payBits.length?`<div class="inv-pay"><h5>Payment</h5>${payBits.join('')}</div>`:''}
+    <div class="inv-actions">
+      <a class="chip ok" href="/api/sales/invoices/${v.id}/pdf" target="_blank" rel="noopener">Download PDF</a>
+      ${v.business&&v.business.id?`<button type="button" data-open-prospect="${v.business.id}">Open lead</button>`:''}
+    </div>
+  </div>`;
+}
 function invoiceCardHtml(i,{compact=false}={}){
   const payload=invoicePayload(i);
   const live=payload && String(payload).startsWith('http') && !String(payload).includes('/placeholder/');
@@ -2244,13 +2500,21 @@ function bindInvoiceCardActions(root, invoices, {onPaid, onVoided}={}){
   root.querySelectorAll('[data-inv-view]').forEach(btn=>btn.addEventListener('click',async()=>{
     try{
       const v=await api('/api/sales/invoices/'+btn.dataset.invView+'/view');
-      const lines=(v.line_items||[]).map(li=>`• ${li.name||li.description||'Item'} × ${li.qty||li.quantity||1} — ${fmtMoney(li.amount,v.currency)}`).join('\n');
-      await uiForm({
-        title:`Invoice ${v.number}`,
-        message:`${v.billing_entity&&v.billing_entity.legal_name||'AppointHive'}\nBill to: ${(v.business&&v.business.name)||'—'}\nStatus: ${v.status}\nTotal: ${fmtMoney(v.total,v.currency)}\nIssued: ${fmtDateTime(v.created_at)}\n\n${lines||'(no line items)'}\n\n${v.pay_instructions||v.hosted_url||''}`,
+      const dlg=openUiDialog({
+        title:`Invoice ${v.number||''}`,
+        message:'',
+        bodyHtml:invoicePreviewHtml(v),
         confirmLabel:'Close',
-        fields:[]
+        cancelLabel:'Download PDF',
+        focusSelector:'.invoice-preview'
       });
+      const host=$('uiDialogBody');
+      if(host) host.querySelectorAll('[data-open-prospect]').forEach(b=>b.addEventListener('click',()=>{
+        closeUiDialog(true);
+        openProspectById(b.dataset.openProspect);
+      }));
+      const ok=await dlg;
+      if(ok===null) window.open('/api/sales/invoices/'+v.id+'/pdf','_blank','noopener');
     }catch(e){ toast(e.message,true); }
   }));
   root.querySelectorAll('[data-inv-compose]').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -2777,8 +3041,85 @@ async function refreshBeConnBanners(){
   [['beDealsBanner',!connected],['beMoneyBanner',!connected],['bePipelineBanner',!connected]].forEach(([id,show])=>{
     const el=$(id); if(!el) return;
     el.classList.toggle('hidden', !show);
-    if(show) el.innerHTML=`${esc(msg)} <button type="button" class="chip ok" data-goto="appoinHive">Open AppointHive</button>`;
+    if(show) el.innerHTML=`${esc(msg)} <button type="button" class="chip ok" data-goto="appoinHive:connect">Open AppointHive</button>`;
   });
+}
+function renderBeConnDetails(conn){
+  const host=$('beConnDetails');
+  if(!host) return;
+  const st=conn.connection_status||'disconnected';
+  const rows=[
+    ['Status', conn.connected?'Connected':st],
+    ['Base URL', conn.base_url||'—'],
+    ['Bridge', conn.bridge_enabled?'enabled':'disabled'],
+    ['Secret', conn.secret_configured?(conn.secret_hint||'configured'):'not set'],
+    ['Webhook', conn.webhook_path||'/api/webhooks/booking-engine'],
+    ['Last health', conn.last_health_at||'—'],
+    ['Pairing', conn.pairing_code_active?(`active until ${conn.pairing_expires_at||'—'}`):'none'],
+    ['Product', conn.product_name||'AppointHive Sales OS'],
+  ];
+  host.innerHTML=`<strong>${conn.connected?'Connected details':'Connection details'}</strong>
+    <div class="sales-table-wrap" style="margin-top:8px"><table class="sales-table"><tbody>
+      ${rows.map(([k,v])=>`<tr><td style="width:140px"><strong>${esc(k)}</strong></td><td>${esc(String(v))}</td></tr>`).join('')}
+    </tbody></table></div>
+    ${conn.connected?'':'<div class="sub" style="margin-top:8px">Not connected — save URL/secret or pair, then Test connection.</div>'}`;
+}
+function beCatalogRows(data){
+  if(!data || typeof data!=='object') return [];
+  const candidates=[data.items, data.packages, data.products, data.catalog, data.revisions, data.rows];
+  for(const c of candidates){ if(Array.isArray(c) && c.length) return c; }
+  if(Array.isArray(data)) return data;
+  // Nested { STANDALONE: [...] } style
+  for(const v of Object.values(data)){
+    if(Array.isArray(v) && v.length && typeof v[0]==='object') return v;
+  }
+  return [];
+}
+function formatBePrice(row){
+  const cents=row.priceCents!=null?Number(row.priceCents):(row.price_cents!=null?Number(row.price_cents):null);
+  const amount=row.price!=null?Number(row.price):(row.amount!=null?Number(row.amount):null);
+  const cur=row.currency||row.Currency||'USD';
+  if(cents!=null && !Number.isNaN(cents)) return `${cur} ${(cents/100).toFixed(2)}`;
+  if(amount!=null && !Number.isNaN(amount)) return `${cur} ${amount.toFixed(2)}`;
+  return '—';
+}
+async function loadBeCatalog(){
+  const host=$('beCatalogHost');
+  if(!host) return;
+  if(!(beConnCache&&beConnCache.connected)){
+    host.innerHTML=`<div class="empty-card">Connect AppointHive first. <button type="button" class="chip ok" data-goto="appoinHive:connect">Open Connect</button></div>`;
+    return;
+  }
+  const line=(($('beCatalogLine')&&$('beCatalogLine').value)||'STANDALONE').toUpperCase();
+  host.textContent='Loading catalog from AppointHive…';
+  try{
+    const data=await api('/api/sales/be/catalog?product_line='+encodeURIComponent(line));
+    const rows=beCatalogRows(data);
+    if(!rows.length){
+      const keys=data&&typeof data==='object'&&!Array.isArray(data)?Object.keys(data).slice(0,12).join(', '):'(array/empty)';
+      host.innerHTML=`<div class="empty-card">No catalog rows for ${esc(line)}. Response keys: ${esc(keys||'—')}</div>`;
+      return;
+    }
+    host.innerHTML=`<div class="sales-table-wrap"><table class="sales-table"><thead><tr>
+      <th>Name</th><th>Edition / plan</th><th>Price</th><th>Revision / id</th><th>Line</th>
+    </tr></thead><tbody>
+      ${rows.map(r=>{
+        const name=r.label||r.name||r.productName||r.product_name||r.title||r.productId||r.product_id||'—';
+        const edition=r.edition||r.plan||r.tier||r.sku||'';
+        const id=r.productRevisionId||r.product_revision_id||r.revisionId||r.id||r.sku||'';
+        const pl=r.productLine||r.product_line||line;
+        return `<tr>
+          <td><strong>${esc(name)}</strong></td>
+          <td>${esc(edition)}</td>
+          <td>${esc(formatBePrice(r))}</td>
+          <td><code>${esc(String(id))}</code></td>
+          <td>${esc(pl)}</td>
+        </tr>`;
+      }).join('')}
+    </tbody></table></div>`;
+  }catch(e){
+    host.innerHTML=`<div class="pay-status err">${esc(e.message||'Failed to load catalog')}</div>`;
+  }
 }
 async function loadAppointHive(){
   const banner=$('beConnBanner');
@@ -2791,9 +3132,10 @@ async function loadAppointHive(){
     if(banner){
       banner.className='pay-status '+cls;
       banner.innerHTML=conn.connected
-        ?`<strong>Connected</strong> to AppointHive at ${esc(conn.base_url||'—')}. Live prices + pay links enabled. Local STANDALONE PSP blocked.`
-        :`<strong>${esc(st)}</strong> — Connect AppointHive first. Catalog / send / upgrade stay disabled until Test connection succeeds.`;
+        ?`<strong>Connected</strong> to AppointHive at ${esc(conn.base_url||'—')}. Live prices + pay links enabled. Local STANDALONE PSP blocked. <button type="button" class="chip ok" data-goto="appoinHive:connect">Connection details</button>`
+        :`<strong>${esc(st)}</strong> — Connect AppointHive first. Catalog / send / upgrade stay disabled until Test connection succeeds. <button type="button" class="chip ok" data-goto="appoinHive:connect">Open Connect</button>`;
     }
+    renderBeConnDetails(conn);
     if($('beBaseUrl') && conn.base_url && !$('beBaseUrl').value) $('beBaseUrl').value=conn.base_url;
     if($('bePairBox')){
       $('bePairBox').innerHTML=conn.pairing_code_active
@@ -2802,11 +3144,12 @@ async function loadAppointHive(){
     }
     if(revHost){
       if(!conn.connected){
-        revHost.textContent='Connect first to load packages.';
+        revHost.innerHTML=`Connect first to load packages. <button type="button" class="chip ok" data-goto="appoinHive:connect">Open Connect</button>`;
       }else{
         try{
           const data=await api('/api/sales/be/revisions');
           const rows=data.revisions||[];
+          beRevisionsCache=rows;
           revHost.innerHTML=rows.length
             ?`<div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>Package</th><th>Edition</th><th>Price</th><th>Revision</th></tr></thead><tbody>
               ${rows.map(r=>`<tr>
@@ -2818,12 +3161,16 @@ async function loadAppointHive(){
             </tbody></table></div>`
             :'<div class="empty-card">No FINALIZED revisions on AppointHive yet.</div>';
         }catch(e){
-          revHost.textContent=e.message||'Failed to load revisions';
+          revHost.innerHTML=`<div class="pay-status err">${esc(e.message||'Failed to load revisions')}</div>`;
         }
       }
     }
+    applyBeConnectOwnerGate();
+    if(ahTab==='catalogs') await loadBeCatalog().catch(()=>{});
   }catch(e){
     if(banner){ banner.className='pay-status err'; banner.textContent=e.message||'Failed to load connection'; }
+    if($('beConnDetails')) $('beConnDetails').textContent=e.message||'Failed to load connection';
+    applyBeConnectOwnerGate();
   }
 }
 
@@ -4087,7 +4434,7 @@ async function createDrawerPaylinkForProvider(provider){
     beConnCache=conn||{};
   }catch(e){}
   if(ahConnected && productLine==='STANDALONE' && (provider==='stripe'||provider==='paypal')){
-    toast('AppointHive connected — use AppointHive tab for Stripe/PayPal card checkout', true);
+    toast('AppointHive connected — use Delivery / pay tab for Stripe/PayPal card checkout', true);
     drawerTab='appointhive'; renderDrawer();
     return;
   }
@@ -4381,7 +4728,23 @@ function updateViewHint(){
   else if(viewMode==='due'){$('viewHint').textContent='Due / overdue follow-ups across all cities.';$('statTotalLabel').textContent='Shown'}
   else{$('viewHint').textContent='City leads for the selected country/city. “All cities · queue” is always global.';$('statTotalLabel').textContent='City shown'}
 }
-function apiError(detail,fallback){if(typeof detail==='string'&&detail)return detail;if(Array.isArray(detail))return detail.map(x=>x&&(x.msg||x.message||JSON.stringify(x))).filter(Boolean).join('; ')||fallback;if(detail&&typeof detail==='object')return detail.msg||detail.message||fallback;return fallback}
+function apiError(detail,fallback){
+  if(typeof detail==='string'&&detail) return detail;
+  if(Array.isArray(detail)){
+    return detail.map(x=>{
+      if(!x) return '';
+      if(typeof x==='string') return x;
+      return x.msg||x.message||x.error||(typeof x.detail==='string'?x.detail:'')||JSON.stringify(x);
+    }).filter(Boolean).join('; ')||fallback;
+  }
+  if(detail&&typeof detail==='object'){
+    const nested=detail.error||detail.msg||detail.message||detail.detail;
+    if(typeof nested==='string'&&nested) return nested;
+    if(nested&&typeof nested==='object') return apiError(nested, fallback);
+    try{ const s=JSON.stringify(detail); if(s&&s!=='{}') return s; }catch(e){}
+  }
+  return fallback;
+}
 function fallbackStatus(code){return code===401?'Authentication required':code===403?'Forbidden':'Request failed ('+code+')'}
 async function api(url,options={}){const opts={credentials:'same-origin',...options};if(opts.body&&typeof opts.body==='object'&&!(opts.body instanceof FormData)){opts.headers={'Content-Type':'application/json',...(opts.headers||{})};opts.body=JSON.stringify(opts.body)}const r=await fetch(url,opts);const text=await r.text();let data=null;try{data=text?JSON.parse(text):null}catch(e){data=null}if(!r.ok)throw Error(apiError(data&&data.detail,(typeof text==='string'&&text&&!data)?text:fallbackStatus(r.status)));return data}
 function channelLabel(ch){return ch==='email'?'Email':ch==='whatsapp'?'WhatsApp':ch==='instagram'?'Instagram':ch==='invoice'?'Invoice':ch}
@@ -5257,7 +5620,7 @@ function renderDrawer(){
       <button type="button" data-dtab="contacts" class="${tab==='contacts'?'active':''}">Contacts</button>
       <button type="button" data-dtab="sales" class="${tab==='sales'?'active':''}">Sales</button>
       <button type="button" data-dtab="proposal" class="${tab==='proposal'?'active':''}">Proposal / pay</button>
-      <button type="button" data-dtab="appointhive" class="${tab==='appointhive'?'active':''}">AppointHive</button>
+      <button type="button" data-dtab="appointhive" class="${tab==='appointhive'?'active':''}">Delivery / pay</button>
       <button type="button" data-dtab="pipeline" class="${tab==='pipeline'?'active':''}">Pipeline</button>
       <button type="button" data-dtab="activity" class="${tab==='activity'?'active':''}">Activity</button>
     </div>
@@ -5276,9 +5639,6 @@ function renderDrawer(){
       <div class="drawer-actions" style="margin-top:12px">
         <button type="button" class="primary" id="drawerMarkToContactBtn">${b.marked_for_contact?'Unmark to contact':'Mark to contact'}</button>
         <button type="button" id="drawerMarkBookingBtn">${(b.current_booking_software||'').trim()?'Clear has booking':'Mark has booking'}</button>
-        <button type="button" data-dtab-jump="contacts">Edit contacts</button>
-        <button type="button" data-dtab-jump="sales">Sales / discovery</button>
-        <button type="button" data-dtab-jump="proposal">Proposal / pay</button>
       </div>
     </div>
     <div class="drawer-pane ${tab==='contacts'?'active':''}" data-dpane="contacts">
@@ -5328,7 +5688,7 @@ function renderDrawer(){
         <button type="button" id="linkProspectBtn">Link product line</button>
         <button type="button" id="undoStageBtn">Undo last stage</button>
         <button type="button" data-dtab-jump="proposal">Open proposal / pay</button>
-        <button type="button" data-dtab-jump="appointhive">Open AppointHive</button>
+        <button type="button" data-dtab-jump="appointhive">Open Delivery / pay</button>
       </div>
     </div>
     <div class="drawer-pane ${tab==='proposal'?'active':''}" data-dpane="proposal">
@@ -5337,7 +5697,7 @@ function renderDrawer(){
         <div class="provider-create-row" id="drawerProviderCreateRow">
           <button type="button" class="primary" data-drawer-pay-provider="manual">Manual</button>
           ${!(beConnCache&&beConnCache.connected&&(b.product_line||'STANDALONE').toUpperCase()==='STANDALONE')?`<button type="button" data-drawer-pay-provider="stripe">Stripe</button>
-          <button type="button" data-drawer-pay-provider="paypal">PayPal</button>`:`<span class="hint" style="align-self:center">Stripe/PayPal → AppointHive tab</span>`}
+          <button type="button" data-drawer-pay-provider="paypal">PayPal</button>`:`<span class="hint" style="align-self:center">Stripe/PayPal → Delivery / pay tab</span>`}
           <button type="button" data-drawer-pay-provider="payoneer">Payoneer</button>
           <button type="button" data-drawer-pay-provider="skrill">Skrill</button>
         </div>
@@ -5351,7 +5711,7 @@ function renderDrawer(){
     </div>
     <div class="drawer-pane ${tab==='appointhive'?'active':''}" data-dpane="appointhive">
       <div id="beDrawerBlock" class="prov-card" style="margin-top:0">
-        <strong>AppointHive Sales OS → Booking Engine</strong>
+        <strong>Delivery / pay · Send to AppointHive</strong>
         <div class="sub" id="beDrawerStatus">Checking connection…</div>
         <div id="beDrawerPrices" class="hint" style="margin-top:8px"></div>
         <div class="drawer-actions" style="margin-top:8px">
@@ -5430,7 +5790,7 @@ async function hydrateBeDrawer(){
     }
     st.innerHTML=connected
       ?`Connected as <strong>AppointHive Sales OS</strong> · live prices below. Full business + contacts sent on handover. Local PSP blocked.`
-      :`Not connected — <button type="button" class="chip ok" data-goto="appoinHive">Connect AppointHive</button> first.`;
+      :`Not connected — <button type="button" class="chip ok" data-goto="appoinHive:connect">Connect AppointHive</button> first.`;
     if(sendBtn) sendBtn.disabled=!connected;
     if(reqBtn) reqBtn.disabled=!connected;
     if(refBtn) refBtn.disabled=!connected;
@@ -5665,8 +6025,12 @@ $('reportsRefresh')&&$('reportsRefresh').addEventListener('click',()=>loadReport
 $('moneyRefresh')&&$('moneyRefresh').addEventListener('click',()=>loadMoney().catch(e=>toast(e.message,true)));
 $('paySetupRefresh')&&$('paySetupRefresh').addEventListener('click',()=>loadPaySetup().catch(e=>toast(e.message,true)));
 $('paySetupSave')&&$('paySetupSave').addEventListener('click',()=>savePaySetup().catch(e=>toast(e.message,true)));
+document.querySelectorAll('#ahTabs [data-ah-tab]').forEach(btn=>btn.addEventListener('click',()=>setAhTab(btn.dataset.ahTab)));
+$('beCatalogRefresh')&&$('beCatalogRefresh').addEventListener('click',()=>loadBeCatalog().catch(e=>toast(e.message,true)));
+$('beCatalogLine')&&$('beCatalogLine').addEventListener('change',()=>{ if(ahTab==='catalogs') loadBeCatalog().catch(()=>{}); });
 $('beConnRefresh')&&$('beConnRefresh').addEventListener('click',()=>loadAppointHive().catch(e=>toast(e.message,true)));
 $('beSaveManual')&&$('beSaveManual').addEventListener('click',async()=>{
+  if(!isOwnerRole()){ toast('Owner only',true); return; }
   try{
     const base=($('beBaseUrl')&&$('beBaseUrl').value||'').trim();
     const secret=($('beSharedSecret')&&$('beSharedSecret').value||'').trim();
@@ -5682,6 +6046,7 @@ $('beSaveManual')&&$('beSaveManual').addEventListener('click',async()=>{
   }catch(e){ toast(e.message,true); }
 });
 $('beGenPair')&&$('beGenPair').addEventListener('click',async()=>{
+  if(!isOwnerRole()){ toast('Owner only',true); return; }
   try{
     const r=await api('/api/sales/be/connection/pair-code',{method:'POST',body:{}});
     if($('bePairBox')){
@@ -5691,6 +6056,7 @@ $('beGenPair')&&$('beGenPair').addEventListener('click',async()=>{
   }catch(e){ toast(e.message,true); }
 });
 $('beTestConn')&&$('beTestConn').addEventListener('click',async()=>{
+  if(!isOwnerRole()){ toast('Owner only',true); return; }
   try{
     const r=await api('/api/sales/be/connection/test',{method:'POST',body:{}});
     toast(r.message||(r.connected?'Connected':'Not connected'), !r.connected);
@@ -5698,6 +6064,7 @@ $('beTestConn')&&$('beTestConn').addEventListener('click',async()=>{
   }catch(e){ toast(e.message,true); }
 });
 $('beDisconnect')&&$('beDisconnect').addEventListener('click',async()=>{
+  if(!isOwnerRole()){ toast('Owner only',true); return; }
   const ok=await uiConfirm({title:'Disconnect AppointHive?', message:'Clears the shared secret path and blocks catalog/send until reconnected.', confirmLabel:'Disconnect'});
   if(!ok) return;
   try{
@@ -5716,6 +6083,7 @@ $('paySetupTabs')&&$('paySetupTabs').addEventListener('click',e=>{
   paySetupSetStatus('Editing '+paySetupTab+'. Fill fields → Save → Validate.', 'info');
 });
 $('settingsRefresh')&&$('settingsRefresh').addEventListener('click',()=>loadSettings().catch(e=>toast(e.message,true)));
+document.querySelectorAll('#settingsTabs [data-settings-tab]').forEach(btn=>btn.addEventListener('click',()=>setSettingsTab(btn.dataset.settingsTab)));
 $('contactQueueRefresh')&&$('contactQueueRefresh').addEventListener('click',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
 $('contactQueueMode')&&$('contactQueueMode').addEventListener('change',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
 $('contactQueueCountry')&&$('contactQueueCountry').addEventListener('change',()=>{
@@ -5795,6 +6163,7 @@ $('paylinkRefreshBtn')&&$('paylinkRefreshBtn').addEventListener('click',()=>rend
 $('brandLogoFile')&&$('brandLogoFile').addEventListener('change',async ev=>{
   const f=ev.target.files&&ev.target.files[0];
   if(!f) return;
+  if($('brandLogoFileName')) $('brandLogoFileName').textContent=f.name||'No file chosen';
   try{
     const fd=new FormData(); fd.append('file', f);
     const r=await fetch('/api/sales/brand-logo',{method:'POST',credentials:'same-origin',body:fd});
@@ -5803,7 +6172,7 @@ $('brandLogoFile')&&$('brandLogoFile').addEventListener('change',async ev=>{
     brandLogoUrl=data.url||'';
     paintBrandLogoPreview();
     toast('Brand logo saved for signatures');
-  }catch(e){ toast(e.message,true); }
+  }catch(e){ toast(e.message,true); if($('brandLogoFileName')) $('brandLogoFileName').textContent='No file chosen'; }
   ev.target.value='';
 });
 $('brandLogoClear')&&$('brandLogoClear').addEventListener('click',async()=>{
@@ -5813,6 +6182,7 @@ $('brandLogoClear')&&$('brandLogoClear').addEventListener('click',async()=>{
     await api('/api/sales/brand-logo',{method:'DELETE'});
     brandLogoUrl='';
     paintBrandLogoPreview();
+    if($('brandLogoFileName')) $('brandLogoFileName').textContent='No file chosen';
     toast('Brand logo removed');
   }catch(e){ toast(e.message,true); }
 });
@@ -5840,15 +6210,22 @@ $('autoSetupProspectsBtn')&&$('autoSetupProspectsBtn').addEventListener('click',
   }catch(e){ toast(e.message,true); }
 });
 $('normalizeCurrencyBtn')&&$('normalizeCurrencyBtn').addEventListener('click',async()=>{
+  const from=(($('currencyNormalizeFrom')&&$('currencyNormalizeFrom').value)||'AUD').toUpperCase();
+  const to=(($('currencyNormalizeTo')&&$('currencyNormalizeTo').value)||'USD').toUpperCase();
+  if(from===to){ toast('From and To are the same',true); return; }
+  const fromLabel=from==='ALL'?'all currencies':(from+' / blank');
   const ok=await uiConfirm({
-    title:'Set AUD → USD?',
-    message:'Updates every prospect still on AUD (or blank) to USD. Prospects already on EUR, GBP, AUD-switched-back, etc. are left alone. You can change any prospect later in Details → Currency.',
-    confirmLabel:'Convert AUD → USD'
+    title:`Convert ${fromLabel} → ${to}?`,
+    message:from==='ALL'
+      ?`Sets every prospect not already on ${to} to ${to}. You can still change any lead later in Sales → Currency.`
+      :`Updates prospects on ${from} (and blank) to ${to}. Other currencies are left alone. Change a lead later in Sales → Currency.`,
+    confirmLabel:`Convert → ${to}`
   });
   if(!ok) return;
   try{
-    const res=await api('/api/sales/prospects/normalize-currency?from_currency=AUD&to_currency=USD',{method:'POST',body:{}});
-    toast(`Currency updated · ${res.updated||0} → USD · ${res.kept||0} kept · ${res.total||0} total`);
+    const qs=new URLSearchParams({from_currency:from, to_currency:to});
+    const res=await api('/api/sales/prospects/normalize-currency?'+qs.toString(),{method:'POST',body:{}});
+    toast(`Currency updated · ${res.updated||0} → ${res.to_currency||to} · ${res.kept||0} kept · ${res.total||0} total`);
     if(appPanel==='prospects') loadProspects().catch(()=>{});
   }catch(e){ toast(e.message,true); }
 });
@@ -6240,11 +6617,11 @@ $('drawerPanel').addEventListener('click',async e=>{
       if(connected && line==='STANDALONE'){
         const path=await uiForm({
           title:'AppointHive is connected',
-          message:'Card checkout for STANDALONE should use AppointHive Send to delivery. You can still create a local Manual/Payoneer/Skrill proposal + pay link/QR.',
+          message:'Card checkout for STANDALONE should use drawer Delivery / pay → Send to delivery. You can still create a local Manual/Payoneer/Skrill proposal + pay link/QR.',
           confirmLabel:'Continue',
           fields:[{name:'path', label:'What do you want?', type:'select', value:'local', options:[
             {value:'local', label:'Local proposal (Manual / Payoneer / Skrill)'},
-            {value:'be', label:'Open AppointHive tab (Send to delivery)'}
+            {value:'be', label:'Open Delivery / pay (Send to delivery)'}
           ]}]
         });
         if(!path) return;

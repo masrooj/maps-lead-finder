@@ -52,6 +52,51 @@ def test_connect_gate_blocks_catalog(auth_client):
         assert "not connected" in str(detail).lower()
 
 
+def test_catalog_when_connected_returns_items(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+    finally:
+        db.close()
+
+    fake_catalog = {
+        "productLine": "STANDALONE",
+        "items": [
+            {
+                "id": "cat_growth",
+                "productRevisionId": "rev_growth",
+                "productName": "Growth",
+                "edition": "GROWTH",
+                "priceCents": 14900,
+                "currency": "USD",
+                "label": "Growth",
+                "productLine": "STANDALONE",
+            },
+            {
+                "id": "cat_pro",
+                "productRevisionId": "rev_pro",
+                "name": "Pro",
+                "edition": "PRO",
+                "priceCents": 24900,
+                "currency": "USD",
+            },
+        ],
+    }
+    with patch(
+        "app.services.booking_engine.client.BookingEngineClient.get_catalog",
+        return_value=fake_catalog,
+    ) as mocked:
+        r = auth_client.get("/api/sales/be/catalog?product_line=STANDALONE")
+    assert r.status_code == 200, r.text
+    mocked.assert_called_once()
+    body = r.json()
+    assert body["productLine"] == "STANDALONE"
+    assert len(body["items"]) == 2
+    assert body["items"][0]["priceCents"] == 14900
+    assert body["items"][0]["productRevisionId"] == "rev_growth"
+    assert body["items"][1]["name"] == "Pro"
+
+
 def test_pair_code_and_public_pairing(auth_client):
     r = auth_client.post("/api/sales/be/connection/pair-code", json={})
     assert r.status_code == 200, r.text
