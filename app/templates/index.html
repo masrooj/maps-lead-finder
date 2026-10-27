@@ -3520,14 +3520,23 @@ function contactQueueChannelMatch(b, ch){
   if(ch==='ig_only') return hasIg && !hasEmail && !hasWa;
   return true;
 }
+function contactQueueIsParked(b){
+  // Marked to contact or has booking → sink to bottom of All tab
+  return !!(b&&(b.marked_for_contact || b.has_booking || (b.current_booking_software||'').trim()));
+}
 function contactQueueVisibleLeads(){
   let base;
   if(contactQueueTab==='selected') base=contactQueueSelectedLeads();
   else if(contactQueueTab==='booking') base=contactQueueBookingLeads();
   else base=(contactQueueLeads||[]).slice();
-  // Keep API rank order on All (after unmark, lead returns to ranked place — not bottom)
+  // All: ranked open leads first; to-contact + has-booking parked at bottom
   if(contactQueueTab==='all'){
-    base.sort((a,b)=>(Number(b.rank_score)||0)-(Number(a.rank_score)||0));
+    base.sort((a,b)=>{
+      const aPark=contactQueueIsParked(a);
+      const bPark=contactQueueIsParked(b);
+      if(aPark!==bPark) return aPark?1:-1;
+      return (Number(b.rank_score)||0)-(Number(a.rank_score)||0);
+    });
   }
   const ch=contactQueueChannel||(($('contactQueueChannel')&&$('contactQueueChannel').value)||'');
   if(ch) base=base.filter(b=>contactQueueChannelMatch(b,ch));
@@ -3568,7 +3577,7 @@ function renderContactQueueExplain(data){
         <div><div class="sub" style="margin:0">In scope</div><strong style="font-size:22px;letter-spacing:-.03em">${total}</strong></div>
       </div>
     </div>
-    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → pick → Mark to contact (bottom) → To contact → Message.</p>
+    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → pick → Mark to contact / Has booking (both sink to bottom of All) → work To contact / Has booking tabs → Message.</p>
     ${parts.length?`<p class="hint" style="margin:8px 0 0"><strong style="color:var(--text)">Top why:</strong> ${esc(parts.join(' · '))}</p>`:''}
   `;
 }
