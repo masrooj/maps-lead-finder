@@ -175,14 +175,26 @@ body.authed .topbar{display:flex}
 .menu-popover.open{display:block}
 .menu-wrap{position:relative}
 .menu-popover h4{margin:4px 8px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:750}
+.notif-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 4px 4px}
+.notif-head h4{margin:4px 4px 4px}
+.notif-head .notif-clear{
+  border:0;background:transparent;color:var(--muted);font-size:11px;font-weight:700;
+  padding:4px 8px;border-radius:8px;min-height:0;cursor:pointer
+}
+.notif-head .notif-clear:hover{color:var(--text);background:var(--panel2)}
 .notif-item{
-  width:100%;text-align:left;display:flex;gap:10px;align-items:flex-start;padding:10px;border-radius:11px;
+  width:100%;text-align:left;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:flex-start;padding:10px;border-radius:11px;
   background:transparent;border:0;color:var(--text);font-weight:500;min-height:0;
 }
 .notif-item:hover{background:var(--panel2)}
 .notif-item .n-count{font-weight:800;font-size:15px;min-width:28px}
 .notif-item .n-label{font-size:13px}
 .notif-item .n-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.notif-item .n-dismiss{
+  border:0;background:transparent;color:var(--muted);width:28px;height:28px;min-height:0;padding:0;
+  border-radius:8px;font-size:16px;line-height:1;cursor:pointer;flex:0 0 auto
+}
+.notif-item .n-dismiss:hover{color:var(--red);background:rgba(255,80,80,.12)}
 .notif-empty{padding:16px 10px;color:var(--muted);font-size:13px;text-align:center}
 .profile-menu-item{
   width:100%;text-align:left;padding:11px 12px;border-radius:11px;border:0;background:transparent;
@@ -225,7 +237,7 @@ body.sidebar-open .sidebar-backdrop{display:block}
 .queue-card[data-goto]{cursor:pointer;transition:border-color .15s,background .15s,transform .12s var(--ease);text-align:left;width:100%;font:inherit;color:inherit}
 .queue-card[data-goto]:hover{border-color:var(--accent);background:#172139;transform:translateY(-1px)}
 .queue-card[data-goto]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.ui-dialog-backdrop{z-index:70}
+.ui-dialog-backdrop{z-index:200}
 .ui-dialog .modal{width:min(440px,100%)}
 .ui-dialog .modal-head h3{margin:0 0 4px}
 .ui-dialog .dialog-msg{margin:0;color:var(--muted);font-size:13px;line-height:1.45}
@@ -682,6 +694,57 @@ body:not(.authed) .wrap{
 }
 #composeModal.confirm-ready #copyComposeBtn,
 #composeModal.confirm-ready #openComposeBtn{opacity:.72}
+.topbar,.topbar-right,.menu-wrap{overflow:visible}
+.menu-popover{z-index:120}
+.ui-dialog-backdrop{z-index:320!important}
+.modal-backdrop#composeModal{z-index:calc(var(--z-overlay) + 20)}
+.drawer-backdrop{z-index:calc(var(--z-overlay) + 5)}
+.menu-popover{z-index:130!important}
+.queue-tabs-sticky{
+  position:sticky;top:58px;z-index:8;padding:8px 0 10px;margin:0 0 8px;
+  background:linear-gradient(180deg,rgba(16,24,43,.98) 60%,rgba(16,24,43,.82));
+  backdrop-filter:blur(10px)
+}
+@media(max-width:900px){.queue-tabs-sticky{top:52px}}
+.compose-tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.compose-tabs button{min-height:36px;padding:7px 12px;font-size:12px}
+.compose-tabs button.active{background:var(--accent);border-color:var(--accent);color:#081026}
+.compose-pane{display:none}
+.compose-pane.active{display:block}
+.field-label-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.field-label-row label{margin:0}
+.icon-copy{
+  width:34px;height:34px;min-height:0;padding:0;display:inline-grid;place-items:center;
+  border-radius:10px;font-size:14px;line-height:1
+}
+#composeBody{
+  min-height:min(42vh,320px)!important;height:min(48vh,380px);resize:vertical;
+  font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;white-space:pre-wrap
+}
+.ch-tag{
+  display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:750;
+  border:1px solid var(--line);background:#132038;color:#bcd0ff;letter-spacing:.02em
+}
+.ch-tag.off{opacity:.45;background:transparent;color:var(--muted)}
+.ch-tag.email{border-color:#2a6b55;color:var(--green)}
+.ch-tag.wa{border-color:#2a6b55;color:#7dffa8}
+.ch-tag.ig{border-color:#7a5a20;color:var(--amber)}
+.ch-tag.web{border-color:#334766;color:#bcd0ff}
+.queue-lead{cursor:pointer}
+.brand-logo-preview{max-width:160px;max-height:64px;border-radius:10px;border:1px solid var(--line);background:#0b1324;object-fit:contain;display:block;margin-top:8px}
+.paylink-qr{width:140px;height:140px;border-radius:12px;border:1px solid var(--line);background:#fff;padding:8px;flex:0 0 auto;object-fit:contain}
+.paylink-card{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;padding:14px;border:1px solid var(--line-soft);border-radius:14px;background:rgba(11,19,36,.55);margin:0 0 12px}
+.paylink-card .paylink-meta{flex:1;min-width:min(100%,200px)}
+.paylink-card .paylink-url{word-break:break-all;margin-top:6px;font-size:12px;color:var(--muted);line-height:1.4;max-height:3.6em;overflow:hidden}
+.invoice-card-grid{display:flex;flex-direction:column;gap:0}
+.lead-group{margin:0 0 16px;padding:0;border:1px solid var(--line-soft);border-radius:14px;background:rgba(11,19,36,.4);overflow:hidden}
+.lead-group-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line-soft);background:rgba(16,24,43,.75)}
+.lead-group-head strong{font-size:14px;font-weight:750}
+.lead-group-body{padding:10px 12px 4px}
+.money-pane.hidden,.comms-pane.hidden{display:none!important}
+.provider-create-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
+.provider-create-row button{flex:1 1 auto;min-width:110px}
+.fields.filter-bar{grid-template-columns:repeat(auto-fit,minmax(160px,1fr)) auto;align-items:end}
 .activity{list-style:none;margin:0;padding:0}
 .activity li{padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:12px}
 .activity li:last-child{border-bottom:0}
@@ -723,6 +786,7 @@ body:not(.authed) .wrap{
   .panel,.card,.searchbox,.templates{padding:16px}
   .fields{grid-template-columns:1fr 1fr;gap:12px}
   .fields .field:nth-child(3),.fields button{grid-column:span 2}
+  .fields[style*="grid-template-columns"]{grid-template-columns:1fr 1fr!important}
   .queue-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}
   .guide-steps{grid-template-columns:1fr}
   .template-layout{grid-template-columns:1fr}
@@ -730,7 +794,10 @@ body:not(.authed) .wrap{
   body.templates-mode .template-list{max-height:28vh}
   .footer{display:flex}
   .toolbar,.crud-toolbar,.bulkbar{gap:8px}
-  .toolbar input,.crud-toolbar input,.crud-toolbar select,.toolbar select{max-width:100%;min-width:0;flex:1 1 calc(50% - 8px)}
+  .toolbar input,.crud-toolbar input,.crud-toolbar select,.toolbar select,
+  .head-actions select,.fields select,.field select{
+    max-width:100%;min-width:0;width:100%;flex:1 1 calc(50% - 8px);box-sizing:border-box
+  }
   .modal{max-height:min(94dvh,100%);width:min(560px,100%);border-radius:16px}
   .drawer{width:min(100vw,100%);max-height:min(92dvh,100%);border-left:0;border-radius:18px 18px 0 0;height:auto}
   .drawer-backdrop{align-items:flex-end}
@@ -739,13 +806,22 @@ body:not(.authed) .wrap{
   .task-row{flex-direction:column;align-items:flex-start}
   .sectionhead{align-items:flex-start}
   .report-bar{grid-template-columns:88px 1fr 36px}
+  .paylink-qr{width:112px;height:112px}
+  .paylink-card{flex-direction:column;align-items:stretch}
   #loginCard .login-panel{width:min(420px,calc(100% - 24px));padding:24px 18px 20px}
   #loginCard .login-brand .brand-name{font-size:24px}
 }
 @media(max-width:640px){
-  .fields{grid-template-columns:1fr}
-  .fields .field:nth-child(3),.fields button{grid-column:auto}
+  .fields,.fields[style*="grid-template-columns"]{grid-template-columns:1fr!important;gap:12px}
+  .fields .field:nth-child(3),.fields button,.fields .field{grid-column:auto!important}
   .fields button.primary{width:100%}
+  .fields .field,.field{min-width:0;max-width:100%;overflow:visible}
+  .field select,.toolbar select,.crud-toolbar select,.drawer select,.modal select,
+  .head-actions select,#pipelineLine,.pager select{
+    width:100%!important;max-width:100%!important;min-width:0!important;
+    flex:1 1 100%!important;box-sizing:border-box;
+    font-size:16px; /* iOS zoom prevention */
+  }
   .stats{grid-template-columns:1fr 1fr;gap:8px}
   .stat{padding:12px}
   .stat strong{font-size:18px}
@@ -772,7 +848,9 @@ body:not(.authed) .wrap{
   .queue-lead .actions{grid-area:actions;justify-content:stretch;display:flex;flex-wrap:wrap;gap:8px;width:100%}
   .queue-lead .actions button{flex:1 1 calc(50% - 8px);min-height:40px}
   .queue-lead .queue-rank strong{font-size:16px}
-  .toolbar input,.crud-toolbar input,.crud-toolbar select,.toolbar select{flex:1 1 100%}
+  .toolbar,.crud-toolbar,.head-actions{flex-wrap:wrap;width:100%;flex-direction:column;align-items:stretch}
+  .toolbar input,.crud-toolbar input,.crud-toolbar select,.toolbar select,.head-actions select,.head-actions button,
+  .crud-toolbar button{flex:1 1 100%;width:100%;max-width:100%;min-width:0;box-sizing:border-box}
   .views{gap:6px}
   .views button{flex:1 1 auto;text-align:center}
   .toast-wrap{left:calc(12px + var(--safe-l));right:calc(12px + var(--safe-r));max-width:none}
@@ -804,10 +882,12 @@ body:not(.authed) .wrap{
   .chip{max-width:100%}
   .brand h1{font-size:18px}
   .head-actions{width:100%}
-  .head-actions select,.head-actions button{flex:1 1 auto}
   .task-row{flex-direction:column;align-items:stretch}
   .task-row .action-stack{width:100%}
   .task-row .action-stack button{flex:1 1 calc(50% - 8px);min-height:40px}
+  .provider-create-row button{flex:1 1 calc(50% - 8px);min-height:40px}
+  .queue-tabs{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;scrollbar-width:thin}
+  .queue-tabs button{flex:0 0 auto;white-space:nowrap}
 }
 @media(max-width:420px){
   .stats{grid-template-columns:1fr}
@@ -880,7 +960,10 @@ body:not(.authed) .wrap{
         <span class="badge-dot" id="notifBadge">0</span>
       </button>
       <div class="menu-popover" id="notifMenu" role="menu" aria-label="Notifications">
-        <h4>Notifications</h4>
+        <div class="notif-head">
+          <h4>Notifications</h4>
+          <button type="button" class="notif-clear" id="notifClearAll" title="Clear all from badge">Clear all</button>
+        </div>
         <div id="notifList"><div class="notif-empty">Loading…</div></div>
       </div>
     </div>
@@ -946,23 +1029,21 @@ body:not(.authed) .wrap{
   <div class="panel-page hidden" id="guidePanel">
     <section class="panel card">
       <div class="sectionhead"><h2>How it works</h2><span>Discovery → Money path</span></div>
-      <p class="hint" style="margin-top:0">One business = one prospect. Discover / Contact queue / Pipeline / Tasks / Communication are <strong>views of the same record</strong>, not separate databases. Use this loop for every city.</p>
+      <p class="hint" style="margin-top:0">Use this loop for every city. Click a step to jump there.</p>
       <div class="guide-steps" id="guideSteps">
-        <button type="button" class="guide-step" data-goto="leads"><strong>1. Discover</strong><span>Search Places by country + city. Import / star ★. Each saved lead becomes a prospect (stage, currency, product line).</span></button>
-        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>Ranked who to message. All → pick → Mark to contact → To contact → Message → Confirm sent.</span></button>
-        <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>Same prospects on a stage board. Confirm-sent / discovery / demo / score move stages; drag only to override.</span></button>
-        <button type="button" class="guide-step" data-goto="prospects"><strong>4. Prospects (directory)</strong><span>Search your whole book by country/city/name. Open any row → same detail drawer used from queue or pipeline. Optional lookup — not a required daily step.</span></button>
-        <button type="button" class="guide-step" data-goto="tasks"><strong>5. Tasks</strong><span>Follow-ups auto-create when you Confirm sent. Complete or reschedule; still tied to that prospect.</span></button>
-        <button type="button" class="guide-step" data-goto="activities"><strong>6. Communication</strong><span>Outreach log for that prospect (email / WA / IG / calls). Not where deals close.</span></button>
-        <button type="button" class="guide-step" data-goto="demos"><strong>7. Demos</strong><span>Record demo outcome on the prospect; positive demos advance toward proposal.</span></button>
-        <button type="button" class="guide-step" data-goto="deals"><strong>8. Deals</strong><span>Proposals + pay links for a prospect; confirm close here.</span></button>
-        <button type="button" class="guide-step" data-goto="money"><strong>9. Money</strong><span>Cash collected: payments − refunds. Invoice ledger + providers.</span></button>
-        <button type="button" class="guide-step" data-goto="reports"><strong>10. Reports</strong><span>Funnel, scores, win rate, sources across the same prospect book.</span></button>
+        <button type="button" class="guide-step" data-goto="leads"><strong>1. Discover</strong><span>Search Places (Fetch: All for city scan). Star ★ leads. Prospects auto-setup on import.</span></button>
+        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → mark to contact → To contact → send message. Re-ranks after discovery.</span></button>
+        <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>Stages advance automatically on confirm-sent, discovery, demo, and score. Drag only to override.</span></button>
+        <button type="button" class="guide-step" data-goto="tasks"><strong>4. Tasks</strong><span>Follow-ups auto-create when you confirm email/WA/IG sent. Complete or reschedule.</span></button>
+        <button type="button" class="guide-step" data-goto="activities"><strong>5. Communication</strong><span>Outreach + invoices grouped by lead. Closing stays under Deals.</span></button>
+        <button type="button" class="guide-step" data-goto="demos"><strong>6. Demos</strong><span>Record demo outcome; positive demos auto-advance toward proposal.</span></button>
+        <button type="button" class="guide-step" data-goto="deals"><strong>7. Deals</strong><span>Proposals, pay links, and confirm close — kept apart from day-to-day comms.</span></button>
+        <button type="button" class="guide-step" data-goto="money"><strong>8. Money</strong><span>Ledger · Invoices &amp; QR · Settings (keys). Cash = payments − refunds.</span></button>
+        <button type="button" class="guide-step" data-goto="reports"><strong>9. Reports</strong><span>Funnel, score bands, win rate, sources — open from menu or KPI cards.</span></button>
       </div>
       <div class="empty-card" style="margin-top:14px;text-align:left">
-        <strong style="color:var(--text)">Daily path (short)</strong>
-        <p class="hint" style="margin:8px 0 0"><strong>Discover</strong> → <strong>Contact queue</strong> (mark → send → confirm) → stages move on <strong>Pipeline</strong> → <strong>Tasks</strong> / <strong>Communication</strong> follow that prospect → later <strong>Demos / Deals / Money</strong>. Open <strong>Prospects</strong> anytime to find someone by name or city.</p>
-        <p class="hint" style="margin:10px 0 0"><strong>Why only ~60 after a big fetch?</strong> Docker uses Postgres; older SQLite fetches may sit in <code>local-dev.db</code>. Filter the city you searched, or use Global queue. Fetch: <strong>All (scan city)</strong> for &gt;60 Places results.</p>
+        <strong style="color:var(--text)">Why only ~60 leads after a big fetch?</strong>
+        <p class="hint" style="margin:8px 0 0">Docker uses <em>Postgres</em>. Large historical fetches may live in <code>local-dev.db</code> (SQLite). Discover also filters by the selected city — pick the city you searched, or use Global queue. Use Fetch: <strong>All (scan city)</strong> for &gt;60 Places results.</p>
       </div>
     </section>
   </div>
@@ -978,7 +1059,7 @@ body:not(.authed) .wrap{
 
   <div class="panel-page" id="leadsPanel">
     <section class="searchbox">
-      <div class="sectionhead"><h2>Find businesses</h2><span>Google Maps search → import. Already saved? Use Prospects to look them up.</span></div>
+      <div class="sectionhead"><h2>Find businesses</h2><span>Example: Australia · Sydney · barbers</span></div>
       <form id="searchForm">
         <div class="fields">
           <div class="field"><label for="country">Country</label><select id="country" required><option value="">Loading…</option></select></div>
@@ -1105,7 +1186,7 @@ body:not(.authed) .wrap{
           <button type="button" id="prospectsRefresh">Refresh</button>
         </div>
       </div>
-      <p class="hint" id="prospectsMeta" style="margin-top:0">Directory of saved businesses (same records as Discover). Use this to look someone up — not to search Google Maps.</p>
+      <p class="hint" id="prospectsMeta" style="margin-top:0">Filter by country, then city — lists stay city-scoped, never mixed.</p>
       <div class="sales-table-wrap"><table class="sales-table prospects-table" id="prospectsTable"><thead><tr><th>Name</th><th>Country</th><th>City</th><th>Stage</th><th>Value</th><th>Score</th><th></th></tr></thead><tbody></tbody></table></div>
     </section>
   </div>
@@ -1131,11 +1212,12 @@ body:not(.authed) .wrap{
           <button type="button" class="primary" id="contactQueueRefresh">Refresh ranking</button>
         </div>
       </div>
-      <div class="queue-tabs" id="contactQueueTabs" role="tablist" aria-label="Contact queue views">
+      <div class="queue-tabs queue-tabs-sticky" id="contactQueueTabs" role="tablist" aria-label="Contact queue views">
         <button type="button" role="tab" class="active" data-cq-tab="all" aria-selected="true">All <span class="tab-count" id="contactQueueAllCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="selected" aria-selected="false">To contact <span class="tab-count" id="contactQueueSelectedCount">0</span></button>
+        <button type="button" role="tab" data-cq-tab="booking" aria-selected="false">Has booking <span class="tab-count" id="contactQueueBookingCount">0</span></button>
       </div>
-      <div class="fields" style="grid-template-columns:minmax(160px,1fr) minmax(160px,1fr) minmax(220px,1.4fr) auto;align-items:end;margin-bottom:10px">
+      <div class="fields filter-bar" style="margin-bottom:10px">
         <div class="field">
           <label for="contactQueueCountry">Country</label>
           <select id="contactQueueCountry" aria-label="Filter by country"><option value="">All countries</option></select>
@@ -1143,6 +1225,19 @@ body:not(.authed) .wrap{
         <div class="field">
           <label for="contactQueueCity">City</label>
           <select id="contactQueueCity" aria-label="Filter by city"><option value="">All cities</option></select>
+        </div>
+        <div class="field">
+          <label for="contactQueueChannel">Channel filter</label>
+          <select id="contactQueueChannel" aria-label="Filter by channel">
+            <option value="">Any channel</option>
+            <option value="email">Has email</option>
+            <option value="whatsapp">Has WhatsApp</option>
+            <option value="instagram">Has Instagram</option>
+            <option value="website">Has website</option>
+            <option value="no_email">No email</option>
+            <option value="no_website">No website</option>
+            <option value="ig_only">IG only</option>
+          </select>
         </div>
         <div class="field">
           <label for="contactQueueMode">Ranking mode</label>
@@ -1180,8 +1275,17 @@ body:not(.authed) .wrap{
           <button type="button" id="activitiesRefresh">Refresh</button>
         </div>
       </div>
-      <p class="hint" style="margin-top:0">Calls, email, WhatsApp, Instagram. Closing a deal lives under <strong>Deals</strong> — not here.</p>
-      <div id="activitiesFeed" class="leads list-shell" style="min-height:120px"></div>
+      <p class="hint" style="margin-top:0">Outreach and invoices grouped by lead. Closing a deal lives under <strong>Deals</strong>.</p>
+      <div class="queue-tabs" id="commsTabs" role="tablist" aria-label="Communication views" style="margin-bottom:12px">
+        <button type="button" class="active" data-comms-tab="outreach">Outreach</button>
+        <button type="button" data-comms-tab="invoices">Invoices</button>
+      </div>
+      <div class="comms-pane" id="commsOutreachPane">
+        <div id="activitiesFeed" class="leads list-shell" style="min-height:120px"></div>
+      </div>
+      <div class="comms-pane hidden" id="commsInvoicesPane">
+        <div id="commsInvoicesHost" class="invoice-card-grid" style="min-height:120px"></div>
+      </div>
     </section>
   </div>
 
@@ -1196,11 +1300,26 @@ body:not(.authed) .wrap{
         </div>
       </div>
       <p class="hint" style="margin-top:0">Confirm close / send pay links here. Communication stays in its own menu.</p>
+      <div class="queue-tabs" id="dealsTabs" role="tablist" aria-label="Deals views" style="margin-bottom:12px">
+        <button type="button" class="active" data-deals-tab="proposals">Proposals</button>
+        <button type="button" data-deals-tab="paylinks">Pay links &amp; QR</button>
+      </div>
       <div class="queue-grid" id="dealsStats"></div>
+      <div id="dealsProposalsPane">
       <h3 class="panel-title">Open proposals</h3>
       <div class="sales-table-wrap"><table class="sales-table" id="dealsProposalsTable"><thead><tr><th>Ref</th><th>Prospect</th><th>Status</th><th>Total</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
       <h3 class="panel-title">Invoices awaiting pay / confirm</h3>
       <div class="sales-table-wrap"><table class="sales-table" id="dealsInvoicesTable"><thead><tr><th>Number</th><th>Status</th><th>Provider</th><th>Total</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div id="dealsPaylinksPane" class="hidden">
+        <h3 class="panel-title">Pay links &amp; QR codes</h3>
+        <p class="hint" style="margin-top:0">Creates real proposal + invoices per provider. Hosted pay URLs (or pay instructions) show here with downloadable / printable QR codes.</p>
+        <div class="crud-toolbar">
+          <button type="button" class="primary" id="paylinkCreateBtn">Create pay links</button>
+          <button type="button" id="paylinkRefreshBtn">Refresh</button>
+        </div>
+        <div id="paylinksHost"><div class="empty-card">No pay links yet.</div></div>
+      </div>
     </section>
   </div>
 
@@ -1258,6 +1377,13 @@ body:not(.authed) .wrap{
       <h3 class="panel-title">Currency</h3>
       <p class="hint" style="margin-top:0">Default is <strong>USD</strong>. Bulk-convert prospects still on AUD → USD. Other currencies (EUR, GBP, …) are left alone — switch any prospect back with the currency select in Details.</p>
       <button type="button" class="primary" id="normalizeCurrencyBtn">Set AUD → USD now</button>
+      <h3 class="panel-title">Brand logo (email signature)</h3>
+      <p class="hint" style="margin-top:0">Upload a logo used in email signatures when you copy / open Zoho. Stored under uploads.</p>
+      <div class="crud-toolbar" style="margin:0">
+        <input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" aria-label="Upload logo">
+        <button type="button" id="brandLogoClear">Remove logo</button>
+      </div>
+      <img id="brandLogoPreview" class="brand-logo-preview hidden" alt="Brand logo preview">
       <h3 class="panel-title">Users</h3>
       <div class="crud-toolbar">
         <button type="button" class="primary" id="userAddBtn">Add user</button>
@@ -1333,7 +1459,7 @@ body:not(.authed) .wrap{
         <button type="button" class="primary" id="paySetupSave">Save</button>
         <button type="button" id="paySetupValidate">Validate connection</button>
         <button type="button" id="paySetupLocalDefaults" title="Modes, localhost URL, Payoneer/Skrill notify secrets — not live Stripe/PayPal keys">Apply local defaults</button>
-        <button type="button" data-goto="money">Open Money ledger</button>
+        <button type="button" data-goto="money:ledger">Open Money ledger</button>
       </div>
       <h3 class="panel-title">Provider status</h3>
       <div id="paySetupProviders" class="hint">Loading…</div>
@@ -1345,31 +1471,43 @@ body:not(.authed) .wrap{
     <div class="money-banner" id="testModeBanner">Payment providers may be in test/sandbox mode. Test payments never count as live collected revenue.</div>
     <section class="panel card">
       <div class="sectionhead"><h2>Money</h2><button type="button" id="moneyRefresh">Refresh</button></div>
-      <div class="money-origin" id="moneyOrigin">
-        <strong>Where money comes from</strong>
-        Collected = succeeded payments − refunds (verified cash only). Proposals and open invoices are not revenue until paid.
+      <div class="queue-tabs" id="moneyTabs" role="tablist" aria-label="Money views" style="margin-bottom:12px">
+        <button type="button" class="active" data-money-tab="ledger">Ledger</button>
+        <button type="button" data-money-tab="invoices">Invoices &amp; QR</button>
+        <button type="button" data-money-tab="settings">Settings</button>
       </div>
-      <div class="queue-grid" id="moneyStats"></div>
-      <div class="prov-card" style="margin-bottom:14px">
-        <strong>Configure payment keys</strong>
-        <div class="sub">API keys, webhooks, and SMTP live under <button type="button" class="chip ok" data-goto="paySetup">Pay setup</button> — fill, save, and validate there.</div>
+      <div class="money-pane" id="moneyLedgerPane">
+        <div class="money-origin" id="moneyOrigin">
+          <strong>Where money comes from</strong>
+          Collected = succeeded payments − refunds (verified cash only). Proposals and open invoices are not revenue until paid.
+        </div>
+        <div class="queue-grid" id="moneyStats"></div>
+        <h3 class="panel-title">Send pay link</h3>
+        <p class="hint" style="margin-top:0">Create a proposal + invoice for a lead, then copy or open the hosted pay URL. Full closing flow also lives under Deals.</p>
+        <button type="button" class="primary" id="sendPayLinkBtn">Send pay link to a lead</button>
+        <h3 class="panel-title">Payments ledger (source of truth)</h3>
+        <p><a class="chip ok" href="/api/sales/payments/export.csv" id="paymentsExport">Download payments CSV</a></p>
+        <div class="sales-table-wrap"><table class="sales-table" id="paymentsTable"><thead><tr><th>ID</th><th>Amount</th><th>Status</th><th>Provider</th><th>Paid at</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
       </div>
-      <h3 class="panel-title">Payment provider setup</h3>
-      <div id="providersSetup" class="hint">Loading…</div>
-      <h3 class="panel-title">Payment API keys &amp; secrets (Owner)</h3>
-      <p class="hint" style="margin-top:0">Or use the full form under <button type="button" class="chip ok" data-goto="paySetup">Pay setup</button>. Secrets encrypted at rest.</p>
-      <div id="paymentSettingsPanel" class="hint">Owner only — open Money while signed in as Owner.</div>
-      <h3 class="panel-title">Mail / SMTP (Owner)</h3>
-      <p class="hint" style="margin-top:0">Required to <strong>Send email with PDF</strong> on invoices. Also under Pay setup → Mail.</p>
-      <div id="mailSettingsPanel" class="hint">Owner only.</div>
-      <h3 class="panel-title">Send pay link</h3>
-      <p class="hint" style="margin-top:0">Create a proposal + invoice for a lead, then copy or open the hosted pay URL. Full closing flow also lives under Deals.</p>
-      <button type="button" class="primary" id="sendPayLinkBtn">Send pay link to a lead</button>
-      <h3 class="panel-title">Open / recent invoices</h3>
-      <div class="sales-table-wrap"><table class="sales-table" id="invoicesTable"><thead><tr><th>Number</th><th>Status</th><th>Provider</th><th>Total</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
-      <h3 class="panel-title">Payments ledger (source of truth)</h3>
-      <p><a class="chip ok" href="/api/sales/payments/export.csv" id="paymentsExport">Download payments CSV</a></p>
-      <div class="sales-table-wrap"><table class="sales-table" id="paymentsTable"><thead><tr><th>ID</th><th>Amount</th><th>Status</th><th>Provider</th><th>Paid at</th><th>Actions</th></tr></thead><tbody></tbody></table></div>
+      <div class="money-pane hidden" id="moneyInvoicesPane">
+        <h3 class="panel-title">Invoices · pay links · QR</h3>
+        <p class="hint" style="margin-top:0">Open pay URL, download QR/PDF, copy instructions, or confirm paid. Grouped by lead.</p>
+        <div id="moneyInvoicesHost" class="invoice-card-grid" style="min-height:120px"></div>
+      </div>
+      <div class="money-pane hidden" id="moneySettingsPane">
+        <div class="prov-card" style="margin-bottom:14px">
+          <strong>Payment configuration</strong>
+          <div class="sub">Keys, webhooks, and SMTP live in one place — <button type="button" class="chip ok" data-goto="paySetup">Open Pay setup</button>. Validate Stripe/PayPal/Payoneer/Skrill there before sending live links.</div>
+          <div class="drawer-actions" style="margin-top:10px">
+            <button type="button" class="primary" data-goto="paySetup">Open Pay setup</button>
+          </div>
+        </div>
+        <h3 class="panel-title">Provider status (read-only)</h3>
+        <p class="hint" style="margin-top:0">Snapshot of what’s configured. Edit keys under Pay setup.</p>
+        <div id="providersSetup" class="hint">Loading…</div>
+        <div id="paymentSettingsPanel" class="hidden" aria-hidden="true"></div>
+        <div id="mailSettingsPanel" class="hidden" aria-hidden="true"></div>
+      </div>
     </section>
   </div>
 
@@ -1443,39 +1581,54 @@ body:not(.authed) .wrap{
         <strong>Welcome back</strong>
         <span id="composeReturnText">Did you send the message? Confirm below, or Confirm + next to keep working the list.</span>
       </div>
+      <div class="compose-tabs" id="composeTabs" role="tablist" aria-label="Compose sections">
+        <button type="button" class="active" data-compose-tab="message" role="tab" aria-selected="true">Message</button>
+        <button type="button" data-compose-tab="confirm" role="tab" aria-selected="false">Confirm · outcome</button>
+      </div>
     </div>
     <div class="modal-scroll">
-      <div class="field"><label for="composeChannel">Channel</label><select id="composeChannel"></select></div>
-      <div class="field"><label for="composeTemplate">Template</label><select id="composeTemplate"></select></div>
-      <div class="field" id="composeSubjectField"><label for="composeSubject">Subject</label><input id="composeSubject"></div>
-      <div class="field"><label for="composeBody">Message</label><textarea id="composeBody"></textarea></div>
-      <div id="igCopyBox" class="ig-copy hidden"></div>
-      <div class="field"><label for="composeOutcome">Outcome (on confirm)</label>
-        <select id="composeOutcome">
-          <option value="">—</option>
-          <option value="interested">interested</option>
-          <option value="not_now">not now</option>
-          <option value="booked">booked</option>
-          <option value="no_reply">no reply</option>
-          <option value="wrong_contact">wrong contact</option>
-          <option value="other">other</option>
-        </select>
+      <div class="compose-pane active" data-compose-pane="message">
+        <div class="field"><label for="composeChannel">Channel</label><select id="composeChannel"></select></div>
+        <div class="field"><label for="composeTemplate">Template</label><select id="composeTemplate"></select></div>
+        <div class="field" id="composeSubjectField"><label for="composeSubject">Subject</label><input id="composeSubject"></div>
+        <div class="field">
+          <div class="field-label-row">
+            <label for="composeBody">Message</label>
+            <button type="button" class="icon-copy" id="copyComposeIconBtn" title="Copy message" aria-label="Copy message">⧉</button>
+          </div>
+          <textarea id="composeBody"></textarea>
+        </div>
+        <div id="igCopyBox" class="ig-copy hidden"></div>
+        <p class="channel-note" id="composeNote">Edit here first. Use <strong>Open app</strong> only when ready — it opens Zoho / WhatsApp / Instagram.</p>
       </div>
-      <div class="field"><label for="composeNotes">Notes (on confirm)</label><textarea id="composeNotes" rows="2" placeholder="Optional note after sending…"></textarea></div>
-      <div class="field"><label for="composeFollowUp">Follow up on</label><input id="composeFollowUp" type="date">
-        <div class="snooze">
-          <button type="button" data-snooze="1">Tomorrow</button>
-          <button type="button" data-snooze="3">+3 days</button>
-          <button type="button" data-snooze="7">+7 days</button>
-          <button type="button" data-snooze="clear">Clear</button>
+      <div class="compose-pane" data-compose-pane="confirm">
+        <div class="field"><label for="composeOutcome">Outcome (on confirm)</label>
+          <select id="composeOutcome">
+            <option value="">—</option>
+            <option value="interested">interested</option>
+            <option value="not_now">not now</option>
+            <option value="booked">booked</option>
+            <option value="no_reply">no reply</option>
+            <option value="wrong_contact">wrong contact</option>
+            <option value="other">other</option>
+          </select>
+        </div>
+        <div class="field"><label for="composeNotes">Notes (on confirm)</label><textarea id="composeNotes" rows="4" placeholder="Optional note after sending…"></textarea></div>
+        <div class="field"><label for="composeFollowUp">Follow up on</label><input id="composeFollowUp" type="date">
+          <div class="snooze">
+            <button type="button" data-snooze="1">Tomorrow</button>
+            <button type="button" data-snooze="3">+3 days</button>
+            <button type="button" data-snooze="7">+7 days</button>
+            <button type="button" data-snooze="clear">Clear</button>
+          </div>
         </div>
       </div>
-      <p class="channel-note" id="composeNote">Copy the message, paste into your email / WhatsApp / IG, then Confirm sent. <strong>N</strong> confirm + next · <strong>S</strong> skip.</p>
     </div>
     <div class="modal-foot">
       <div class="modal-actions">
+        <button type="button" id="composeMarkBtn">Mark to contact</button>
         <button type="button" class="primary" id="copyComposeBtn">Copy message</button>
-        <button type="button" id="openComposeBtn" title="Opens Zoho Mail / WhatsApp / Instagram on this device">Open app</button>
+        <button type="button" id="openComposeBtn" title="Opens Zoho Mail / WhatsApp / Instagram">Open app</button>
         <button type="button" id="confirmSentBtn">Confirm sent</button>
         <button type="button" id="confirmNextBtn" title="Confirm sent and open next lead (N)">Confirm + next</button>
         <button type="button" id="skipNextBtn" title="Skip without confirming (S)">Skip → next</button>
@@ -1523,6 +1676,11 @@ let loadSeq=0; // ignore stale responses when views/filters change quickly
 let appPanel='leads'; // dashboard | leads | pipeline | tasks | money | templates
 let lastPipelineStages=[]; // [{id,name,slug,is_lost}] for move dialog
 let _uiDialogResolver=null;
+let moneyTab='ledger'; // ledger | invoices | settings
+let commsTab='outreach'; // outreach | invoices
+let dealsTab='proposals'; // proposals | paylinks
+let moneyInvoicesCache=[];
+let commsInvoicesCache=[];
 
 function closeUiDialog(result){
   const dlg=$('uiDialog');
@@ -1600,10 +1758,10 @@ function closeSidebar(){
 const PANEL_META={
   guide:{title:'How it works',sub:'Discovery → Money playbook'},
   dashboard:{title:'Dashboard',sub:'Queues, pipeline value, and cash collected'},
-  leads:{title:'Discover',sub:'Search Google Maps and import new leads'},
+  leads:{title:'Discover',sub:'Find and contact prospects'},
   contactQueue:{title:'Contact queue',sub:'Ranked who to call next'},
   pipeline:{title:'Pipeline',sub:'Stages (auto-advance + manual override)'},
-  prospects:{title:'Prospects',sub:'Look up your saved book — not a Maps search'},
+  prospects:{title:'Prospects',sub:'Search your sales book'},
   tasks:{title:'Tasks',sub:'Follow-ups due and overdue'},
   activities:{title:'Communication',sub:'Outreach log — not deal closing'},
   demos:{title:'Demos',sub:'Demo outcomes and next steps'},
@@ -1628,9 +1786,26 @@ function closeTopMenus(){
   ['notifBtn','profileBtn'].forEach(id=>{ const el=$(id); if(el) el.setAttribute('aria-expanded','false'); });
 }
 
-function setAppPanel(panel){
+function setAppPanel(panel, opts){
   const allowed=APP_PANELS;
-  appPanel=allowed.includes(panel)?panel:'leads';
+  const o=opts||{};
+  // Allow "money:invoices" / "activities:invoices" shorthand from KPI data-goto
+  let target=panel;
+  let tabHint='';
+  if(typeof panel==='string' && panel.includes(':')){
+    const parts=panel.split(':');
+    target=parts[0];
+    tabHint=parts[1]||'';
+  }
+  appPanel=allowed.includes(target)?target:'leads';
+  if(tabHint){
+    if(appPanel==='money') moneyTab=['ledger','invoices','settings'].includes(tabHint)?tabHint:moneyTab;
+    if(appPanel==='activities') commsTab=tabHint==='invoices'?'invoices':'outreach';
+    if(appPanel==='deals') dealsTab=tabHint==='paylinks'?'paylinks':'proposals';
+  }
+  if(o.moneyTab) moneyTab=o.moneyTab;
+  if(o.commsTab) commsTab=o.commsTab;
+  if(o.dealsTab) dealsTab=o.dealsTab;
   allowed.forEach(p=>{
     const el=$(p+'Panel');
     if(el) el.classList.toggle('hidden',appPanel!==p);
@@ -1641,20 +1816,33 @@ function setAppPanel(panel){
   updateTopbarTitle(appPanel);
   closeTopMenus();
   closeSidebar();
+  if(appPanel==='money') setMoneyTab(moneyTab);
+  if(appPanel==='activities') setCommsTab(commsTab);
+  if(appPanel==='deals'){
+    document.querySelectorAll('#dealsTabs [data-deals-tab]').forEach(b=>b.classList.toggle('active',b.dataset.dealsTab===dealsTab));
+    if($('dealsProposalsPane')) $('dealsProposalsPane').classList.toggle('hidden', dealsTab!=='proposals');
+    if($('dealsPaylinksPane')) $('dealsPaylinksPane').classList.toggle('hidden', dealsTab!=='paylinks');
+  }
   if(appPanel==='templates'){
     loadTemplates().catch(()=>{});
     requestAnimationFrame(()=>{$('tplBody')&&$('tplBody').focus({preventScroll:true})});
   }
   if(appPanel==='dashboard') loadDashboard().catch(e=>toast(e.message,true));
   if(appPanel==='contactQueue') loadContactQueue().catch(e=>toast(e.message,true));
-  if(appPanel==='pipeline') loadPipeline().catch(e=>toast(e.message,true));
+  if(appPanel==='pipeline'){ refreshBeConnBanners().catch(()=>{}); loadPipeline().catch(e=>toast(e.message,true)); }
   if(appPanel==='prospects') loadProspects().catch(e=>toast(e.message,true));
   if(appPanel==='tasks') loadTasks().catch(e=>toast(e.message,true));
-  if(appPanel==='activities') loadActivitiesFeed().catch(e=>toast(e.message,true));
+  if(appPanel==='activities'){
+    if(commsTab==='invoices') loadCommsInvoices().catch(e=>toast(e.message,true));
+    else loadActivitiesFeed().catch(e=>toast(e.message,true));
+  }
   if(appPanel==='demos') loadDemos().catch(e=>toast(e.message,true));
-  if(appPanel==='deals'){ refreshBeConnBanners().catch(()=>{}); loadDeals().catch(e=>toast(e.message,true)); }
+  if(appPanel==='deals'){
+    refreshBeConnBanners().catch(()=>{});
+    loadDeals().catch(e=>toast(e.message,true));
+    if(dealsTab==='paylinks') renderPaylinksHost().catch(()=>{});
+  }
   if(appPanel==='money'){ refreshBeConnBanners().catch(()=>{}); loadMoney().catch(e=>toast(e.message,true)); }
-  if(appPanel==='pipeline'){ refreshBeConnBanners().catch(()=>{}); loadPipeline().catch(e=>toast(e.message,true)); }
   if(appPanel==='paySetup') loadPaySetup().catch(e=>toast(e.message,true));
   if(appPanel==='appoinHive') loadAppointHive().catch(e=>toast(e.message,true));
   if(appPanel==='reports') loadReports().catch(e=>toast(e.message,true));
@@ -1718,37 +1906,96 @@ async function pickProspectField(label='Select prospect'){
   return id;
 }
 
+const NOTIF_DISMISS_KEY='ah_notif_dismissed_v1';
+function notifDismissStore(){
+  try{ return JSON.parse(localStorage.getItem(NOTIF_DISMISS_KEY)||'{}')||{}; }
+  catch(e){ return {}; }
+}
+function saveNotifDismissStore(map){
+  try{ localStorage.setItem(NOTIF_DISMISS_KEY, JSON.stringify(map||{})); }catch(e){}
+}
+function isNotifDismissed(id, count){
+  const row=notifDismissStore()[id];
+  if(!row) return false;
+  // Stay hidden until the live count rises above what was dismissed
+  return Number(count||0) <= Number(row.count||0);
+}
+function dismissNotification(id, count){
+  if(!id) return;
+  const map=notifDismissStore();
+  map[id]={count:Number(count||0), at:new Date().toISOString()};
+  saveNotifDismissStore(map);
+}
+function clearAllNotifications(items){
+  const map=notifDismissStore();
+  (items||[]).forEach(i=>{ map[i.id]={count:Number(i.count||0), at:new Date().toISOString()}; });
+  saveNotifDismissStore(map);
+}
+function buildNotificationItems(dashboard){
+  const d=dashboard||{};
+  const q=d.queues||{};
+  return [
+    {id:'overdue', goto:'tasks', count:q.overdue_count||0, label:'Overdue tasks', sub:'Needs action now', urgent:true},
+    {id:'due_today', goto:'tasks', count:q.due_today_count||0, label:'Due today', sub:'Follow up before EOD'},
+    {id:'due_soon', goto:'tasks', count:q.due_soon_count||0, label:'Due in 7 days', sub:'Upcoming follow-ups'},
+    {id:'to_contact', goto:'contactQueue', count:q.contact_queue_count||q.to_contact_count||0, label:'To contact', sub:'Open Contact queue'},
+    {id:'no_next_action', goto:'prospects', count:q.no_next_action_count||0, label:'No next action', sub:'Prospects without a next step'},
+    {id:'open_invoices', goto:'money:invoices', count:(d.invoiced_outstanding&&d.invoiced_outstanding.sample_size)||0, label:'Open invoices', sub:'Outstanding billed amounts'}
+  ].filter(i=>Number(i.count)>0);
+}
+let _notifLastItems=[];
 async function refreshNotifications(){
   const list=$('notifList');
   const badge=$('notifBadge');
   if(!list) return;
   try{
     const d=await api('/api/sales/dashboard?product_line=STANDALONE');
-    const q=d.queues||{};
-    const items=[
-      {goto:'tasks', count:q.overdue_count||0, label:'Overdue tasks', sub:'Needs action now', urgent:true},
-      {goto:'tasks', count:q.due_today_count||0, label:'Due today', sub:'Follow up before EOD'},
-      {goto:'tasks', count:q.due_soon_count||0, label:'Due in 7 days', sub:'Upcoming follow-ups'},
-      {goto:'prospects', count:q.no_next_action_count||0, label:'No next action', sub:'Prospects without a next step'},
-      {goto:'money', count:(d.invoiced_outstanding&&d.invoiced_outstanding.sample_size)||0, label:'Open invoices', sub:'Outstanding billed amounts'}
-    ].filter(i=>Number(i.count)>0);
+    const all=buildNotificationItems(d);
+    _notifLastItems=all;
+    const items=all.filter(i=>!isNotifDismissed(i.id, i.count));
     const total=items.reduce((s,i)=>s+Number(i.count||0),0);
     if(badge){
-      badge.textContent=total>99?'99+':String(total);
+      badge.textContent=total>99?'99+':String(total||0);
       badge.classList.toggle('show', total>0);
     }
-    if(!items.length){
+    if($('notifClearAll')) $('notifClearAll').disabled=!all.length;
+    if(!all.length){
       list.innerHTML='<div class="notif-empty">You\'re clear — no overdue tasks or open queues.</div>';
       return;
     }
+    if(!items.length){
+      list.innerHTML='<div class="notif-empty">All caught up. New items appear when counts rise.<br><button type="button" class="chip ok" id="notifRestoreBtn" style="margin-top:10px">Show dismissed</button></div>';
+      const restore=$('notifRestoreBtn');
+      if(restore) restore.addEventListener('click',e=>{
+        e.preventDefault(); e.stopPropagation();
+        saveNotifDismissStore({});
+        refreshNotifications().catch(()=>{});
+      });
+      return;
+    }
     list.innerHTML=items.map(i=>`
-      <button type="button" class="notif-item" data-goto="${esc(i.goto)}" role="menuitem">
+      <div class="notif-item" role="menuitem" data-notif-id="${esc(i.id)}" data-notif-count="${esc(String(i.count))}" data-goto="${esc(i.goto)}">
         <div class="n-count" style="${i.urgent?'color:var(--red)':''}">${esc(String(i.count))}</div>
-        <div><div class="n-label">${esc(i.label)}</div><div class="n-sub">${esc(i.sub)}</div></div>
-      </button>`).join('');
-    list.querySelectorAll('[data-goto]').forEach(btn=>btn.addEventListener('click',()=>{
+        <div class="n-body">
+          <div class="n-label">${esc(i.label)}</div>
+          <div class="n-sub">${esc(i.sub)}</div>
+        </div>
+        <button type="button" class="n-dismiss" data-notif-dismiss="${esc(i.id)}" data-notif-count="${esc(String(i.count))}" title="Remove" aria-label="Remove notification">×</button>
+      </div>`).join('');
+    list.querySelectorAll('.notif-item[data-goto]').forEach(row=>row.addEventListener('click',e=>{
+      if(e.target.closest('[data-notif-dismiss]')) return;
+      const id=row.dataset.notifId;
+      const count=Number(row.dataset.notifCount||0);
+      dismissNotification(id, count); // read = clear from badge
       closeTopMenus();
-      setAppPanel(btn.dataset.goto);
+      setAppPanel(row.dataset.goto);
+      refreshNotifications().catch(()=>{});
+    }));
+    list.querySelectorAll('[data-notif-dismiss]').forEach(btn=>btn.addEventListener('click',e=>{
+      e.preventDefault(); e.stopPropagation();
+      dismissNotification(btn.dataset.notifDismiss, Number(btn.dataset.notifCount||0));
+      refreshNotifications().catch(()=>{});
+      toast('Notification cleared');
     }));
   }catch(e){
     list.innerHTML=`<div class="notif-empty">${esc(e.message||'Could not load notifications')}</div>`;
@@ -1850,21 +2097,41 @@ function renderProspectsTable(){
     const scoreHtml=hasScore
       ?`<span class="score-pill has">${esc(p.qualification_score)}/10</span>`
       :`<span class="score-pill muted-dash">Not scored</span>`;
-    return `<tr data-open-prospect="${p.id}">
-    <td data-label="Name"><strong>${esc(p.name)}</strong></td>
+    const hasBook=!!(p.current_booking_software||'').trim();
+    return `<tr data-open-prospect="${p.id}" data-maps="${esc(mapsUrlFor(p))}" style="cursor:pointer">
+    <td data-label="Name"><strong>${esc(p.name)}</strong>${hasBook?' <span class="badge">Booking</span>':''}</td>
     <td data-label="Country">${esc(p.country||'—')}</td>
     <td data-label="City">${esc(p.city||'—')}</td>
     <td data-label="Stage">${esc((p.stage&&p.stage.name)||'—')}</td>
     <td data-label="Value">${valHtml}</td>
     <td data-label="Score">${scoreHtml}</td>
-    <td data-label="Actions"><div class="action-stack"><button type="button" data-open-prospect="${p.id}">Open</button></div></td>
+    <td data-label="Actions"><div class="action-stack">
+      <button type="button" data-open-prospect="${p.id}">Open</button>
+      <button type="button" data-prospect-booking="${p.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>
+    </div></td>
   </tr>`;
   }).join('');
   renderPager(pagerHost, slice, renderProspectsTable);
   tb.querySelectorAll('[data-open-prospect]').forEach(el=>el.addEventListener('click',async ev=>{
+    if(ev.target.closest('[data-prospect-booking]')) return;
     ev.stopPropagation();
     const id=el.dataset.openProspect||el.closest('[data-open-prospect]')?.dataset.openProspect;
     if(id) await openProspectById(id);
+  }));
+  tb.querySelectorAll('[data-prospect-booking]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    try{
+      const on=btn.dataset.bookingOn==='1';
+      await markBookingIds([btn.dataset.prospectBooking], on);
+      const row=prospectsCache.find(x=>String(x.id)===String(btn.dataset.prospectBooking));
+      if(row) row.current_booking_software=on?'Has booking':'';
+      renderProspectsTable();
+      toast(on?'Marked as has booking':'Cleared booking flag');
+    }catch(e){ toast(e.message,true); }
+  }));
+  tb.querySelectorAll('tr[data-maps]').forEach(tr=>tr.addEventListener('click',ev=>{
+    if(ev.target.closest('button,a,input')) return;
+    // double-duty: open maps only when alt/meta, else open prospect (existing open handler on name/open)
   }));
 }
 async function loadProspects(){
@@ -1887,6 +2154,193 @@ async function loadProspects(){
   renderProspectsTable();
 }
 
+function groupByLeadName(rows, nameKey='business_name', idKey='business_id'){
+  const map=new Map();
+  (rows||[]).forEach(r=>{
+    const id=r[idKey];
+    const key=id!=null?String(id):('_'+ (r[nameKey]||'unknown'));
+    if(!map.has(key)){
+      map.set(key,{
+        business_id:id,
+        name:r[nameKey]||(id!=null?('#'+id):'Unknown'),
+        items:[]
+      });
+    }
+    map.get(key).items.push(r);
+  });
+  return [...map.values()].sort((a,b)=>String(a.name).localeCompare(String(b.name)));
+}
+function invoicePayload(i){
+  if(!i) return '';
+  const url=i.hosted_url||'';
+  if(url && !String(url).includes('/placeholder/') && String(url).startsWith('http')) return url;
+  return i.pay_instructions||url||'';
+}
+function invoiceCardHtml(i,{compact=false}={}){
+  const payload=invoicePayload(i);
+  const live=payload && String(payload).startsWith('http') && !String(payload).includes('/placeholder/');
+  const qr=payload?qrUrlFor(payload):'';
+  const canVoid=i.status==='open'||i.status==='draft';
+  if(compact){
+    return `
+    <article class="task-row" data-inv-card="${i.id}">
+      <div>
+        <div class="biz">${esc(i.number||('#'+i.id))} · ${esc(i.provider||'manual')} · <span class="status-pill ${esc(i.status||'')}">${esc(i.status||'')}</span></div>
+        <div class="sub">${esc(fmtMoney(i.total,i.currency))}${i.is_test_mode?' · test':''}</div>
+      </div>
+      <div class="action-stack">
+        <button type="button" data-inv-view="${i.id}">View</button>
+        <a class="chip ok" href="/api/sales/invoices/${i.id}/pdf" target="_blank" rel="noopener">PDF</a>
+        ${i.business_id?`<button type="button" data-open-prospect="${i.business_id}">Open lead</button>`:''}
+        <button type="button" data-goto="money:invoices">Money</button>
+      </div>
+    </article>`;
+  }
+  return `
+  <div class="paylink-card" data-inv-card="${i.id}">
+    ${qr?`<img class="paylink-qr" src="${esc(qr)}" alt="QR ${esc(i.number||'')}" loading="lazy">`:''}
+    <div class="paylink-meta">
+      <strong>${esc(i.number||('#'+i.id))}</strong>
+      <span class="status-pill ${esc(i.status||'')}">${esc(i.status||'')}</span>
+      <span class="sub"> · ${esc(i.provider||'manual')}${i.is_test_mode?' · test':''}</span>
+      <div class="sub">${esc(fmtMoney(i.total,i.currency))} · ${esc(i.business_name||('#'+(i.business_id||'')))}</div>
+      ${payload?`<div class="paylink-url">${esc(payload)}</div>`:'<div class="hint">No pay URL or instructions yet</div>'}
+      <div class="drawer-actions" style="margin-top:8px">
+        <button type="button" data-inv-view="${i.id}">View</button>
+        <a class="chip ok" href="/api/sales/invoices/${i.id}/pdf" target="_blank" rel="noopener">PDF</a>
+        ${live?`<button type="button" class="primary" data-inv-open="${i.id}">Open link</button>`:''}
+        ${payload?`<button type="button" data-inv-copy-pay="${i.id}">Copy</button>`:''}
+        ${qr?`<a class="chip ok" href="${esc(qr)}" download="invoice-${esc(i.number||i.id)}-qr.png" target="_blank" rel="noopener">QR</a>
+        <button type="button" data-inv-print-qr="${i.id}">Print QR</button>`:''}
+        <button type="button" data-inv-compose="${i.id}">Copy message</button>
+        <button type="button" class="primary" data-inv-send="${i.id}">Email + PDF</button>
+        ${i.status==='open'?`<button type="button" class="primary" data-pay="${i.id}" data-number="${esc(i.number)}" data-total="${esc(String(i.total))}" data-currency="${esc(i.currency||'')}">Confirm paid</button>`:''}
+        ${canVoid?`<button type="button" class="danger" data-inv-void="${i.id}" data-number="${esc(i.number||'')}">Void</button>`:''}
+        ${i.business_id?`<button type="button" data-open-prospect="${i.business_id}">Open lead</button>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+function bindInvoiceCardActions(root, invoices, {onPaid, onVoided}={}){
+  if(!root) return;
+  const byId=Object.fromEntries((invoices||[]).map(i=>[String(i.id), i]));
+  root.querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',()=>openProspectById(btn.dataset.openProspect)));
+  root.querySelectorAll('[data-inv-open]').forEach(btn=>btn.addEventListener('click',()=>{
+    const url=invoicePayload(byId[btn.dataset.invOpen]);
+    if(url&&String(url).startsWith('http')) window.open(url,'_blank','noopener');
+  }));
+  root.querySelectorAll('[data-inv-copy-pay]').forEach(btn=>btn.addEventListener('click',async()=>{
+    const text=invoicePayload(byId[btn.dataset.invCopyPay])||'';
+    try{ await navigator.clipboard.writeText(text); toast('Copied'); }catch(e){ toast('Could not copy',true); }
+  }));
+  root.querySelectorAll('[data-inv-print-qr]').forEach(btn=>btn.addEventListener('click',()=>{
+    const inv=byId[btn.dataset.invPrintQr]; if(!inv) return;
+    const payload=invoicePayload(inv);
+    const w=window.open('','_blank','noopener,width=420,height=520');
+    if(!w){ toast('Pop-up blocked',true); return; }
+    w.document.write(`<!doctype html><title>QR</title><body style="font-family:sans-serif;text-align:center;padding:24px"><h2>${esc(inv.provider||'')} · ${esc(inv.number||'')}</h2><img src="${esc(qrUrlFor(payload))}" width="220" height="220"><p style="word-break:break-all">${esc(payload)}</p><script>window.onload=()=>window.print()<\/script></body>`);
+    w.document.close();
+  }));
+  root.querySelectorAll('[data-inv-view]').forEach(btn=>btn.addEventListener('click',async()=>{
+    try{
+      const v=await api('/api/sales/invoices/'+btn.dataset.invView+'/view');
+      const lines=(v.line_items||[]).map(li=>`• ${li.name||li.description||'Item'} × ${li.qty||li.quantity||1} — ${fmtMoney(li.amount,v.currency)}`).join('\n');
+      await uiForm({
+        title:`Invoice ${v.number}`,
+        message:`${v.billing_entity&&v.billing_entity.legal_name||'AppointHive'}\nBill to: ${(v.business&&v.business.name)||'—'}\nStatus: ${v.status}\nTotal: ${fmtMoney(v.total,v.currency)}\nIssued: ${fmtDateTime(v.created_at)}\n\n${lines||'(no line items)'}\n\n${v.pay_instructions||v.hosted_url||''}`,
+        confirmLabel:'Close',
+        fields:[]
+      });
+    }catch(e){ toast(e.message,true); }
+  }));
+  root.querySelectorAll('[data-inv-compose]').forEach(btn=>btn.addEventListener('click',async()=>{
+    try{
+      const c=await api('/api/sales/invoices/'+btn.dataset.invCompose+'/compose-copy');
+      const text=`Subject: ${c.subject}\n\n${c.body}\n\n—\n${c.note||''}\nPDF: ${location.origin}${c.pdf_url}`;
+      await navigator.clipboard.writeText(text);
+      toast(c.smtp_ready?'Message copied (or use Email + PDF)':'Invoice message copied — download PDF and attach manually');
+      if(!c.smtp_ready) window.open(c.pdf_url,'_blank');
+    }catch(e){ toast(e.message,true); }
+  }));
+  root.querySelectorAll('[data-inv-send]').forEach(btn=>btn.addEventListener('click',async()=>{
+    try{
+      const c=await api('/api/sales/invoices/'+btn.dataset.invSend+'/compose-copy');
+      const form=await uiForm({
+        title:'Send invoice email with PDF',
+        message:c.smtp_ready?'Sends via SMTP with PDF attached.':'SMTP not ready — configure Mail under Money → Settings.',
+        confirmLabel:'Send',
+        fields:[
+          {name:'to', label:'To', required:true, value:c.to||''},
+          {name:'subject', label:'Subject', required:true, value:c.subject||''},
+          {name:'body', label:'Body', type:'textarea', rows:8, value:c.body||''}
+        ]
+      });
+      if(!form) return;
+      await api('/api/sales/invoices/'+btn.dataset.invSend+'/send-email',{method:'POST',body:{to:form.to, subject:form.subject, body:form.body, template_id:c.template_id||null}});
+      toast('Invoice emailed with PDF');
+    }catch(e){ toast(e.message,true); }
+  }));
+  root.querySelectorAll('[data-pay]').forEach(btn=>btn.addEventListener('click',async()=>{
+    const form=await uiForm({
+      title:'Confirm payment received',
+      message:`Record cash for invoice ${btn.dataset.number} (${fmtMoney(btn.dataset.total,btn.dataset.currency)}). Owner only.`,
+      confirmLabel:'Mark paid',
+      fields:[{name:'provider_ref', label:'Payment reference', placeholder:'Bank ref / Stripe id (optional)'}]
+    });
+    if(!form) return;
+    try{
+      await api('/api/sales/invoices/'+btn.dataset.pay+'/confirm-paid',{method:'POST',body:{provider_ref:form.provider_ref||''}});
+      toast('Payment recorded');
+      if(typeof onPaid==='function') await onPaid();
+      else await loadMoney();
+    }catch(e){ toast(e.message,true); }
+  }));
+  root.querySelectorAll('[data-inv-void]').forEach(btn=>btn.addEventListener('click',async()=>{
+    const form=await uiForm({
+      title:'Void invoice '+btn.dataset.number+'?',
+      message:'Owner only. Paid invoices cannot be voided — refund instead. Related follow-up tasks are cancelled.',
+      confirmLabel:'Void',
+      danger:true,
+      fields:[{name:'reason', label:'Reason (optional)', placeholder:'Duplicate, wrong amount, cancelled deal…'}]
+    });
+    if(!form) return;
+    try{
+      await api('/api/sales/invoices/'+btn.dataset.invVoid+'/void',{method:'POST',body:{reason:form.reason||''}});
+      toast('Invoice voided');
+      if(typeof onVoided==='function') await onVoided();
+      else if(typeof onPaid==='function') await onPaid();
+      else await loadMoney();
+    }catch(e){ toast(e.message,true); }
+  }));
+  root.querySelectorAll('[data-goto]').forEach(btn=>btn.addEventListener('click',()=>setAppPanel(btn.dataset.goto)));
+}
+function renderGroupedInvoiceCards(host, invoices, {pagerKey, onRender, onPaid, onVoided, compact}={}){
+  if(!host) return;
+  const list=invoices||[];
+  const pagerHost=pagerKey?ensurePagerHost(host,pagerKey+'Pager'):null;
+  if(!list.length){
+    host.innerHTML='<div class="empty-card">No invoices yet. Create one from a prospect drawer → Proposal / pay.</div>';
+    if(pagerHost) pagerHost.innerHTML='';
+    return;
+  }
+  const groups=groupByLeadName(list);
+  const flatForPage=groups; // page by lead groups
+  const slice=pagerKey?pageSlice(flatForPage,pagerKey):{items:flatForPage};
+  host.innerHTML=slice.items.map(g=>`
+    <section class="lead-group">
+      <div class="lead-group-head">
+        <strong>${esc(g.name)}</strong>
+        <div class="action-stack">
+          ${g.business_id?`<button type="button" data-open-prospect="${g.business_id}">Open lead</button>`:''}
+          ${compact?`<button type="button" data-goto="money:invoices">Open in Money</button>`:''}
+          <span class="sub">${g.items.length} invoice${g.items.length===1?'':'s'}</span>
+        </div>
+      </div>
+      <div class="lead-group-body">${g.items.map(i=>invoiceCardHtml(i,{compact})).join('')}</div>
+    </section>`).join('');
+  if(pagerKey) renderPager(pagerHost, slice, onRender||(()=>renderGroupedInvoiceCards(host,invoices,{pagerKey,onRender,onPaid,onVoided,compact})));
+  bindInvoiceCardActions(host, list, {onPaid, onVoided: onVoided||onPaid});
+}
 function renderActivitiesFeed(){
   const list=activitiesCache||[];
   const feed=$('activitiesFeed');
@@ -1896,18 +2350,30 @@ function renderActivitiesFeed(){
     if(pagerHost) pagerHost.innerHTML='';
     return;
   }
-  const slice=pageSlice(list,'activities');
-  feed.innerHTML=slice.items.map(a=>`
-    <article class="task-row">
-      <div>
-        <div class="biz">${esc(a.activity_type)} · #${a.business_id}</div>
-        <div class="sub">${esc(a.summary||'')} ${a.outcome?'· '+esc(a.outcome):''} · ${esc(fmtDateTime(a.created_at||''))}</div>
+  const groups=groupByLeadName(list);
+  const slice=pageSlice(groups,'activities');
+  feed.innerHTML=slice.items.map(g=>`
+    <section class="lead-group">
+      <div class="lead-group-head">
+        <strong>${esc(g.name)}</strong>
+        <div class="action-stack">
+          ${g.business_id?`<button type="button" data-open-prospect="${g.business_id}">Open lead</button>`:''}
+          <span class="sub">${g.items.length}</span>
+        </div>
       </div>
-      <div class="action-stack">
-        <button type="button" data-open-prospect="${a.business_id}">Open</button>
-        <button type="button" class="danger" data-del-activity="${a.id}">Delete</button>
+      <div class="lead-group-body">
+        ${g.items.map(a=>`
+          <article class="task-row">
+            <div>
+              <div class="biz">${esc(a.activity_type)}${a.channel?' · '+esc(a.channel):''}</div>
+              <div class="sub">${esc(a.summary||'')} ${a.outcome?'· '+esc(a.outcome):''} · ${esc(fmtDateTime(a.created_at||''))}</div>
+            </div>
+            <div class="action-stack">
+              <button type="button" class="danger" data-del-activity="${a.id}">Delete</button>
+            </div>
+          </article>`).join('')}
       </div>
-    </article>`).join('');
+    </section>`).join('');
   renderPager(pagerHost, slice, renderActivitiesFeed);
   feed.querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',()=>openProspectById(btn.dataset.openProspect)));
   feed.querySelectorAll('[data-del-activity]').forEach(btn=>btn.addEventListener('click',async()=>{
@@ -1922,6 +2388,49 @@ async function loadActivitiesFeed(){
   activitiesCache=data.activities||[];
   if(pagerState.activities) pagerState.activities.page=1;
   renderActivitiesFeed();
+}
+function renderMoneyInvoices(){
+  renderGroupedInvoiceCards($('moneyInvoicesHost'), moneyInvoicesCache, {
+    pagerKey:'moneyInvoices',
+    onRender:renderMoneyInvoices,
+    onPaid:async()=>{ await loadMoney(); if(commsTab==='invoices') await loadCommsInvoices(); }
+  });
+}
+function renderCommsInvoices(){
+  renderGroupedInvoiceCards($('commsInvoicesHost'), commsInvoicesCache, {
+    pagerKey:'commsInvoices',
+    onRender:renderCommsInvoices,
+    onPaid:async()=>{ await loadCommsInvoices(); if(appPanel==='money') await loadMoney(); },
+    compact:true
+  });
+}
+async function loadCommsInvoices(){
+  const data=await api('/api/sales/invoices');
+  commsInvoicesCache=data.invoices||[];
+  if(pagerState.commsInvoices) pagerState.commsInvoices.page=1;
+  renderCommsInvoices();
+}
+function setCommsTab(tab){
+  commsTab=tab==='invoices'?'invoices':'outreach';
+  document.querySelectorAll('#commsTabs [data-comms-tab]').forEach(b=>{
+    const on=b.dataset.commsTab===commsTab;
+    b.classList.toggle('active',on);
+    b.setAttribute('aria-selected', on?'true':'false');
+  });
+  if($('commsOutreachPane')) $('commsOutreachPane').classList.toggle('hidden', commsTab!=='outreach');
+  if($('commsInvoicesPane')) $('commsInvoicesPane').classList.toggle('hidden', commsTab!=='invoices');
+  if(commsTab==='invoices') loadCommsInvoices().catch(e=>toast(e.message,true));
+}
+function setMoneyTab(tab){
+  moneyTab=['ledger','invoices','settings'].includes(tab)?tab:'ledger';
+  document.querySelectorAll('#moneyTabs [data-money-tab]').forEach(b=>{
+    const on=b.dataset.moneyTab===moneyTab;
+    b.classList.toggle('active',on);
+    b.setAttribute('aria-selected', on?'true':'false');
+  });
+  if($('moneyLedgerPane')) $('moneyLedgerPane').classList.toggle('hidden', moneyTab!=='ledger');
+  if($('moneyInvoicesPane')) $('moneyInvoicesPane').classList.toggle('hidden', moneyTab!=='invoices');
+  if($('moneySettingsPane')) $('moneySettingsPane').classList.toggle('hidden', moneyTab!=='settings');
 }
 
 function renderDemosTable(){
@@ -2409,7 +2918,7 @@ async function loadReports(){
       <button type="button" class="queue-card" data-goto="activities"><span>Contacted</span><strong>${eng.contacted||0}</strong><span class="kpi-hint">→ Comms</span></button>
       <button type="button" class="queue-card" data-goto="prospects"><span>Discovery notes</span><strong>${eng.discovery_notes||0}</strong><span class="kpi-hint">→ Prospects</span></button>
       <button type="button" class="queue-card" data-goto="deals"><span>Proposals</span><strong>${eng.proposals||0}</strong><span class="kpi-hint">→ Deals</span></button>
-      <button type="button" class="queue-card" data-goto="money"><span>Open invoices</span><strong>${eng.invoices_open||0}</strong><span class="kpi-hint">→ Money</span></button>`;
+      <button type="button" class="queue-card" data-goto="money:invoices"><span>Open invoices</span><strong>${eng.invoices_open||0}</strong><span class="kpi-hint">→ Invoices &amp; QR</span></button>`;
     bindDashKpis($('reportsEngage'));
   }
   $('reportsLost').textContent=Object.entries(data.lost_reasons||{}).map(([k,v])=>`${k}: ${v}`).join(' · ')||'—';
@@ -2433,6 +2942,8 @@ async function loadReports(){
 async function loadSettings(){
   const me=await api('/api/sales/me');
   const settings=await api('/api/sales/settings');
+  brandLogoUrl=((settings.settings||{}).brand_logo_url)||'';
+  paintBrandLogoPreview();
   $('saasEnabledToggle').checked=!!me.saas_enabled;
   $('settingsMeta').innerHTML=`
     <div class="queue-card"><span>Signed in</span><strong style="font-size:14px">${esc((me.user&&me.user.email)||me.username||'')}</strong></div>
@@ -2901,101 +3412,15 @@ async function loadMoney(){
       Proposals and open invoices are <em>not</em> revenue. Confirm paid under Deals or here; refunds reduce collected.`;
   }
   $('moneyStats').innerHTML=`
-    <button type="button" class="queue-card" data-goto="deals"><span>Collected</span><strong style="font-size:15px">${fmt(collected)}</strong><span class="kpi-hint">→ Deals</span></button>
-    <button type="button" class="queue-card" data-goto="deals"><span>Invoiced outstanding</span><strong style="font-size:15px">${fmt(outstanding)}</strong><span class="kpi-hint">→ Deals</span></button>
-    <div class="queue-card"><span>Stripe</span><strong style="font-size:14px">${prov.stripe&&prov.stripe.configured?'configured':'not set'}</strong></div>
-    <div class="queue-card"><span>PayPal / Payoneer / Skrill</span><strong style="font-size:13px">${[prov.paypal&&prov.paypal.configured&&'PayPal',prov.payoneer&&prov.payoneer.configured&&'Payoneer',prov.skrill&&prov.skrill.configured&&'Skrill'].filter(Boolean).join(', ')||'manual only'}</strong></div>`;
+    <button type="button" class="queue-card" data-goto="money:ledger"><span>Collected</span><strong style="font-size:15px">${fmt(collected)}</strong><span class="kpi-hint">→ Ledger</span></button>
+    <button type="button" class="queue-card" data-goto="money:invoices"><span>Invoiced outstanding</span><strong style="font-size:15px">${fmt(outstanding)}</strong><span class="kpi-hint">→ Invoices &amp; QR</span></button>
+    <button type="button" class="queue-card" data-goto="money:settings"><span>Stripe</span><strong style="font-size:14px">${prov.stripe&&prov.stripe.configured?'configured':'not set'}</strong><span class="kpi-hint">→ Settings</span></button>
+    <button type="button" class="queue-card" data-goto="paySetup"><span>PayPal / Payoneer / Skrill</span><strong style="font-size:13px">${[prov.paypal&&prov.paypal.configured&&'PayPal',prov.payoneer&&prov.payoneer.configured&&'Payoneer',prov.skrill&&prov.skrill.configured&&'Skrill'].filter(Boolean).join(', ')||'manual only'}</strong><span class="kpi-hint">→ Pay setup</span></button>`;
   bindDashKpis($('moneyStats'));
   const invoices=inv.invoices||[];
-  const tb=$('invoicesTable').querySelector('tbody');
-  const moneyInvPager=ensurePagerHost($('invoicesTable').closest('.sales-table-wrap'),'moneyInvoicesPager');
-  const moneyInvSlice=pageSlice(invoices,'moneyInvoices');
-  if(!invoices.length){
-    tb.innerHTML='<tr><td colspan="5" data-label=""><div class="empty-card">No invoices yet. Create one from a prospect drawer (Create proposal).</div></td></tr>';
-    if(moneyInvPager) moneyInvPager.innerHTML='';
-  }else{
-    tb.innerHTML=moneyInvSlice.items.map(i=>{
-      const liveLink=i.hosted_url&&!String(i.hosted_url).includes('/placeholder/');
-      const link=liveLink
-        ?`<a class="chip ok" href="${esc(i.hosted_url)}" target="_blank" rel="noopener">Open pay link</a>`
-        :(i.hosted_url?`<span class="hint" title="${esc(i.pay_instructions||'')}">Link pending</span>`:'');
-      const copyPay=(i.pay_instructions&&['payoneer','skrill','manual'].includes(String(i.provider||'').toLowerCase()))
-        ?`<button type="button" data-copy-inv="${i.id}">Copy pay instructions</button>`:'';
-      const docs=`<button type="button" data-inv-view="${i.id}">View</button>
-        <a class="chip ok" href="/api/sales/invoices/${i.id}/pdf" target="_blank" rel="noopener">PDF</a>
-        <button type="button" data-inv-compose="${i.id}">Copy message</button>
-        <button type="button" class="primary" data-inv-send="${i.id}">Send email + PDF</button>`;
-      const payBtn=i.status==='open'
-        ?`<button type="button" class="primary" data-pay="${i.id}" data-number="${esc(i.number)}" data-total="${esc(String(i.total))}" data-currency="${esc(i.currency||'')}">Confirm paid</button>`
-        :'';
-      return `<tr>
-      <td data-label="Number"><strong>${esc(i.number)}</strong></td>
-      <td data-label="Status"><span class="status-pill ${esc(i.status)}">${esc(i.status)}</span></td>
-      <td data-label="Provider">${esc(i.provider)}</td>
-      <td data-label="Total">${esc(fmtMoney(i.total,i.currency))}${i.is_test_mode?' <span class="hint">test</span>':''}</td>
-      <td data-label="Actions"><div class="action-stack">${docs}${link||''}${copyPay||''}${payBtn||''}</div></td>
-    </tr>`;
-    }).join('');
-    renderPager(moneyInvPager, moneyInvSlice, ()=>loadMoney());
-  }
-  const invById=Object.fromEntries(invoices.map(i=>[String(i.id), i]));
-  tb.querySelectorAll('[data-copy-inv]').forEach(btn=>btn.addEventListener('click',async()=>{
-    const text=(invById[btn.dataset.copyInv]||{}).pay_instructions||'';
-    try{ await navigator.clipboard.writeText(text); toast('Pay instructions copied — paste to the lead'); }
-    catch(e){ toast('Could not copy',true); }
-  }));
-  tb.querySelectorAll('[data-inv-view]').forEach(btn=>btn.addEventListener('click',async()=>{
-    try{
-      const v=await api('/api/sales/invoices/'+btn.dataset.invView+'/view');
-      const lines=(v.line_items||[]).map(li=>`• ${li.name||li.description||'Item'} × ${li.qty||li.quantity||1} — ${fmtMoney(li.amount,v.currency)}`).join('\n');
-      await uiForm({
-        title:`Invoice ${v.number}`,
-        message:`${v.billing_entity&&v.billing_entity.legal_name||'AppointHive'}\nBill to: ${(v.business&&v.business.name)||'—'}\nStatus: ${v.status}\nTotal: ${fmtMoney(v.total,v.currency)}\nIssued: ${fmtDateTime(v.created_at)}\n\n${lines||'(no line items)'}\n\n${v.pay_instructions||v.hosted_url||''}`,
-        confirmLabel:'Close',
-        fields:[]
-      });
-    }catch(e){ toast(e.message,true); }
-  }));
-  tb.querySelectorAll('[data-inv-compose]').forEach(btn=>btn.addEventListener('click',async()=>{
-    try{
-      const c=await api('/api/sales/invoices/'+btn.dataset.invCompose+'/compose-copy');
-      const text=`Subject: ${c.subject}\n\n${c.body}\n\n—\n${c.note||''}\nPDF: ${location.origin}${c.pdf_url}`;
-      await navigator.clipboard.writeText(text);
-      toast(c.smtp_ready?'Message copied (or use Send email + PDF)':'Invoice message copied — download PDF and attach manually');
-      if(!c.smtp_ready) window.open(c.pdf_url,'_blank');
-    }catch(e){ toast(e.message,true); }
-  }));
-  tb.querySelectorAll('[data-inv-send]').forEach(btn=>btn.addEventListener('click',async()=>{
-    try{
-      const c=await api('/api/sales/invoices/'+btn.dataset.invSend+'/compose-copy');
-      const form=await uiForm({
-        title:'Send invoice email with PDF',
-        message:c.smtp_ready?'Sends via SMTP with PDF attached.':'SMTP not ready — configure Mail settings under Money first.',
-        confirmLabel:'Send',
-        fields:[
-          {name:'to', label:'To', required:true, value:c.to||''},
-          {name:'subject', label:'Subject', required:true, value:c.subject||''},
-          {name:'body', label:'Body', type:'textarea', rows:8, value:c.body||''}
-        ]
-      });
-      if(!form) return;
-      await api('/api/sales/invoices/'+btn.dataset.invSend+'/send-email',{method:'POST',body:{to:form.to, subject:form.subject, body:form.body, template_id:c.template_id||null}});
-      toast('Invoice emailed with PDF');
-    }catch(e){ toast(e.message,true); }
-  }));
-  tb.querySelectorAll('[data-pay]').forEach(btn=>btn.addEventListener('click',async()=>{
-    const form=await uiForm({
-      title:'Confirm payment received',
-      message:`Record cash for invoice ${btn.dataset.number} (${fmtMoney(btn.dataset.total,btn.dataset.currency)}). Owner only.`,
-      confirmLabel:'Mark paid',
-      fields:[{name:'provider_ref', label:'Payment reference', placeholder:'Bank ref / Stripe id (optional)'}]
-    });
-    if(!form) return;
-    try{
-      await api('/api/sales/invoices/'+btn.dataset.pay+'/confirm-paid',{method:'POST',body:{provider_ref:form.provider_ref||''}});
-      toast('Payment recorded'); await loadMoney();
-    }catch(e){ toast(e.message,true); }
-  }));
+  moneyInvoicesCache=invoices;
+  if(pagerState.moneyInvoices) pagerState.moneyInvoices.page=1;
+  renderMoneyInvoices();
   const payments=pay.payments||[];
   const pt=$('paymentsTable').querySelector('tbody');
   const payPager=ensurePagerHost($('paymentsTable').closest('.sales-table-wrap'),'moneyPaymentsPager');
@@ -3037,10 +3462,12 @@ async function loadMoney(){
 
 let contactQueueLeads=[];
 let contactQueueModes=[];
-let contactQueueTab='all'; // all | selected
+let contactQueueTab='all'; // all | selected | booking
 let contactQueuePick=new Set(); // checkbox picks on All tab (before mark)
 let contactQueueQuery='';
+let contactQueueChannel='';
 let contactQueueLocations={}; // country -> [cities] from API
+let brandLogoUrl='';
 
 function contactQueueSelectedLeads(){
   return (contactQueueLeads||[]).filter(b=>b.marked_for_contact && !b.contacted && !b.opt_out);
@@ -3074,17 +3501,36 @@ function contactQueueMatchQuery(b, q){
   return q.split(/\s+/).filter(Boolean).every(tok=>hay.includes(tok));
 }
 
+function contactQueueBookingLeads(){
+  return (contactQueueLeads||[]).filter(b=>b.has_booking || (b.current_booking_software||'').trim());
+}
+function contactQueueChannelMatch(b, ch){
+  if(!ch) return true;
+  const c=b.channels||{};
+  const hasEmail=!!(c.email || b.email);
+  const hasWa=!!(c.whatsapp || b.phone || b.international_phone);
+  const hasIg=!!c.instagram;
+  const hasWeb=!!(b.website||'').trim();
+  if(ch==='email') return hasEmail;
+  if(ch==='whatsapp') return hasWa;
+  if(ch==='instagram') return hasIg;
+  if(ch==='website') return hasWeb;
+  if(ch==='no_email') return !hasEmail;
+  if(ch==='no_website') return !hasWeb;
+  if(ch==='ig_only') return hasIg && !hasEmail && !hasWa;
+  return true;
+}
 function contactQueueVisibleLeads(){
-  let base=contactQueueTab==='selected'?contactQueueSelectedLeads():(contactQueueLeads||[]).slice();
-  // All tab: unmarked first (work queue), already marked sink to bottom
+  let base;
+  if(contactQueueTab==='selected') base=contactQueueSelectedLeads();
+  else if(contactQueueTab==='booking') base=contactQueueBookingLeads();
+  else base=(contactQueueLeads||[]).slice();
+  // Keep API rank order on All (after unmark, lead returns to ranked place — not bottom)
   if(contactQueueTab==='all'){
-    base.sort((a,b)=>{
-      const am=a.marked_for_contact?1:0;
-      const bm=b.marked_for_contact?1:0;
-      if(am!==bm) return am-bm;
-      return (Number(b.rank_score)||0)-(Number(a.rank_score)||0);
-    });
+    base.sort((a,b)=>(Number(b.rank_score)||0)-(Number(a.rank_score)||0));
   }
+  const ch=contactQueueChannel||(($('contactQueueChannel')&&$('contactQueueChannel').value)||'');
+  if(ch) base=base.filter(b=>contactQueueChannelMatch(b,ch));
   const q=(contactQueueQuery||'').trim().toLowerCase();
   if(!q) return base;
   return base.filter(b=>contactQueueMatchQuery(b,q));
@@ -3136,12 +3582,18 @@ function syncContactQueueSearchUi(){
 
 function syncContactQueueTabs(){
   const q=(contactQueueQuery||'').trim().toLowerCase();
+  const ch=contactQueueChannel||(($('contactQueueChannel')&&$('contactQueueChannel').value)||'');
+  const pass=(list)=>list.filter(b=>{
+    if(ch && !contactQueueChannelMatch(b,ch)) return false;
+    if(q && !contactQueueMatchQuery(b,q)) return false;
+    return true;
+  });
   const allBase=contactQueueLeads||[];
   const selBase=contactQueueSelectedLeads();
-  const allN=q?allBase.filter(b=>contactQueueMatchQuery(b,q)).length:allBase.length;
-  const selN=q?selBase.filter(b=>contactQueueMatchQuery(b,q)).length:selBase.length;
-  if($('contactQueueAllCount')) $('contactQueueAllCount').textContent=String(allN);
-  if($('contactQueueSelectedCount')) $('contactQueueSelectedCount').textContent=String(selN);
+  const bookBase=contactQueueBookingLeads();
+  if($('contactQueueAllCount')) $('contactQueueAllCount').textContent=String(pass(allBase).length);
+  if($('contactQueueSelectedCount')) $('contactQueueSelectedCount').textContent=String(pass(selBase).length);
+  if($('contactQueueBookingCount')) $('contactQueueBookingCount').textContent=String(pass(bookBase).length);
   document.querySelectorAll('#contactQueueTabs [data-cq-tab]').forEach(btn=>{
     const on=btn.dataset.cqTab===contactQueueTab;
     btn.classList.toggle('active',on);
@@ -3156,21 +3608,43 @@ function syncContactQueueTabs(){
   if($('contactQueueMessageNext')) $('contactQueueMessageNext').disabled=!selBase.length;
 }
 
+function mapsUrlFor(b){
+  const direct=(b&&b.google_maps_url||'').trim();
+  if(direct) return direct;
+  const q=[b&&b.name,b&&b.address,b&&b.city,b&&b.country].filter(Boolean).join(' ').trim();
+  if(!q) return '';
+  return 'https://www.google.com/maps/search/?api=1&query='+encodeURIComponent(q);
+}
+function channelTagsHtml(b){
+  const ch=b.channels||{};
+  const tags=[
+    {on:!!(ch.email||b.email), cls:'email', label:'#email'},
+    {on:!!(ch.whatsapp||b.phone||b.international_phone), cls:'wa', label:'#whatsapp'},
+    {on:!!ch.instagram, cls:'ig', label:'#instagram'},
+    {on:!!(b.website||'').trim(), cls:'web', label:'#website'},
+    {on:!!(b.has_booking||(b.current_booking_software||'').trim()), cls:'web', label:'#booking'}
+  ];
+  return tags.map(t=>`<span class="ch-tag ${t.cls}${t.on?'':' off'}">${t.label}</span>`).join(' ');
+}
 function renderContactQueueList(){
   const list=$('contactQueueList');
   if(!list) return;
   syncContactQueueTabs();
   const isSelected=contactQueueTab==='selected';
+  const isBooking=contactQueueTab==='booking';
   const leads=contactQueueVisibleLeads();
   const q=(contactQueueQuery||'').trim();
   const pagerHost=ensurePagerHost(list,'contactQueuePager');
+  const tabLabel=isSelected?'To contact':(isBooking?'Has booking':'All');
   if(!leads.length){
-    if(q){
-      list.innerHTML=`<div class="empty-card">No matches for “${esc(q)}” on <strong>${isSelected?'To contact':'All'}</strong>.</div>`;
+    if(q || contactQueueChannel){
+      list.innerHTML=`<div class="empty-card">No matches on <strong>${tabLabel}</strong> for this search/filter.</div>`;
     }else{
       list.innerHTML=isSelected
         ? '<div class="empty-card">Nothing marked to contact yet. On <strong>All</strong>, pick leads and use <strong>Mark to contact</strong> at the bottom.</div>'
-        : '<div class="empty-card">No leads match this ranking mode. Try Balanced, or Discover + star prospects first.</div>';
+        : isBooking
+          ? '<div class="empty-card">No leads marked as already having booking. Use <strong>Has booking</strong> on a row.</div>'
+          : '<div class="empty-card">No leads match this ranking mode. Try Balanced, or Discover + star prospects first.</div>';
     }
     if(pagerHost) pagerHost.innerHTML='';
     return;
@@ -3179,30 +3653,38 @@ function renderContactQueueList(){
   list.innerHTML=slice.items.map((b,i)=>{
     const whyParts=(b.why_parts&&b.why_parts.length)?b.why_parts:String(b.why||'').split(',').map(s=>s.trim()).filter(Boolean);
     const chips=whyParts.map(w=>`<span class="chip ok">${esc(w)}</span>`).join('');
-    const ch=b.channels||{};
-    const reach=[
-      ch.email?'Email':'',
-      ch.whatsapp?'WA':'',
-      ch.instagram?'IG':'',
-      b.website?'Web':''
-    ].filter(Boolean).join(' · ')||'No channels';
     const picked=contactQueuePick.has(String(b.id));
     const already=!!b.marked_for_contact;
+    const hasBook=!!(b.has_booking||(b.current_booking_software||'').trim());
     const rankNo=slice.start+i+1;
-    const checkCell=isSelected?'':`<div class="checkcol"><input type="checkbox" data-cq-pick="${b.id}" ${picked?'checked':''} aria-label="Pick ${esc(b.name||'lead')}"></div>`;
-    const actions=isSelected?`
+    const mapsUrl=mapsUrlFor(b);
+    const checkCell=(isSelected||isBooking)?'':`<div class="checkcol"><input type="checkbox" data-cq-pick="${b.id}" ${picked?'checked':''} aria-label="Pick ${esc(b.name||'lead')}"></div>`;
+    let actions='';
+    if(isSelected){
+      actions=`
         <button type="button" class="primary" data-compose-queue="${b.id}">Message</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>
-        <button type="button" data-cq-unmark="${b.id}">Remove</button>`:`
+        <button type="button" data-cq-unmark="${b.id}">Remove</button>
+        <button type="button" data-cq-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>`;
+    }else if(isBooking){
+      actions=`
+        <button type="button" class="primary" data-compose-queue="${b.id}">Message</button>
+        <button type="button" data-open-prospect="${b.id}">Open</button>
+        <button type="button" data-cq-booking="${b.id}" data-booking-on="0">Clear booking</button>`;
+    }else{
+      actions=`
         <button type="button" class="primary" data-cq-mark="${b.id}" ${already?'disabled':''}>${already?'On To contact':'Mark to contact'}</button>
+        <button type="button" data-cq-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>`;
+    }
     return `
-    <article class="queue-lead ${isSelected?'no-check':''}" data-row="${b.id}">
+    <article class="queue-lead ${(isSelected||isBooking)?'no-check':''}" data-row="${b.id}" data-maps="${esc(mapsUrl)}" title="${mapsUrl?'Open Google Maps':''}">
       ${checkCell}
       <div class="queue-rank meta" style="min-width:48px;align-items:flex-start"><strong style="font-size:18px">#${rankNo}</strong><span class="sub">${esc(String(b.rank_score))}</span></div>
       <div class="queue-body">
-        <div class="biz">${esc(b.name||'—')}${already&&!isSelected?' <span class="badge queue">To contact</span>':''}</div>
-        <div class="sub"><span>${esc(b.country||'—')}</span> · <span>${esc(b.city||'—')}</span> · ${esc((b.stage&&b.stage.name)||'—')} · ${esc(reach)}</div>
+        <div class="biz">${esc(b.name||'—')}${already&&!isSelected?' <span class="badge queue">To contact</span>':''}${hasBook?' <span class="badge">Booking</span>':''}</div>
+        <div class="sub"><span>${esc(b.country||'—')}</span> · <span>${esc(b.city||'—')}</span> · ${esc((b.stage&&b.stage.name)||'—')}</div>
+        <div class="reach" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${channelTagsHtml(b)}</div>
         <div class="reach" style="margin-top:6px">${chips||`<span class="chip">${esc(b.why||'ranked')}</span>`}</div>
       </div>
       <div class="actions">${actions}
@@ -3233,9 +3715,8 @@ function renderContactQueueList(){
     if(btn.disabled) return;
     try{
       await markContactQueueIds([btn.dataset.cqMark], true);
-      contactQueueTab='selected';
       await loadContactQueue({keepTab:true});
-      toast('Added to To contact');
+      toast('Added to To contact — staying on All');
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('[data-cq-unmark]').forEach(btn=>btn.addEventListener('click',async ev=>{
@@ -3245,6 +3726,21 @@ function renderContactQueueList(){
       await loadContactQueue({keepTab:true});
       toast('Removed from To contact');
     }catch(e){ toast(e.message,true); }
+  }));
+  list.querySelectorAll('[data-cq-booking]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    try{
+      const on=btn.dataset.bookingOn==='1';
+      await markBookingIds([btn.dataset.cqBooking], on);
+      await loadContactQueue({keepTab:true});
+      toast(on?'Marked as has booking':'Cleared booking flag');
+    }catch(e){ toast(e.message,true); }
+  }));
+  list.querySelectorAll('article.queue-lead').forEach(row=>row.addEventListener('click',ev=>{
+    if(ev.target.closest('button,a,input,label,.actions,.checkcol')) return;
+    const url=(row.dataset.maps||'').trim();
+    if(url) window.open(url,'_blank','noopener');
+    else toast('No map location for this lead',true);
   }));
 }
 
@@ -3257,6 +3753,19 @@ async function markContactQueueIds(ids, marked){
     if(row) row.marked_for_contact=!!marked;
     contactQueuePick.delete(String(id));
   });
+}
+async function markBookingIds(ids, hasBooking){
+  const list=(ids||[]).map(Number).filter(Boolean);
+  if(!list.length) return;
+  const value=hasBooking?'Has booking':'';
+  for(const id of list){
+    await api('/api/sales/prospects/'+id,{method:'PATCH',body:{current_booking_software:value}});
+    const row=contactQueueLeads.find(x=>Number(x.id)===Number(id));
+    if(row){
+      row.current_booking_software=value;
+      row.has_booking=!!hasBooking;
+    }
+  }
 }
 
 async function loadContactQueue(opts={}){
@@ -3301,38 +3810,81 @@ async function saveContactQueueMode(){
   await loadContactQueue({keepTab:true});
 }
 
-async function createProposalInvoiceForProspect(businessId, {provider='manual', title=''}={}){
-  const plans=await api('/api/sales/plans');
+async function createProposalInvoiceForProspect(businessId, {provider='manual', title='', productLine='', quiet=false, planId=null}={}){
+  const wantProvider=(provider||'manual').toLowerCase();
+  let line=(productLine||'').toUpperCase();
+  let currency='USD';
+  if(!line){
+    try{
+      const lead=await api('/api/sales/prospects/'+businessId);
+      line=(lead.product_line||'STANDALONE').toUpperCase();
+      currency=(lead.currency||'USD').toUpperCase();
+    }catch(e){ line='STANDALONE'; }
+  }else{
+    try{
+      const lead=await api('/api/sales/prospects/'+businessId);
+      currency=(lead.currency||'USD').toUpperCase();
+    }catch(e){}
+  }
+  // Reuse open invoice for same lead+provider (avoids spam on one-click create)
+  try{
+    const existingInv=await api('/api/sales/invoices?business_id='+encodeURIComponent(businessId));
+    const hit=(existingInv.invoices||[]).find(i=>
+      String(i.provider||'').toLowerCase()===wantProvider && (i.status==='open'||i.status==='draft')
+    );
+    if(hit){
+      return {prop:{id:hit.proposal_id, reference:hit.number}, inv:hit, reused:true};
+    }
+  }catch(e){}
+  // Reuse latest open/sent/accepted proposal when quiet one-click
+  let reusedProp=null;
+  if(quiet){
+    try{
+      const props=await api('/api/sales/proposals?business_id='+encodeURIComponent(businessId));
+      reusedProp=(props.proposals||[]).find(p=>['draft','sent','accepted'].includes(String(p.status||'')));
+    }catch(e){}
+  }
+  const plans=await api('/api/sales/plans?product_line='+encodeURIComponent(line));
   const list=plans.plans||[];
-  const growth=list.find(p=>(p.code||'').toLowerCase()==='growth')||list[0];
-  if(!growth) throw new Error('No plans configured');
-  const form=await uiForm({
-    title:'Proposal + pay link',
-    message:'Creates a proposal and invoice. Hosted pay URL appears when Stripe/PayPal is configured.',
-    confirmLabel:'Create',
-    fields:[
-      {name:'plan_id', label:'Plan', type:'select', required:true, value:String(growth.id), options:list.map(p=>({value:String(p.id), label:p.name||p.code}))},
-      {name:'provider', label:'Invoice provider', type:'select', value:provider, options:[
-        {value:'manual',label:'Manual / bank'},{value:'stripe',label:'Stripe'},{value:'paypal',label:'PayPal'},
-        {value:'payoneer',label:'Payoneer'},{value:'skrill',label:'Skrill'}
-      ]},
-      {name:'title', label:'Title', value:title||'', placeholder:'Optional custom title'}
-    ]
-  });
-  if(!form) return null;
-  const plan=list.find(p=>String(p.id)===String(form.plan_id))||growth;
-  const prop=await api('/api/sales/proposals',{method:'POST',body:{
-    business_id:Number(businessId),
-    title:form.title||(plan.name+' proposal'),
-    currency:'USD',
-    plan_id:Number(form.plan_id),
-    tax_rate:0,
-    tax_label:'',
-    terms_url:''
-  }});
-  await api('/api/sales/proposals/'+prop.id+'/send',{method:'POST',body:{}});
-  const inv=await api('/api/sales/invoices',{method:'POST',body:{proposal_id:prop.id, provider:form.provider||'manual'}});
-  return {prop, inv};
+  const growth=list.find(p=>(p.code||'').toLowerCase().includes('growth'))||list[0];
+  if(!growth) throw new Error('No plans configured for '+line);
+  let form={plan_id:String(planId||growth.id), provider:wantProvider, title:title||''};
+  if(!quiet){
+    form=await uiForm({
+      title:'Proposal + pay link',
+      message:reusedProp
+        ?('Will attach invoice to existing proposal '+reusedProp.reference+' when possible. Hosted pay URL appears when Stripe/PayPal is configured.')
+        :('Creates a proposal and invoice. Hosted pay URL appears when Stripe/PayPal is configured.'),
+      confirmLabel:'Create',
+      fields:[
+        {name:'plan_id', label:'Plan', type:'select', required:true, value:String(planId||growth.id), options:list.map(p=>({value:String(p.id), label:p.name||p.code}))},
+        {name:'provider', label:'Invoice provider', type:'select', value:wantProvider, options:[
+          {value:'manual',label:'Manual / bank'},{value:'stripe',label:'Stripe'},{value:'paypal',label:'PayPal'},
+          {value:'payoneer',label:'Payoneer'},{value:'skrill',label:'Skrill'}
+        ]},
+        {name:'title', label:'Title', value:title||'', placeholder:'Optional custom title'}
+      ]
+    });
+    if(!form) return null;
+  }
+  let prop=reusedProp;
+  if(!prop){
+    const plan=list.find(p=>String(p.id)===String(form.plan_id))||growth;
+    prop=await api('/api/sales/proposals',{method:'POST',body:{
+      business_id:Number(businessId),
+      title:form.title||(plan.name+' proposal'),
+      currency:currency,
+      plan_id:Number(form.plan_id),
+      tax_rate:0,
+      tax_label:'',
+      terms_url:''
+    }});
+  }
+  if(prop.status==='draft' || !prop.status){
+    try{ await api('/api/sales/proposals/'+prop.id+'/send',{method:'POST',body:{}}); prop.status='sent'; }catch(e){}
+  }
+  const inv=await api('/api/sales/invoices',{method:'POST',body:{proposal_id:prop.id, provider:form.provider||wantProvider}});
+  return {prop, inv, reused:!!reusedProp};
 }
 
 async function sendPayLinkFlow(){
@@ -3344,7 +3896,7 @@ async function sendPayLinkFlow(){
       if(conn&&conn.connected){
         toast('AppointHive connected — open the prospect and use Send to delivery', true);
         await openProspectById(bid);
-        drawerTab='sales'; renderDrawer();
+        drawerTab='appointhive'; renderDrawer();
         return;
       }
     }catch(e){}
@@ -3386,6 +3938,270 @@ async function sendPayLinkFlow(){
   }catch(e){ toast(e.message,true); }
 }
 
+function paylinksStore(){
+  try{ return JSON.parse(localStorage.getItem('ah_paylinks')||'[]'); }catch(e){ return []; }
+}
+function savePaylinksStore(rows){
+  localStorage.setItem('ah_paylinks', JSON.stringify(rows||[]));
+}
+function qrUrlFor(data){
+  const payload=encodeURIComponent(data||'');
+  // Primary: QR Server; fallback SVG data URI when offline is handled by onerror on <img>
+  return 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data='+payload;
+}
+function paylinkPayload(r){
+  return (r.url&&!String(r.url).includes('/placeholder/')?r.url:'')||(r.pay_instructions||'')||r.url||'';
+}
+function mergePaylinkRows(invoiceRows){
+  const local=paylinksStore();
+  const byInv=new Map(local.filter(x=>x.invoice_id).map(x=>[String(x.invoice_id),x]));
+  const fromInv=(invoiceRows||[]).map(i=>{
+    const live=i.hosted_url&&!String(i.hosted_url).includes('/placeholder/');
+    const url=live?i.hosted_url:(i.pay_instructions||i.hosted_url||'');
+    const prev=byInv.get(String(i.id))||{};
+    return {
+      id: prev.id||('inv-'+i.id),
+      invoice_id:i.id,
+      number:i.number,
+      business_id:i.business_id,
+      prospect_name:prev.prospect_name||i.business_name||('Invoice '+i.number),
+      business_name:i.business_name||prev.prospect_name||'',
+      provider:i.provider||'manual',
+      url,
+      pay_instructions:i.pay_instructions||'',
+      status:i.status,
+      total:i.total,
+      currency:i.currency,
+      created_at:prev.created_at||'',
+      source:'invoice'
+    };
+  }).filter(r=>paylinkPayload(r));
+  const orphans=local.filter(x=>!x.invoice_id);
+  return fromInv.concat(orphans);
+}
+async function renderPaylinksHost(opts={}){
+  const hostId=opts.hostId||'paylinksHost';
+  const businessId=opts.businessId!=null?opts.businessId:null;
+  const host=$(hostId);
+  if(!host) return;
+  host.innerHTML='<div class="hint">Loading pay links…</div>';
+  let invoices=[];
+  try{
+    const qs=businessId!=null?('?business_id='+encodeURIComponent(businessId)):'';
+    const data=await api('/api/sales/invoices'+qs);
+    invoices=data.invoices||[];
+  }catch(e){
+    host.innerHTML=`<div class="empty-card">${esc(e.message||'Could not load invoices')}</div>`;
+    return;
+  }
+  let rows=mergePaylinkRows(invoices);
+  if(businessId==null) savePaylinksStore(rows);
+  if(businessId!=null) rows=rows.filter(r=>String(r.business_id)===String(businessId));
+  if(!rows.length){
+    host.innerHTML=businessId!=null
+      ?'<div class="empty-card">No pay links for this lead yet. Create one per provider above.</div>'
+      :'<div class="empty-card">No pay links yet. Create real invoices per provider — hosted URLs and QR codes appear here.</div>';
+    return;
+  }
+  host.innerHTML=rows.map(r=>{
+    const payload=paylinkPayload(r);
+    const live=r.url&&!String(r.url).includes('/placeholder/')&&!String(r.url).startsWith('Pay ')&&String(r.url).startsWith('http');
+    const invId=r.invoice_id||(String(r.id||'').startsWith('inv-')?String(r.id).slice(4):'');
+    return `
+    <div class="paylink-card" data-pl-id="${esc(r.id)}">
+      <img class="paylink-qr" src="${esc(qrUrlFor(payload))}" alt="QR for ${esc(r.provider)}" loading="lazy">
+      <div class="paylink-meta">
+        <strong>${esc(r.provider||'manual')}</strong>${r.number?` · <span class="sub">${esc(r.number)}</span>`:''}
+        <span class="status-pill ${esc(r.status||'')}">${esc(r.status||'')}</span>
+        <div class="sub">${esc(r.prospect_name||r.business_name||('#'+r.business_id))} · ${esc(r.currency||'')} ${r.total!=null?esc(String(r.total)):''}</div>
+        <div class="paylink-url">${esc(payload)}</div>
+        <div class="drawer-actions" style="margin-top:8px">
+          ${live?`<button type="button" class="primary" data-pl-open="${esc(r.id)}">Open</button>`:''}
+          <button type="button" data-pl-copy="${esc(r.id)}">Copy</button>
+          <a class="chip ok" href="${esc(qrUrlFor(payload))}" download="paylink-${esc(r.provider||'qr')}.png" target="_blank" rel="noopener">Download QR</a>
+          <button type="button" data-pl-print="${esc(r.id)}">Print QR</button>
+          ${invId?`<button type="button" data-inv-view="${esc(invId)}">View invoice</button>
+          <a class="chip ok" href="/api/sales/invoices/${esc(invId)}/pdf" target="_blank" rel="noopener">PDF</a>`:''}
+          ${invId&&(r.status==='open'||r.status==='draft')?`<button type="button" class="danger" data-inv-void="${esc(invId)}" data-number="${esc(r.number||'')}">Void</button>`:''}
+          ${r.source==='local'?`<button type="button" class="danger" data-pl-del="${esc(r.id)}">Delete</button>`:''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  const storeRows=()=> {
+    const all=paylinksStore();
+    return rows.map(r=>all.find(x=>String(x.id)===String(r.id))||r);
+  };
+  host.querySelectorAll('[data-pl-open]').forEach(btn=>btn.addEventListener('click',()=>{
+    const row=storeRows().find(x=>String(x.id)===String(btn.dataset.plOpen))||rows.find(x=>String(x.id)===String(btn.dataset.plOpen));
+    const url=row&&paylinkPayload(row);
+    if(url&&String(url).startsWith('http')) window.open(url,'_blank','noopener');
+  }));
+  host.querySelectorAll('[data-pl-copy]').forEach(btn=>btn.addEventListener('click',async()=>{
+    const row=storeRows().find(x=>String(x.id)===String(btn.dataset.plCopy))||rows.find(x=>String(x.id)===String(btn.dataset.plCopy));
+    if(!row) return;
+    try{ await navigator.clipboard.writeText(paylinkPayload(row)); toast('Copied'); }catch(e){ toast('Copy failed',true); }
+  }));
+  host.querySelectorAll('[data-pl-print]').forEach(btn=>btn.addEventListener('click',()=>{
+    const row=storeRows().find(x=>String(x.id)===String(btn.dataset.plPrint))||rows.find(x=>String(x.id)===String(btn.dataset.plPrint));
+    if(!row) return;
+    const payload=paylinkPayload(row);
+    const w=window.open('','_blank','noopener,width=420,height=520');
+    if(!w){ toast('Pop-up blocked',true); return; }
+    w.document.write(`<!doctype html><title>QR</title><body style="font-family:sans-serif;text-align:center;padding:24px"><h2>${esc(row.provider)} · ${esc(row.number||'pay link')}</h2><img src="${esc(qrUrlFor(payload))}" width="220" height="220"><p style="word-break:break-all">${esc(payload)}</p><script>window.onload=()=>window.print()<\/script></body>`);
+    w.document.close();
+  }));
+  host.querySelectorAll('[data-pl-del]').forEach(btn=>btn.addEventListener('click',async()=>{
+    const ok=await uiConfirm({title:'Delete local pay link?', confirmLabel:'Delete', danger:true});
+    if(!ok) return;
+    savePaylinksStore(paylinksStore().filter(x=>String(x.id)!==String(btn.dataset.plDel)));
+    renderPaylinksHost(opts);
+  }));
+  bindInvoiceCardActions(host, invoices.map(i=>({...i, business_name:i.business_name})), {
+    onPaid:async()=>{ await renderPaylinksHost(opts); if(appPanel==='money') await loadMoney(); },
+    onVoided:async()=>{ await renderPaylinksHost(opts); if(appPanel==='money') await loadMoney(); }
+  });
+}
+async function refreshDrawerPaylinks(){
+  if(!drawerLead||!$('drawerPaylinksHost')) return;
+  await renderPaylinksHost({hostId:'drawerPaylinksHost', businessId:drawerLead.id});
+}
+async function createDrawerPaylinkForProvider(provider){
+  if(!drawerLead) return;
+  const bid=drawerLead.id;
+  const prospectName=drawerLead.name||('#'+bid);
+  const productLine=(drawerLead.product_line||'STANDALONE').toUpperCase();
+  let ahConnected=false;
+  try{
+    const conn=await api('/api/sales/be/connection');
+    ahConnected=!!(conn&&conn.connected);
+    beConnCache=conn||{};
+  }catch(e){}
+  if(ahConnected && productLine==='STANDALONE' && (provider==='stripe'||provider==='paypal')){
+    toast('AppointHive connected — use AppointHive tab for Stripe/PayPal card checkout', true);
+    drawerTab='appointhive'; renderDrawer();
+    return;
+  }
+  try{
+      const res=await createProposalInvoiceForProspect(bid,{
+      provider,
+      title:prospectName+' · '+provider,
+      productLine,
+      quiet:true
+    });
+    if(!res) return;
+    const inv=res.inv||{};
+    const rows=paylinksStore();
+    rows.unshift({
+      id:'inv-'+(inv.id||Date.now()),
+      invoice_id:inv.id,
+      number:inv.number,
+      business_id:bid,
+      prospect_name:prospectName,
+      business_name:prospectName,
+      provider:inv.provider||provider,
+      url:inv.hosted_url||'',
+      pay_instructions:inv.pay_instructions||'',
+      status:inv.status,
+      total:inv.total,
+      currency:inv.currency,
+      created_at:new Date().toISOString(),
+      source:'invoice'
+    });
+    savePaylinksStore(rows);
+    toast(res.reused
+      ?((inv.provider||provider)+' pay link already open — showing existing')
+      :((inv.provider||provider)+' pay link ready'));
+    await refreshDrawerPaylinks();
+    if(dealsTab==='paylinks') renderPaylinksHost().catch(()=>{});
+    if(appPanel==='money') loadMoney().catch(()=>{});
+  }catch(e){ toast(e.message||'Could not create pay link', true); }
+}
+async function createPaylinksFlow(){
+  const bid=await pickProspectField('Prospect for pay links');
+  if(bid==null) return;
+  let prospectName='#'+bid;
+  let productLine='STANDALONE';
+  try{
+    const p=await api('/api/sales/prospects/'+bid);
+    prospectName=p.name||prospectName;
+    productLine=(p.product_line||'STANDALONE').toUpperCase();
+  }catch(e){}
+  let ahConnected=false;
+  try{
+    const conn=await api('/api/sales/be/connection');
+    ahConnected=!!(conn&&conn.connected);
+    beConnCache=conn||{};
+  }catch(e){}
+  const defaultProviders=ahConnected&&productLine==='STANDALONE'?'manual,payoneer,skrill':'manual,stripe,paypal';
+  const form=await uiForm({
+    title:'Create pay links + QR',
+    message:ahConnected&&productLine==='STANDALONE'
+      ?('AppointHive is connected — Stripe/PayPal product checkout stays on AppointHive. Creating Manual/Payoneer/Skrill invoices for '+prospectName+'.')
+      :('Creates a real proposal + invoice per provider for '+prospectName+'. Hosted pay URLs and QR codes appear in this tab.'),
+    confirmLabel:'Create invoices',
+    fields:[
+      {name:'providers', label:'Providers (comma)', value:defaultProviders, placeholder:'manual,stripe,paypal,payoneer,skrill'}
+    ]
+  });
+  if(!form) return;
+  const providers=String(form.providers||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
+  if(!providers.length){ toast('Pick at least one provider',true); return; }
+  let ok=0, fail=0;
+  for(const provider of providers){
+    try{
+      if(ahConnected && productLine==='STANDALONE' && (provider==='stripe'||provider==='paypal')){
+        fail++; continue;
+      }
+      const res=await createProposalInvoiceForProspect(bid,{provider, title:prospectName+' · '+provider, productLine});
+      if(!res){ fail++; continue; }
+      const inv=res.inv||{};
+      const rows=paylinksStore();
+      rows.unshift({
+        id:'inv-'+(inv.id||Date.now()),
+        invoice_id:inv.id,
+        number:inv.number,
+        business_id:bid,
+        prospect_name:prospectName,
+        provider:inv.provider||provider,
+        url:inv.hosted_url||'',
+        pay_instructions:inv.pay_instructions||'',
+        status:inv.status,
+        total:inv.total,
+        currency:inv.currency,
+        created_at:new Date().toISOString(),
+        source:'invoice'
+      });
+      savePaylinksStore(rows);
+      ok++;
+    }catch(e){ fail++; toast((provider+': '+(e.message||'failed')).slice(0,120), true); }
+  }
+  dealsTab='paylinks';
+  document.querySelectorAll('#dealsTabs [data-deals-tab]').forEach(b=>b.classList.toggle('active',b.dataset.dealsTab===dealsTab));
+  if($('dealsProposalsPane')) $('dealsProposalsPane').classList.add('hidden');
+  if($('dealsPaylinksPane')) $('dealsPaylinksPane').classList.remove('hidden');
+  await renderPaylinksHost();
+  if(appPanel==='deals') try{ await loadDeals(); }catch(e){}
+  toast(ok?`${ok} pay link invoice(s) ready`+(fail?` · ${fail} skipped`:'') : 'No invoices created', !ok);
+}
+function paintBrandLogoPreview(){
+  const img=$('brandLogoPreview');
+  if(!img) return;
+  if(brandLogoUrl){
+    img.src=brandLogoUrl;
+    img.classList.remove('hidden');
+  }else{
+    img.removeAttribute('src');
+    img.classList.add('hidden');
+  }
+}
+async function loadBrandLogoSetting(){
+  try{
+    const s=await api('/api/sales/settings');
+    brandLogoUrl=((s.settings||{}).brand_logo_url)||'';
+    paintBrandLogoPreview();
+  }catch(e){}
+}
 async function loadDeals(){
   const [props, inv, dash]=await Promise.all([
     api('/api/sales/proposals'),
@@ -3397,8 +4213,8 @@ async function loadDeals(){
   const fmt=o=>Object.keys(o).length?Object.entries(o).map(([c,v])=>`${c} ${Number(v).toFixed(0)}`).join(' · '):'—';
   if($('dealsStats')){
     $('dealsStats').innerHTML=`
-      <button type="button" class="queue-card" data-goto="money"><span>Collected</span><strong style="font-size:15px">${fmt(collected)}</strong><span class="kpi-hint">→ Money</span></button>
-      <button type="button" class="queue-card" data-goto="money"><span>Outstanding</span><strong style="font-size:15px">${fmt(outstanding)}</strong><span class="kpi-hint">→ Money</span></button>
+      <button type="button" class="queue-card" data-goto="money:ledger"><span>Collected</span><strong style="font-size:15px">${fmt(collected)}</strong><span class="kpi-hint">→ Ledger</span></button>
+      <button type="button" class="queue-card" data-goto="money:invoices"><span>Outstanding</span><strong style="font-size:15px">${fmt(outstanding)}</strong><span class="kpi-hint">→ Invoices &amp; QR</span></button>
       <div class="queue-card"><span>Proposals</span><strong>${(props.proposals||[]).length}</strong></div>
       <div class="queue-card"><span>Open invoices</span><strong>${(inv.invoices||[]).filter(i=>i.status==='open').length}</strong></div>`;
     bindDashKpis($('dealsStats'));
@@ -3580,14 +4396,56 @@ function isMobileClient(){
 }
 function isAndroidClient(){ return /Android/i.test(navigator.userAgent||''); }
 function isIOSClient(){ return /iPhone|iPad|iPod/i.test(navigator.userAgent||''); }
+function normalizeEmailBodyBreaks(body){
+  // Keep real paragraph breaks for Zoho / mailto (avoid one giant paragraph)
+  return String(body||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/\n/g,'\r\n');
+}
+function brandLogoAbsoluteUrl(){
+  if(!brandLogoUrl) return '';
+  return /^https?:\/\//i.test(brandLogoUrl)?brandLogoUrl:(location.origin+brandLogoUrl);
+}
+function emailSignaturePlain(){
+  const abs=brandLogoAbsoluteUrl();
+  if(!abs) return '';
+  return '\r\n\r\n--\r\nAppointHive\r\nLogo: '+abs;
+}
+function emailSignatureHtml(){
+  const abs=brandLogoAbsoluteUrl();
+  if(!abs) return '';
+  return '<br><br>--<br><img src="'+esc(abs)+'" alt="Logo" height="48" style="max-height:48px;width:auto;display:block;margin:8px 0"><br>';
+}
+function withEmailSignature(body, {html=false}={}){
+  const base=String(body||'');
+  if(!brandLogoUrl) return base;
+  if(base.includes(brandLogoUrl) || base.includes(brandLogoAbsoluteUrl())) return base;
+  if(html){
+    const withBr=base.replace(/\r\n|\n|\r/g,'<br>');
+    return withBr+emailSignatureHtml();
+  }
+  return base+emailSignaturePlain();
+}
+async function copyEmailHtmlSignature(plainBody){
+  const abs=brandLogoAbsoluteUrl();
+  if(!abs || !navigator.clipboard || !window.ClipboardItem) return false;
+  const html=withEmailSignature(plainBody,{html:true});
+  const plain=normalizeEmailBodyBreaks(withEmailSignature(plainBody));
+  try{
+    await navigator.clipboard.write([new ClipboardItem({
+      'text/html': new Blob([html],{type:'text/html'}),
+      'text/plain': new Blob([plain],{type:'text/plain'})
+    })]);
+    return true;
+  }catch(e){ return false; }
+}
 function zohoComposeUrl(to,subject,body){
-  // Zoho Mail web composer (mailto handler style) — fills To, Subject, Body
-  const ct=`mailto:${to}?subject=${encodeURIComponent(subject||'')}&body=${encodeURIComponent(body||'')}`;
+  // Plain body with CRLF for Zoho mailto bridge; HTML logo also copied to clipboard by openChannelApp
+  const clean=normalizeEmailBodyBreaks(withEmailSignature(body));
+  const ct=`mailto:${to}?subject=${encodeURIComponent(subject||'')}&body=${encodeURIComponent(clean)}`;
   return `https://mail.zoho.com/mail/compose.do?extsrc=mailto&mode=compose&ct=${encodeURIComponent(ct)}`;
 }
 function mailtoComposeUrl(to,subject,body){
-  // Opens the device mail app — set Zoho Mail as the default handler to land in Zoho
-  return `mailto:${to}?subject=${encodeURIComponent(subject||'')}&body=${encodeURIComponent(body||'')}`;
+  const clean=normalizeEmailBodyBreaks(withEmailSignature(body));
+  return `mailto:${to}?subject=${encodeURIComponent(subject||'')}&body=${encodeURIComponent(clean)}`;
 }
 function whatsappWebUrl(phone,body){
   return `https://web.whatsapp.com/send?phone=${encodeURIComponent(phone)}&text=${encodeURIComponent(body||'')}`;
@@ -3830,6 +4688,8 @@ function actionButtons(b){
   if(c.email)parts.push(`<button type="button" data-compose="${b.id}" data-channel="email">Email</button>`);
   if(c.whatsapp)parts.push(`<button type="button" data-compose="${b.id}" data-channel="whatsapp">WA</button>`);
   if(c.instagram)parts.push(`<button type="button" data-compose="${b.id}" data-channel="instagram">IG</button>`);
+  const hasBook=!!(b.current_booking_software||'').trim();
+  parts.push(`<button type="button" data-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>`);
   parts.push(`<button type="button" data-open="${b.id}">Details</button>`);
   // Do not stopPropagation here — Email/WA/IG/Details are handled by the #rows click listener
   return `<div class="lead-actions actions">${parts.join('')}</div>`;
@@ -3856,10 +4716,11 @@ function paint(){
     const starred=b.marked_for_contact?'on':'';
     const follow=b.next_follow_up_at?`<div class="sub">Follow up · ${esc(dateOnly(b.next_follow_up_at))}</div>`:'';
     const labels=b.search_labels&&b.search_labels!==b.category?`<div class="sub">${esc(b.search_labels)}</div>`:'';
-    return `<div class="lead lead-row ${drawerLead&&drawerLead.id===b.id?'active':''}" data-row="${b.id}">
+    const hasBook=!!(b.current_booking_software||'').trim();
+    return `<div class="lead lead-row ${drawerLead&&drawerLead.id===b.id?'active':''}" data-row="${b.id}" data-maps="${esc(mapsUrlFor(b))}">
       <div class="checkcol"><input type="checkbox" data-select="${b.id}" ${checked} aria-label="Select ${esc(b.name)}"></div>
       <div class="starcol"><button type="button" class="starbtn ${starred}" data-mark="${b.id}" title="Mark for contact">${b.marked_for_contact?'★':'☆'}</button></div>
-      <div class="lead-biz"><div class="biz">${esc(b.name)}</div><div class="sub">${esc(b.category||'—')} · ${esc(b.city)}, ${esc(b.country)}</div>${labels}${follow}</div>
+      <div class="lead-biz"><div class="biz">${esc(b.name)}${hasBook?' <span class="badge">Booking</span>':''}</div><div class="sub">${esc(b.category||'—')} · ${esc(b.city)}, ${esc(b.country)}</div>${labels}${follow}</div>
       <div class="lead-reach">${reachCell(b)}</div>
       <div class="lead-meta meta">${b.rating!=null?`<div class="rating">★ ${esc(b.rating)}</div>`:'<div class="sub">—</div>'}${statusBadge(b)}</div>
       ${actionButtons(b)}
@@ -4136,7 +4997,15 @@ async function copyComposeMessage(){
   if(!composeLead)return;
   const channel=$('composeChannel').value;
   const subject=($('composeSubject')&&$('composeSubject').value||'').trim();
-  const body=($('composeBody')&&$('composeBody').value||'').trim();
+  let body=($('composeBody')&&$('composeBody').value||'').trim();
+  if(channel==='email'){
+    const htmlOk=await copyEmailHtmlSignature(body);
+    body=withEmailSignature(body).trim();
+    if(htmlOk){
+      toast('Copied with logo image (HTML) — paste into Zoho / mail');
+      return;
+    }
+  }
   const text=channel==='email'&&subject?`Subject: ${subject}\n\n${body}`:body;
   if(!text){ toast('Nothing to copy',true); return; }
   try{
@@ -4171,15 +5040,31 @@ async function openCompose(b,preferred){
   $('igCopyBox').classList.add('hidden');
   clearComposeConfirmReturn();
   fillComposeTemplates(composePreferred);
+  setComposeTab('message');
   $('composeModal').classList.remove('hidden');
   document.body.style.overflow='hidden';
   const scroll=$('composeModal').querySelector('.modal-scroll');
   if(scroll)scroll.scrollTop=0;
   $('composeBody').focus();
-  // On phones, tapping Email / WA / IG should hand off to the installed app right away
-  if(isMobileClient() && ['email','whatsapp','instagram'].includes(composePreferred)){
-    setTimeout(()=>{ openChannelApp().catch(()=>{}); }, 350);
-  }
+  // Do not auto-open WhatsApp / Zoho / IG — user opens the message modal first, then Open app
+  syncComposeMarkBtn();
+}
+function setComposeTab(name){
+  document.querySelectorAll('#composeTabs [data-compose-tab]').forEach(btn=>{
+    const on=btn.dataset.composeTab===name;
+    btn.classList.toggle('active',on);
+    btn.setAttribute('aria-selected', on?'true':'false');
+  });
+  document.querySelectorAll('#composeModal [data-compose-pane]').forEach(pane=>{
+    pane.classList.toggle('active', pane.dataset.composePane===name);
+  });
+}
+function syncComposeMarkBtn(){
+  const btn=$('composeMarkBtn');
+  if(!btn||!composeLead) return;
+  const already=!!composeLead.marked_for_contact;
+  btn.textContent=already?'On To contact':'Mark to contact';
+  btn.disabled=already;
 }
 function closeCompose(){
   clearComposeConfirmReturn();
@@ -4229,17 +5114,20 @@ async function openChannelApp(){
   let tip='';
   if(channel==='email'){
     const to=firstEmail(b);if(!to){toast('No email.',true);return}
-    const clip=subject?`Subject: ${subject}\n\n${body}`:body;
-    const copied=await copyTextQuiet(clip);
+    const signed=withEmailSignature(body);
+    const clip=subject?`Subject: ${subject}\n\n${signed}`:signed;
+    const htmlCopied=await copyEmailHtmlSignature(body);
+    const copied=htmlCopied||await copyTextQuiet(clip);
     if(mobile){
-      // mailto opens Zoho Mail when it is the device default email app
       launchExternal(mailtoComposeUrl(to,subject,body));
-      tip=copied
-        ?'Mail app opened (use Zoho Mail as default). Message copied if compose fields are empty.'
-        :'Mail app opened. Set Zoho Mail as your default email app to open Zoho.';
+      tip=htmlCopied
+        ?'Mail app opened. HTML signature (logo image) copied — paste into compose if needed.'
+        :(copied?'Mail app opened. Message + logo URL copied.':'Mail app opened. Set Zoho Mail as default.');
     }else{
       launchExternal(zohoComposeUrl(to,subject,body));
-      tip='Opened Zoho Mail compose. Confirm sent when done.';
+      tip=htmlCopied
+        ?'Zoho opened with line breaks. Logo HTML copied — paste once if the image is missing.'
+        :'Opened Zoho Mail compose (logo URL in body). Confirm sent when done.';
     }
   }else if(channel==='whatsapp'){
     const phone=phoneDigits(b);if(!phone){toast('No phone.',true);return}
@@ -4359,6 +5247,8 @@ function renderDrawer(){
       <button type="button" data-dtab="overview" class="${tab==='overview'?'active':''}">Overview</button>
       <button type="button" data-dtab="contacts" class="${tab==='contacts'?'active':''}">Contacts</button>
       <button type="button" data-dtab="sales" class="${tab==='sales'?'active':''}">Sales</button>
+      <button type="button" data-dtab="proposal" class="${tab==='proposal'?'active':''}">Proposal / pay</button>
+      <button type="button" data-dtab="appointhive" class="${tab==='appointhive'?'active':''}">AppointHive</button>
       <button type="button" data-dtab="pipeline" class="${tab==='pipeline'?'active':''}">Pipeline</button>
       <button type="button" data-dtab="activity" class="${tab==='activity'?'active':''}">Activity</button>
     </div>
@@ -4375,8 +5265,11 @@ function renderDrawer(){
       <div class="sub" style="margin-top:8px">Place ID · ${esc(String(b.place_id||'').replace(/^places\//,''))}</div>
       <div class="links" style="margin-top:10px">${b.google_maps_url?`<a href="${esc(b.google_maps_url)}" target="_blank" rel="noopener noreferrer">Google Maps</a>`:''}</div>
       <div class="drawer-actions" style="margin-top:12px">
-        <button type="button" class="primary" data-dtab-jump="contacts">Edit contacts</button>
+        <button type="button" class="primary" id="drawerMarkToContactBtn">${b.marked_for_contact?'Unmark to contact':'Mark to contact'}</button>
+        <button type="button" id="drawerMarkBookingBtn">${(b.current_booking_software||'').trim()?'Clear has booking':'Mark has booking'}</button>
+        <button type="button" data-dtab-jump="contacts">Edit contacts</button>
         <button type="button" data-dtab-jump="sales">Sales / discovery</button>
+        <button type="button" data-dtab-jump="proposal">Proposal / pay</button>
       </div>
     </div>
     <div class="drawer-pane ${tab==='contacts'?'active':''}" data-dpane="contacts">
@@ -4425,9 +5318,30 @@ function renderDrawer(){
         <button type="button" id="saveDemoBtn">Save demo</button>
         <button type="button" id="linkProspectBtn">Link product line</button>
         <button type="button" id="undoStageBtn">Undo last stage</button>
-        <button type="button" class="primary" id="createProposalBtn">Proposal / pay link</button>
+        <button type="button" data-dtab-jump="proposal">Open proposal / pay</button>
+        <button type="button" data-dtab-jump="appointhive">Open AppointHive</button>
       </div>
-      <div id="beDrawerBlock" class="prov-card" style="margin-top:14px">
+    </div>
+    <div class="drawer-pane ${tab==='proposal'?'active':''}" data-dpane="proposal">
+      <p class="hint" style="margin-top:0">Create a pay link + QR per provider for <strong>${esc(b.name||'')}</strong>. View, copy, open, and print below.</p>
+      <div class="field"><label>Create pay link by provider</label>
+        <div class="provider-create-row" id="drawerProviderCreateRow">
+          <button type="button" class="primary" data-drawer-pay-provider="manual">Manual</button>
+          ${!(beConnCache&&beConnCache.connected&&(b.product_line||'STANDALONE').toUpperCase()==='STANDALONE')?`<button type="button" data-drawer-pay-provider="stripe">Stripe</button>
+          <button type="button" data-drawer-pay-provider="paypal">PayPal</button>`:`<span class="hint" style="align-self:center">Stripe/PayPal → AppointHive tab</span>`}
+          <button type="button" data-drawer-pay-provider="payoneer">Payoneer</button>
+          <button type="button" data-drawer-pay-provider="skrill">Skrill</button>
+        </div>
+      </div>
+      <div class="drawer-actions" style="margin-bottom:10px">
+        <button type="button" class="primary" id="createProposalBtn">Create with plan picker…</button>
+        <button type="button" id="drawerRefreshPaylinksBtn">Refresh</button>
+      </div>
+      <h4 class="panel-title" style="margin-top:4px">This lead · pay links &amp; QR</h4>
+      <div id="drawerPaylinksHost" class="invoice-card-grid"><div class="hint">Loading…</div></div>
+    </div>
+    <div class="drawer-pane ${tab==='appointhive'?'active':''}" data-dpane="appointhive">
+      <div id="beDrawerBlock" class="prov-card" style="margin-top:0">
         <strong>AppointHive Sales OS → Booking Engine</strong>
         <div class="sub" id="beDrawerStatus">Checking connection…</div>
         <div id="beDrawerPrices" class="hint" style="margin-top:8px"></div>
@@ -4483,6 +5397,7 @@ function renderDrawer(){
   $('drawerBody').querySelectorAll('select[data-score-key]').forEach(sel=>sel.addEventListener('change',refreshScorePreview));
   refreshScorePreview();
   hydrateBeDrawer().catch(()=>{});
+  if(tab==='proposal') refreshDrawerPaylinks().catch(()=>{});
 }
 
 async function hydrateBeDrawer(){
@@ -4677,6 +5592,12 @@ $('notifBtn')&&$('notifBtn').addEventListener('click',e=>{
   toggleMenu('notifBtn','notifMenu');
   if(opening) refreshNotifications().catch(()=>{});
 });
+$('notifClearAll')&&$('notifClearAll').addEventListener('click',e=>{
+  e.preventDefault(); e.stopPropagation();
+  clearAllNotifications(_notifLastItems.length?_notifLastItems:[]);
+  refreshNotifications().catch(()=>{});
+  toast('Notifications cleared');
+});
 $('profileBtn')&&$('profileBtn').addEventListener('click',e=>{
   e.stopPropagation();
   toggleMenu('profileBtn','profileMenu');
@@ -4684,7 +5605,17 @@ $('profileBtn')&&$('profileBtn').addEventListener('click',e=>{
 $('profileSettingsBtn')&&$('profileSettingsBtn').addEventListener('click',()=>{ closeTopMenus(); setAppPanel('settings'); });
 $('notifMenu')&&$('notifMenu').addEventListener('click',e=>e.stopPropagation());
 $('profileMenu')&&$('profileMenu').addEventListener('click',e=>e.stopPropagation());
-document.addEventListener('click',()=>closeTopMenus());
+document.addEventListener('click',e=>{
+  const gotoBtn=e.target.closest('[data-goto]');
+  if(gotoBtn && gotoBtn.dataset.goto){
+    e.preventDefault();
+    closeTopMenus();
+    if(!$('drawer').classList.contains('hidden')) closeDrawer();
+    setAppPanel(gotoBtn.dataset.goto);
+    return;
+  }
+  closeTopMenus();
+});
 $('pipelineRefresh')&&$('pipelineRefresh').addEventListener('click',()=>loadPipeline().catch(e=>toast(e.message,true)));
 $('pipelineLine')&&$('pipelineLine').addEventListener('change',()=>loadPipeline().catch(e=>toast(e.message,true)));
 $('tasksRefresh')&&$('tasksRefresh').addEventListener('click',()=>loadTasks().catch(e=>toast(e.message,true)));
@@ -4697,7 +5628,12 @@ $('prospectsCountry')&&$('prospectsCountry').addEventListener('change',()=>{
   loadProspects().catch(e=>toast(e.message,true));
 });
 $('prospectsCity')&&$('prospectsCity').addEventListener('change',()=>loadProspects().catch(e=>toast(e.message,true)));
-$('activitiesRefresh')&&$('activitiesRefresh').addEventListener('click',()=>loadActivitiesFeed().catch(e=>toast(e.message,true)));
+$('activitiesRefresh')&&$('activitiesRefresh').addEventListener('click',()=>{
+  if(commsTab==='invoices') loadCommsInvoices().catch(e=>toast(e.message,true));
+  else loadActivitiesFeed().catch(e=>toast(e.message,true));
+});
+document.querySelectorAll('#commsTabs [data-comms-tab]').forEach(btn=>btn.addEventListener('click',()=>setCommsTab(btn.dataset.commsTab)));
+document.querySelectorAll('#moneyTabs [data-money-tab]').forEach(btn=>btn.addEventListener('click',()=>setMoneyTab(btn.dataset.moneyTab)));
 $('activityCreateBtn')&&$('activityCreateBtn').addEventListener('click',()=>createActivityFlow().catch(e=>toast(e.message,true)));
 $('demosRefresh')&&$('demosRefresh').addEventListener('click',()=>loadDemos().catch(e=>toast(e.message,true)));
 $('demoAssetsRefresh')&&$('demoAssetsRefresh').addEventListener('click',()=>loadDemoAssets().catch(e=>toast(e.message,true)));
@@ -4725,10 +5661,14 @@ $('beSaveManual')&&$('beSaveManual').addEventListener('click',async()=>{
   try{
     const base=($('beBaseUrl')&&$('beBaseUrl').value||'').trim();
     const secret=($('beSharedSecret')&&$('beSharedSecret').value||'').trim();
-    if(!base||!secret){ toast('AppointHive URL and shared secret required',true); return; }
-    await api('/api/sales/be/connection/manual',{method:'POST',body:{base_url:base, shared_secret:secret}});
+    if(!base){ toast('AppointHive base URL required',true); return; }
+    if(!secret && !(beConnCache&&beConnCache.secret_configured)){
+      toast('Shared secret required (or generate a pairing code)',true); return;
+    }
+    const body={base_url:base, shared_secret:secret||''};
+    await api('/api/sales/be/connection/manual',{method:'POST',body});
     if($('beSharedSecret')) $('beSharedSecret').value='';
-    toast('Saved — click Test connection');
+    toast(secret?'Saved — click Test connection':'URL saved (kept existing secret) — click Test connection');
     await loadAppointHive();
   }catch(e){ toast(e.message,true); }
 });
@@ -4779,7 +5719,12 @@ $('contactQueueSaveMode')&&$('contactQueueSaveMode').addEventListener('click',()
 $('contactQueueTabs')&&$('contactQueueTabs').addEventListener('click',e=>{
   const btn=e.target.closest('[data-cq-tab]');
   if(!btn) return;
-  contactQueueTab=btn.dataset.cqTab==='selected'?'selected':'all';
+  const tab=btn.dataset.cqTab;
+  contactQueueTab=(tab==='selected'||tab==='booking')?tab:'all';
+  renderContactQueueList();
+});
+$('contactQueueChannel')&&$('contactQueueChannel').addEventListener('change',()=>{
+  contactQueueChannel=($('contactQueueChannel').value||'');
   renderContactQueueList();
 });
 $('contactQueueSearch')&&$('contactQueueSearch').addEventListener('input',()=>{
@@ -4799,9 +5744,8 @@ $('contactQueueMarkBtn')&&$('contactQueueMarkBtn').addEventListener('click',asyn
   if(!ids.length){ toast('Pick leads on All first',true); return; }
   try{
     await markContactQueueIds(ids, true);
-    contactQueueTab='selected';
     await loadContactQueue({keepTab:true});
-    toast(ids.length+' added to To contact');
+    toast(ids.length+' added to To contact — staying on All');
   }catch(e){ toast(e.message,true); }
 });
 $('contactQueueClearPick')&&$('contactQueueClearPick').addEventListener('click',()=>{
@@ -4828,6 +5772,41 @@ $('contactQueueClearSelected')&&$('contactQueueClearSelected').addEventListener(
 });
 $('dealsRefresh')&&$('dealsRefresh').addEventListener('click',()=>loadDeals().catch(e=>toast(e.message,true)));
 $('dealCreateBtn')&&$('dealCreateBtn').addEventListener('click',()=>sendPayLinkFlow().catch(e=>toast(e.message,true)));
+$('dealsTabs')&&$('dealsTabs').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-deals-tab]');
+  if(!btn) return;
+  dealsTab=btn.dataset.dealsTab==='paylinks'?'paylinks':'proposals';
+  document.querySelectorAll('#dealsTabs [data-deals-tab]').forEach(b=>b.classList.toggle('active',b.dataset.dealsTab===dealsTab));
+  if($('dealsProposalsPane')) $('dealsProposalsPane').classList.toggle('hidden', dealsTab!=='proposals');
+  if($('dealsPaylinksPane')) $('dealsPaylinksPane').classList.toggle('hidden', dealsTab!=='paylinks');
+  if(dealsTab==='paylinks') renderPaylinksHost().catch(e=>toast(e.message,true));
+});
+$('paylinkCreateBtn')&&$('paylinkCreateBtn').addEventListener('click',()=>createPaylinksFlow().catch(e=>toast(e.message,true)));
+$('paylinkRefreshBtn')&&$('paylinkRefreshBtn').addEventListener('click',()=>renderPaylinksHost().catch(e=>toast(e.message,true)));
+$('brandLogoFile')&&$('brandLogoFile').addEventListener('change',async ev=>{
+  const f=ev.target.files&&ev.target.files[0];
+  if(!f) return;
+  try{
+    const fd=new FormData(); fd.append('file', f);
+    const r=await fetch('/api/sales/brand-logo',{method:'POST',credentials:'same-origin',body:fd});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.detail||data.message||'Upload failed');
+    brandLogoUrl=data.url||'';
+    paintBrandLogoPreview();
+    toast('Brand logo saved for signatures');
+  }catch(e){ toast(e.message,true); }
+  ev.target.value='';
+});
+$('brandLogoClear')&&$('brandLogoClear').addEventListener('click',async()=>{
+  const ok=await uiConfirm({title:'Remove brand logo?', message:'Email signatures will no longer include the logo URL.', confirmLabel:'Remove', danger:true});
+  if(!ok) return;
+  try{
+    await api('/api/sales/brand-logo',{method:'DELETE'});
+    brandLogoUrl='';
+    paintBrandLogoPreview();
+    toast('Brand logo removed');
+  }catch(e){ toast(e.message,true); }
+});
 $('sendPayLinkBtn')&&$('sendPayLinkBtn').addEventListener('click',()=>sendPayLinkFlow().catch(e=>toast(e.message,true)));
 $('userAddBtn')&&$('userAddBtn').addEventListener('click',()=>addUserFlow().catch(e=>toast(e.message,true)));
 $('territoryAddBtn')&&$('territoryAddBtn').addEventListener('click',()=>addTerritoryFlow().catch(e=>toast(e.message,true)));
@@ -4997,12 +5976,31 @@ $('searchForm').addEventListener('submit',async e=>{
 $('rows').addEventListener('click',async e=>{
   const mark=e.target.closest('[data-mark]');
   if(mark){await toggleMark(mark.dataset.mark);return}
+  const booking=e.target.closest('[data-booking]');
+  if(booking){
+    try{
+      const on=booking.dataset.bookingOn==='1';
+      await markBookingIds([booking.dataset.booking], on);
+      const row=rowsData.find(x=>String(x.id)===String(booking.dataset.booking));
+      if(row) row.current_booking_software=on?'Has booking':'';
+      paint();
+      toast(on?'Marked as has booking':'Cleared booking flag');
+    }catch(err){ toast(err.message,true); }
+    return;
+  }
   const compose=e.target.closest('[data-compose]');
   if(compose){const b=rowsData.find(x=>String(x.id)===String(compose.dataset.compose));if(b)openCompose(b,compose.dataset.channel);return}
   const open=e.target.closest('[data-open]');
   if(open){openDrawer(open.dataset.open);return}
   const row=e.target.closest('[data-row]');
-  if(row&&!e.target.closest('input,button,a'))openDrawer(row.dataset.row);
+  if(row&&!e.target.closest('input,button,a')){
+    const maps=(row.dataset.maps||'').trim();
+    if(maps && (e.altKey||e.metaKey)){ window.open(maps,'_blank','noopener'); return; }
+    if(maps && e.shiftKey){ window.open(maps,'_blank','noopener'); return; }
+    // plain row click: Google Maps when URL known; Details still via button
+    if(maps){ window.open(maps,'_blank','noopener'); return; }
+    openDrawer(row.dataset.row);
+  }
 });
 $('rows').addEventListener('change',e=>{
   const el=e.target;
@@ -5018,6 +6016,21 @@ $('composeChannel').addEventListener('change',()=>fillComposeTemplates($('compos
 $('composeTemplate').addEventListener('change',applyComposeTemplate);
 $('copyComposeBtn')&&$('copyComposeBtn').addEventListener('click',()=>copyComposeMessage().catch(e=>toast(e.message,true)));
 $('openComposeBtn').addEventListener('click',openChannelApp);
+$('copyComposeIconBtn')&&$('copyComposeIconBtn').addEventListener('click',()=>copyComposeMessage().catch(e=>toast(e.message,true)));
+$('composeTabs')&&$('composeTabs').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-compose-tab]');
+  if(!btn) return;
+  setComposeTab(btn.dataset.composeTab);
+});
+$('composeMarkBtn')&&$('composeMarkBtn').addEventListener('click',async()=>{
+  if(!composeLead||composeLead.marked_for_contact) return;
+  try{
+    await markContactQueueIds([composeLead.id], true);
+    composeLead.marked_for_contact=true;
+    syncComposeMarkBtn();
+    toast('Marked to contact');
+  }catch(e){ toast(e.message,true); }
+});
 $('confirmSentBtn').addEventListener('click',()=>confirmSent());
 $('confirmNextBtn').addEventListener('click',()=>confirmSent({next:true}));
 $('skipNextBtn').addEventListener('click',()=>{
@@ -5172,6 +6185,39 @@ $('drawerPanel').addEventListener('click',async e=>{
     }catch(err){ toast(err.message,true); }
     return;
   }
+  if(e.target.id==='drawerMarkBookingBtn'){
+    if(!drawerLead)return;
+    try{
+      const on=!(drawerLead.current_booking_software||'').trim();
+      await markBookingIds([drawerLead.id], on);
+      drawerLead.current_booking_software=on?'Has booking':'';
+      renderDrawer();
+      toast(on?'Marked as has booking':'Cleared booking flag');
+    }catch(err){toast(err.message,true)}
+    return;
+  }
+  if(e.target.id==='drawerMarkToContactBtn'){
+    if(!drawerLead)return;
+    try{
+      const on=!drawerLead.marked_for_contact;
+      await patchLead(drawerLead.id,{marked_for_contact:on});
+      drawerLead.marked_for_contact=on;
+      const row=rowsData.find(x=>String(x.id)===String(drawerLead.id));
+      if(row) row.marked_for_contact=on;
+      renderDrawer();
+      toast(on?'Marked to contact':'Unmarked to contact');
+    }catch(err){toast(err.message,true)}
+    return;
+  }
+  if(e.target.id==='drawerRefreshPaylinksBtn'){
+    refreshDrawerPaylinks().catch(err=>toast(err.message,true));
+    return;
+  }
+  if(e.target.closest&&e.target.closest('[data-drawer-pay-provider]')){
+    const btn=e.target.closest('[data-drawer-pay-provider]');
+    createDrawerPaylinkForProvider(btn.dataset.drawerPayProvider).catch(err=>toast(err.message,true));
+    return;
+  }
   if(e.target.id==='createProposalBtn'){
     if(!drawerLead)return;
     try{
@@ -5181,28 +6227,34 @@ $('drawerPanel').addEventListener('click',async e=>{
         connected=!!(conn&&conn.connected);
         beConnCache=conn||{};
       }catch(e){}
-      if(connected && (drawerLead.product_line||'STANDALONE')==='STANDALONE'){
-        toast('AppointHive connected — use Send to delivery for STANDALONE product payment', true);
-        drawerTab='sales'; renderDrawer();
-        return;
+      const line=(drawerLead.product_line||'STANDALONE').toUpperCase();
+      if(connected && line==='STANDALONE'){
+        const path=await uiForm({
+          title:'AppointHive is connected',
+          message:'Card checkout for STANDALONE should use AppointHive Send to delivery. You can still create a local Manual/Payoneer/Skrill proposal + pay link/QR.',
+          confirmLabel:'Continue',
+          fields:[{name:'path', label:'What do you want?', type:'select', value:'local', options:[
+            {value:'local', label:'Local proposal (Manual / Payoneer / Skrill)'},
+            {value:'be', label:'Open AppointHive tab (Send to delivery)'}
+          ]}]
+        });
+        if(!path) return;
+        if(path.path==='be'){ drawerTab='appointhive'; renderDrawer(); return; }
       }
-      const plans=await api('/api/sales/plans?product_line=STANDALONE');
+      const plans=await api('/api/sales/plans?product_line='+encodeURIComponent(line));
       const list=plans.plans||[];
-      if(!list.length){toast('No plans seeded',true);return}
-      const growth=list.find(p=>p.code==='standalone_growth')||list[0];
+      if(!list.length){toast('No plans seeded for '+line,true);return}
+      const growth=list.find(p=>(p.code||'').toLowerCase().includes('growth'))||list[0];
+      const providerOpts=connected&&line==='STANDALONE'
+        ?[{value:'manual',label:'Manual / bank'},{value:'payoneer',label:'Payoneer'},{value:'skrill',label:'Skrill'}]
+        :[{value:'manual',label:'Manual / bank'},{value:'stripe',label:'Stripe'},{value:'paypal',label:'PayPal'},{value:'payoneer',label:'Payoneer'},{value:'skrill',label:'Skrill'}];
       const form=await uiForm({
         title:'Create proposal & invoice',
-        message:`For ${drawerLead.name}. Sends the proposal and opens a manual invoice.`,
+        message:`For ${drawerLead.name}. Creates proposal + invoice; pay link/QR also lands under Deals → Pay links.`,
         confirmLabel:'Create',
         fields:[
           {name:'plan_id', label:'Plan', type:'select', required:true, value:String(growth.id), options:list.map(p=>({value:String(p.id), label:p.name||p.code}))},
-          {name:'provider', label:'Invoice provider', type:'select', value:'manual', options:[
-            {value:'manual',label:'Manual / bank'},
-            {value:'stripe',label:'Stripe'},
-            {value:'paypal',label:'PayPal'},
-            {value:'payoneer',label:'Payoneer'},
-            {value:'skrill',label:'Skrill'}
-          ]}
+          {name:'provider', label:'Invoice provider', type:'select', value:'manual', options:providerOpts}
         ]
       });
       if(!form) return;
@@ -5216,7 +6268,28 @@ $('drawerPanel').addEventListener('click',async e=>{
         try{ await navigator.clipboard.writeText(inv.hosted_url); }catch(e){}
         toast('Proposal '+prop.reference+' · pay link ready');
         window.open(inv.hosted_url,'_blank','noopener');
-      }else toast('Proposal '+prop.reference+' · Invoice '+inv.number+' (confirm close under Deals)');
+      }else toast('Proposal '+prop.reference+' · Invoice '+inv.number+' — QR & instructions below');
+      const rows=paylinksStore();
+      rows.unshift({
+        id:'inv-'+(inv.id||Date.now()),
+        invoice_id:inv.id,
+        number:inv.number,
+        business_id:drawerLead.id,
+        prospect_name:drawerLead.name,
+        business_name:drawerLead.name,
+        provider:inv.provider||form.provider,
+        url:inv.hosted_url||'',
+        pay_instructions:inv.pay_instructions||'',
+        status:inv.status,
+        total:inv.total,
+        currency:inv.currency,
+        created_at:new Date().toISOString(),
+        source:'invoice'
+      });
+      savePaylinksStore(rows);
+      await refreshDrawerPaylinks();
+      if(dealsTab==='paylinks') renderPaylinksHost().catch(()=>{});
+      if(appPanel==='money') loadMoney().catch(()=>{});
     }catch(err){toast(err.message,true)}
     return;
   }
@@ -5304,6 +6377,7 @@ function setAuthed(username){
   setAppPanel('leads');
   loadProfileBar(username).catch(()=>{});
   refreshNotifications().catch(()=>{});
+  loadBrandLogoSetting().catch(()=>{});
 }
 function setLoggedOut(){
   document.body.classList.remove('authed');

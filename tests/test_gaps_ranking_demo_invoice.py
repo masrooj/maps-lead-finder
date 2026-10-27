@@ -140,3 +140,55 @@ def test_invoice_view_pdf_compose(auth_client):
     body = compose.json()
     assert "INV-QA-001" in body["subject"] or "INV-QA-001" in body["body"]
     assert body["pdf_url"].endswith(f"/invoices/{iid}/pdf")
+
+    listed = auth_client.get("/api/sales/invoices")
+    assert listed.status_code == 200, listed.text
+    row = next((i for i in listed.json()["invoices"] if i["id"] == iid), None)
+    assert row is not None
+    assert row.get("business_name") == "Invoice QA Co"
+
+    voided = auth_client.post(f"/api/sales/invoices/{iid}/void", json={"reason": "QA duplicate"})
+    assert voided.status_code == 200, voided.text
+    assert voided.json()["status"] == "void"
+
+    again = auth_client.post(f"/api/sales/invoices/{iid}/void", json={})
+    assert again.status_code == 200, again.text
+    assert again.json()["status"] == "void"
+
+
+def test_void_rejects_paid_invoice(auth_client):
+    with SessionLocal() as db:
+        b = Business(
+            name="QA Paid Void",
+            place_id="places/qa-void-paid",
+            category="salon",
+            city="Sydney",
+            country="AU",
+        )
+        db.add(b)
+        db.flush()
+        ent = db.scalar(select(BillingEntity).where(BillingEntity.active.is_(True)).limit(1))
+        if not ent:
+            ent = BillingEntity(legal_name="AppointHive Test", active=True)
+            db.add(ent)
+            db.flush()
+        inv = Invoice(
+            business_id=b.id,
+            billing_entity_id=ent.id,
+            number="INV-QA-PAID-001",
+            status="paid",
+            currency="AUD",
+            subtotal=50.0,
+            tax_amount=0.0,
+            total=50.0,
+            provider="manual",
+            line_items_json=json.dumps([{"name": "Setup", "qty": 1, "amount": 50}]),
+            paid_at=datetime.now(timezone.utc),
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(inv)
+        db.commit()
+        iid = inv.id
+
+    r = auth_client.post(f"/api/sales/invoices/{iid}/void", json={"reason": "should fail"})
+    assert r.status_code == 400, r.text

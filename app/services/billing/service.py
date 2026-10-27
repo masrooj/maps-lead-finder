@@ -480,6 +480,45 @@ def confirm_manual_payment(db, invoice_id: int, *, actor_id: Optional[int] = Non
     return mark_invoice_paid(db, invoice, provider_ref=provider_ref, actor_id=actor_id, method="manual_confirm")
 
 
+def void_invoice(
+    db,
+    invoice_id: int,
+    *,
+    actor_id: Optional[int] = None,
+    reason: str = "",
+) -> Invoice:
+    invoice = db.get(Invoice, invoice_id)
+    if not invoice:
+        raise HTTPException(404, "Invoice not found")
+    if invoice.status == "paid":
+        raise HTTPException(400, "Cannot void a paid invoice — record a refund instead")
+    if invoice.status == "void":
+        return invoice
+    invoice.status = "void"
+    note = (reason or "").strip()
+    db.add(
+        Activity(
+            business_id=invoice.business_id,
+            activity_type="invoice_voided",
+            summary=f"Invoice {invoice.number} voided",
+            outcome=note or f"provider={invoice.provider}",
+            created_by=actor_id,
+        )
+    )
+    for t in db.scalars(
+        select(Task).where(
+            Task.business_id == invoice.business_id,
+            Task.status == "open",
+            Task.title.ilike(f"%{invoice.number}%"),
+        )
+    ).all():
+        t.status = "cancelled"
+        t.completed_at = _utcnow()
+    db.commit()
+    db.refresh(invoice)
+    return invoice
+
+
 def record_refund(
     db,
     payment_id: int,

@@ -255,6 +255,7 @@ def test_upgrade_requires_installation_id(auth_client):
 
 
 def test_local_psp_blocked_when_connected(auth_client):
+    """When AppointHive is connected: Stripe/PayPal local PSP blocked; Manual/Payoneer/Skrill allowed."""
     db = SessionLocal()
     try:
         _force_connected(db)
@@ -289,8 +290,16 @@ def test_local_psp_blocked_when_connected(auth_client):
         },
     )
     assert prop.status_code == 200, prop.text
-    inv = auth_client.post("/api/sales/invoices", json={"proposal_id": prop.json()["id"], "provider": "manual"})
-    assert inv.status_code == 409
+    pid = prop.json()["id"]
+    # Card PSP must stay on AppointHive delivery when connected
+    inv_stripe = auth_client.post("/api/sales/invoices", json={"proposal_id": pid, "provider": "stripe"})
+    assert inv_stripe.status_code == 409, inv_stripe.text
+    inv_paypal = auth_client.post("/api/sales/invoices", json={"proposal_id": pid, "provider": "paypal"})
+    assert inv_paypal.status_code == 409, inv_paypal.text
+    # Bank-instruction providers remain available for multi pay-link / QR flows
+    inv_manual = auth_client.post("/api/sales/invoices", json={"proposal_id": pid, "provider": "manual"})
+    assert inv_manual.status_code == 200, inv_manual.text
+
 
 
 def test_payment_paid_webhook_mirrors_won(auth_client):

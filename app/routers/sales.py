@@ -34,6 +34,7 @@ from app.services.billing.service import (
     create_invoice_from_proposal,
     create_proposal,
     provider_status,
+    void_invoice,
 )
 from app.services.metrics import dashboard_bundle
 from app.services.pipeline import backfill_prospect_stages, list_stages, move_stage, stage_dict
@@ -110,6 +111,12 @@ def prospect_sales_dict(b: Business, stage=None) -> dict:
         "estimated_close_date": _iso(b.estimated_close_date),
         "score_criteria": criteria,
         "be_installation_id": getattr(b, "be_installation_id", "") or "",
+        "current_booking_software": getattr(b, "current_booking_software", "") or "",
+        "google_maps_url": getattr(b, "google_maps_url", "") or "",
+        "email": getattr(b, "email", "") or "",
+        "website": getattr(b, "website", "") or "",
+        "phone": getattr(b, "phone", "") or "",
+        "international_phone": getattr(b, "international_phone", "") or "",
     }
 
 
@@ -396,6 +403,17 @@ def sales_resolve_duplicate(payload: dict[str, Any], _user: str = Depends(requir
     return {"ok": True, "action": "merge", "primary_id": primary_id, "archived_secondary": secondary_id}
 
 
+@router.get("/prospects/{business_id}")
+def sales_get_prospect(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    from app.models import PipelineStage
+
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    return prospect_sales_dict(b, stage)
+
+
 @router.patch("/prospects/{business_id}")
 def sales_patch_prospect(business_id: int, body: ProspectPatch, _user: str = Depends(require_user), db=Depends(get_db)):
     b = db.get(Business, business_id)
@@ -580,11 +598,17 @@ def sales_activities(business_id: Optional[int] = None, limit: int = 50, _user: 
     if business_id:
         stmt = stmt.where(Activity.business_id == business_id)
     rows = db.scalars(stmt).all()
+    biz_ids = {a.business_id for a in rows if a.business_id}
+    names = {}
+    if biz_ids:
+        for b in db.scalars(select(Business).where(Business.id.in_(biz_ids))).all():
+            names[b.id] = b.name or f"#{b.id}"
     return {
         "activities": [
             {
                 "id": a.id,
                 "business_id": a.business_id,
+                "business_name": names.get(a.business_id) or (f"#{a.business_id}" if a.business_id else "—"),
                 "activity_type": a.activity_type,
                 "summary": a.summary,
                 "outcome": a.outcome,
@@ -743,9 +767,11 @@ def sales_create_invoice(body: InvoiceBody, _user: str = Depends(require_user), 
     prop = db.get(Proposal, body.proposal_id)
     if not prop:
         raise HTTPException(404, "Proposal not found")
-    # When AppointHive bridge is connected, STANDALONE product cash must use BE pay URL — not local PSP.
+    # When AppointHive bridge is connected, STANDALONE card PSP (Stripe/PayPal) must use BE pay URL.
+    # Manual / Payoneer / Skrill invoices stay available for bank-instruction / multi-link + QR flows.
     biz = db.get(Business, prop.business_id)
-    if biz and (biz.product_line or "STANDALONE") == "STANDALONE":
+    provider = (body.provider or "manual").strip().lower()
+    if biz and (biz.product_line or "STANDALONE") == "STANDALONE" and provider in ("stripe", "paypal"):
         from app.services.booking_engine.connect import be_connection_public
 
         conn = be_connection_public(db=db)
@@ -753,7 +779,7 @@ def sales_create_invoice(body: InvoiceBody, _user: str = Depends(require_user), 
             raise HTTPException(
                 409,
                 detail={
-                    "error": "AppointHive connected — use Send to delivery for STANDALONE product payment",
+                    "error": "AppointHive connected — use Send to delivery for Stripe/PayPal, or choose Manual/Payoneer/Skrill for local pay links",
                     "use": "/api/sales/be/send-to-delivery",
                 },
             )
@@ -774,14 +800,27 @@ def sales_create_invoice(body: InvoiceBody, _user: str = Depends(require_user), 
 
 
 @router.get("/invoices")
-def sales_list_invoices(_user: str = Depends(require_user), db=Depends(get_db)):
-    rows = db.scalars(select(Invoice).order_by(Invoice.id.desc()).limit(100)).all()
+def sales_list_invoices(
+    business_id: Optional[int] = None,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    stmt = select(Invoice).order_by(Invoice.id.desc()).limit(200)
+    if business_id:
+        stmt = stmt.where(Invoice.business_id == int(business_id))
+    rows = db.scalars(stmt).all()
+    biz_ids = {i.business_id for i in rows if i.business_id}
+    names = {}
+    if biz_ids:
+        for b in db.scalars(select(Business).where(Business.id.in_(biz_ids))).all():
+            names[b.id] = b.name or f"#{b.id}"
     return {
         "invoices": [
             {
                 "id": i.id,
                 "number": i.number,
                 "business_id": i.business_id,
+                "business_name": names.get(i.business_id) or (f"#{i.business_id}" if i.business_id else "—"),
                 "status": i.status,
                 "provider": i.provider,
                 "total": i.total,
@@ -810,6 +849,27 @@ def sales_confirm_paid(invoice_id: int, body: ConfirmPayBody, _user: str = Depen
         "currency": pay.currency,
         "status": pay.status,
         "is_test_mode": pay.is_test_mode,
+    }
+
+
+class VoidInvoiceBody(BaseModel):
+    reason: str = ""
+
+
+@router.post("/invoices/{invoice_id}/void")
+def sales_void_invoice(invoice_id: int, body: VoidInvoiceBody, _user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.authz import get_user_by_email, require_owner_for_money
+
+    owner = get_user_by_email(db, _user)
+    require_owner_for_money(owner)
+    inv = void_invoice(db, invoice_id, actor_id=owner.id if owner else None, reason=body.reason or "")
+    return {
+        "id": inv.id,
+        "number": inv.number,
+        "status": inv.status,
+        "provider": inv.provider,
+        "total": inv.total,
+        "currency": inv.currency,
     }
 
 
@@ -1656,6 +1716,56 @@ async def upload_demo_asset(request: Request, _user: str = Depends(require_user)
     return _demo_dict(a)
 
 
+@router.post("/brand-logo")
+async def upload_brand_logo(request: Request, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Owner: upload logo for email signatures. Stored under uploads/brand/ + AppSetting brand_logo_url."""
+    from pathlib import Path
+    import uuid
+    from app.services.authz import get_user_by_email, require_role
+    from app.services import storage as store
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner")
+    form = await request.form()
+    upload = form.get("file")
+    if not upload or not hasattr(upload, "filename"):
+        raise HTTPException(422, "file required")
+    raw = await upload.read()
+    if len(raw) > 2 * 1024 * 1024:
+        raise HTTPException(413, "Logo too large (max 2MB)")
+    ctype = getattr(upload, "content_type", None) or "application/octet-stream"
+    if not str(ctype).startswith("image/") and not str(upload.filename or "").lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".svg")):
+        raise HTTPException(422, "Image file required")
+    ext = Path(upload.filename or "logo.png").suffix[:12] or ".png"
+    safe = f"brand/{uuid.uuid4().hex}{ext}"
+    try:
+        saved = store.save_bytes(safe, raw, content_type=ctype)
+    except Exception as exc:
+        raise HTTPException(500, f"Upload failed: {exc}") from exc
+    url = saved.get("url") or f"/uploads/{safe}"
+    row = db.scalar(select(AppSetting).where(AppSetting.key == "brand_logo_url"))
+    if not row:
+        row = AppSetting(key="brand_logo_url", value=url)
+        db.add(row)
+    else:
+        row.value = url
+    db.commit()
+    return {"ok": True, "url": url}
+
+
+@router.delete("/brand-logo")
+def clear_brand_logo(_user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.authz import get_user_by_email, require_role
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner")
+    row = db.scalar(select(AppSetting).where(AppSetting.key == "brand_logo_url"))
+    if row:
+        row.value = ""
+        db.commit()
+    return {"ok": True, "url": ""}
+
+
 # —— Payment provider settings (Owner) ——
 @router.get("/payment-settings")
 def get_payment_settings(_user: str = Depends(require_user), db=Depends(get_db)):
@@ -1969,7 +2079,7 @@ def invoice_send_email(
 # —— AppointHive Booking Engine bridge ——
 class BeManualConnectBody(BaseModel):
     base_url: str = Field(min_length=8, max_length=500)
-    shared_secret: str = Field(min_length=8, max_length=500)
+    shared_secret: str = Field(default="", max_length=500)
 
 
 class BeSendPurchaseBody(BaseModel):

@@ -735,6 +735,7 @@ def business_dict(b: Business) -> dict:
         "mrr": getattr(b, "mrr", None),
         "linked_prospect_id": getattr(b, "linked_prospect_id", None),
         "be_installation_id": getattr(b, "be_installation_id", None) or "",
+        "current_booking_software": getattr(b, "current_booking_software", None) or "",
     }
 
 

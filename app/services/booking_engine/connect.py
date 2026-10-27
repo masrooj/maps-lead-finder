@@ -111,13 +111,17 @@ def issue_pairing_secret(db, *, product_base_url: str, public_base: str) -> dict
     return {"secret": secret, "webhookUrl": webhook, "sharedSecret": secret}
 
 
-def save_manual_connection(db, *, base_url: str, shared_secret: str) -> dict:
+def save_manual_connection(db, *, base_url: str, shared_secret: str = "") -> dict:
+    """Save BE URL. If shared_secret is blank, keep the existing secret (URL-only update)."""
     base = (base_url or "").strip().rstrip("/")
     secret = (shared_secret or "").strip()
     if not base:
         raise HTTPException(422, "AppointHive base URL required")
+    existing = get_be_shared_secret(db=db)
     if not secret:
-        raise HTTPException(422, "Shared secret required")
+        if not existing:
+            raise HTTPException(422, "Shared secret required")
+        secret = existing
     store_setting_value(db, "be.base_url", base, secret=False)
     store_setting_value(db, "be.shared_secret", secret, secret=True)
     store_setting_value(db, "be.bridge_enabled", "true", secret=False)

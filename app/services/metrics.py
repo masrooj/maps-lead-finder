@@ -143,6 +143,21 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
         )
     ).all()
 
+    to_contact = (
+        db.scalar(
+            select(func.count())
+            .select_from(Business)
+            .where(
+                Business.archived.is_(False),
+                Business.lost.is_(False),
+                Business.opt_out.is_(False),
+                Business.marked_for_contact.is_(True),
+                Business.contacted.is_(False),
+            )
+        )
+        or 0
+    )
+
     return {
         "overdue_task_ids": overdue,
         "due_today_task_ids": due_today,
@@ -151,6 +166,8 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
         "overdue_count": len(overdue),
         "due_today_count": len(due_today),
         "due_soon_count": len(due_soon),
+        "to_contact_count": int(to_contact),
+        "contact_queue_count": int(to_contact),
         "notifications_note": "In-app follow-ups only. Email/push reminders are not enabled unless Cron + email provider are configured.",
     }
 
