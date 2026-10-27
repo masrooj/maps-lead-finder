@@ -82,6 +82,51 @@ def test_contact_queue_endpoint(auth_client):
     assert r3.json()["mode"] == "default"
 
 
+def test_contact_queue_mark_for_selected_tab(auth_client):
+    """Marking a ranked lead sets marked_for_contact so UI Selected tab can list it."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy import select
+
+    from app.db import SessionLocal
+    from app.models import Business
+
+    with SessionLocal() as db:
+        b = Business(
+            place_id="qa-cq-mark-1",
+            name="CQ Mark Salon",
+            email="cqmark@example.com",
+            city="Sydney",
+            country="AU",
+            product_line="STANDALONE",
+            marked_for_contact=False,
+            contacted=False,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(b)
+        db.commit()
+        bid = b.id
+
+    q = auth_client.get("/api/sales/contact-queue?limit=100&mode=default")
+    assert q.status_code == 200, q.text
+    ids = {int(x["id"]) for x in (q.json().get("leads") or [])}
+    assert bid in ids
+
+    bulk = auth_client.post("/api/businesses/bulk", json={"ids": [bid], "marked_for_contact": True})
+    assert bulk.status_code == 200, bulk.text
+
+    q2 = auth_client.get("/api/sales/contact-queue?limit=100&mode=default")
+    assert q2.status_code == 200
+    row = next(x for x in q2.json()["leads"] if int(x["id"]) == bid)
+    assert row.get("marked_for_contact") is True
+
+    with SessionLocal() as db:
+        rowb = db.get(Business, bid)
+        if rowb:
+            db.delete(rowb)
+            db.commit()
+
+
 def test_undo_stage_and_link(auth_client):
     # Create a prospect via Places-less path: use search seed? Use CSV-less business via pipeline list
     pipe = auth_client.get("/api/sales/pipeline?product_line=STANDALONE")

@@ -363,7 +363,64 @@ input:-webkit-autofill,input:-webkit-autofill:hover,input:-webkit-autofill:focus
 .leads{padding:6px;overflow-x:auto;overflow-y:visible;margin-bottom:14px;min-height:220px;-webkit-overflow-scrolling:touch}
 .lead,.queue-lead{display:grid;gap:10px;align-items:center;padding:14px 12px;border-bottom:1px solid var(--line-soft);cursor:pointer;min-width:0;transition:background .12s}
 .lead-row{grid-template-columns:36px 34px minmax(0,1.35fr) minmax(0,1fr) minmax(88px,auto) minmax(0,auto)}
-.queue-lead{grid-template-columns:56px minmax(0,1fr) auto;cursor:default}
+.queue-lead{grid-template-columns:36px 56px minmax(0,1fr) auto;cursor:default}
+.queue-lead .checkcol{display:flex;align-items:center;justify-content:center}
+.queue-lead .checkcol input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.queue-lead.no-check{grid-template-columns:56px minmax(0,1fr) auto}
+.queue-tabs{display:flex;gap:8px;margin:0 0 14px;flex-wrap:wrap}
+.queue-tabs button{
+  border-radius:999px;min-height:38px;padding:8px 16px;font-weight:700;font-size:13px;
+  background:var(--input);border:1px solid var(--line);color:var(--muted);
+}
+.queue-tabs button:hover{border-color:var(--accent);color:var(--text);background:#172139}
+.queue-tabs button.active{background:var(--accent);border-color:var(--accent);color:#081026}
+.queue-tabs .tab-count{
+  display:inline-flex;align-items:center;justify-content:center;min-width:1.5em;margin-left:6px;
+  padding:1px 7px;border-radius:999px;font-size:11px;font-weight:800;
+  background:rgba(8,16,38,.18);color:inherit;
+}
+.queue-tabs button:not(.active) .tab-count{background:rgba(126,162,255,.12);color:var(--accent)}
+.queue-summary{
+  text-align:left;margin:0 0 14px;padding:16px 18px;border-radius:14px;
+  border:1px solid var(--line);background:linear-gradient(160deg,rgba(23,33,57,.95),rgba(11,19,36,.88));
+  box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
+}
+.queue-search{
+  display:flex;align-items:stretch;gap:0;margin:0 0 14px;
+  border:1px solid var(--line);border-radius:var(--control-radius);
+  background:var(--input);overflow:hidden;
+  transition:border-color .15s var(--ease),box-shadow .15s var(--ease),background .15s var(--ease);
+}
+.queue-search:hover{border-color:#3f5478;background:var(--input-hover)}
+.queue-search:focus-within{
+  border-color:var(--accent);background:#121b2e;
+  box-shadow:0 0 0 3px rgba(126,162,255,.18);
+}
+.queue-search-ico{
+  display:flex;align-items:center;justify-content:center;flex:0 0 44px;
+  color:var(--muted);pointer-events:none;
+}
+.queue-search-ico svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.queue-search:focus-within .queue-search-ico{color:var(--accent)}
+.queue-search input{
+  flex:1 1 auto;min-width:0;width:100%;min-height:var(--control-h);
+  margin:0;padding:11px 14px 11px 0;border:0!important;border-radius:0!important;
+  background:transparent!important;box-shadow:none!important;outline:none!important;
+  color:var(--text);font:inherit;font-size:14px;line-height:1.4;
+  -webkit-appearance:none;appearance:none;
+}
+.queue-search input::placeholder{color:var(--placeholder);opacity:1}
+.queue-search input::-webkit-search-decoration,
+.queue-search input::-webkit-search-cancel-button,
+.queue-search input::-webkit-search-results-button,
+.queue-search input::-webkit-search-results-decoration{display:none;-webkit-appearance:none}
+.queue-search-clear{
+  display:none;align-items:center;justify-content:center;flex:0 0 40px;
+  border:0;background:transparent;color:var(--muted);cursor:pointer;padding:0;min-height:0;
+}
+.queue-search-clear:hover{color:var(--text)}
+.queue-search.has-query .queue-search-clear{display:flex}
+.queue-footbar{margin-top:12px;margin-bottom:0;position:sticky;bottom:8px;z-index:3}
 .lead:last-child,.queue-lead:last-child{border-bottom:0}
 .lead:hover,.queue-lead:hover{background:rgba(23,33,57,.85)}
 .lead.active{background:var(--accent-soft)}
@@ -586,7 +643,8 @@ body:not(.authed) .wrap{
   .lead-row .lead-reach{grid-area:reach}.lead-row .lead-meta{grid-area:meta;align-items:flex-start;flex-direction:row;flex-wrap:wrap;gap:6px}
   .lead-row .lead-actions{grid-area:actions;justify-content:flex-end}
   .lead-head{display:none}
-  .queue-lead{grid-template-columns:48px minmax(0,1fr) auto}
+  .queue-lead{grid-template-columns:32px 48px minmax(0,1fr) auto}
+  .queue-lead.no-check{grid-template-columns:48px minmax(0,1fr) auto}
   .stats{grid-template-columns:repeat(2,1fr)}
 }
 @media(max-width:900px){
@@ -642,7 +700,9 @@ body:not(.authed) .wrap{
   }
   .lead-row .lead-actions{justify-content:flex-start}
   .lead-row .lead-actions button{flex:1 1 auto;min-height:38px}
-  .queue-lead{grid-template-columns:44px minmax(0,1fr);grid-template-areas:"rank body" "actions actions";gap:8px;padding:14px 10px;align-items:start}
+  .queue-lead{grid-template-columns:28px 44px minmax(0,1fr);grid-template-areas:"check rank" "body body" "actions actions";gap:8px;padding:14px 10px;align-items:start}
+  .queue-lead.no-check{grid-template-columns:44px minmax(0,1fr);grid-template-areas:"rank body" "actions actions"}
+  .queue-lead .checkcol{grid-area:check}
   .queue-lead .queue-rank{grid-area:rank}.queue-lead .queue-body{grid-area:body}
   .queue-lead .actions{grid-area:actions;justify-content:flex-start}
   .queue-lead .actions button{flex:1 1 auto;min-height:38px}
@@ -797,7 +857,7 @@ body:not(.authed) .wrap{
       <p class="hint" style="margin-top:0">Use this loop for every city. Click a step to jump there.</p>
       <div class="guide-steps" id="guideSteps">
         <button type="button" class="guide-step" data-goto="leads"><strong>1. Discover</strong><span>Search Places (Fetch: All for city scan). Star ★ leads. Prospects auto-setup on import.</span></button>
-        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>Ranked by score + discovery depth. Work top-down; re-ranks after discovery.</span></button>
+        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → mark to contact → To contact → send message. Re-ranks after discovery.</span></button>
         <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>Stages advance automatically on confirm-sent, discovery, demo, and score. Drag only to override.</span></button>
         <button type="button" class="guide-step" data-goto="tasks"><strong>4. Tasks</strong><span>Follow-ups auto-create when you confirm email/WA/IG sent. Complete or reschedule.</span></button>
         <button type="button" class="guide-step" data-goto="activities"><strong>5. Communication</strong><span>Outreach log (email / WhatsApp / IG / calls). Separate from closing deals.</span></button>
@@ -976,7 +1036,11 @@ body:not(.authed) .wrap{
           <button type="button" class="primary" id="contactQueueRefresh">Refresh ranking</button>
         </div>
       </div>
-      <div class="fields" style="grid-template-columns:minmax(220px,1.4fr) auto;align-items:end;margin-bottom:12px">
+      <div class="queue-tabs" id="contactQueueTabs" role="tablist" aria-label="Contact queue views">
+        <button type="button" role="tab" class="active" data-cq-tab="all" aria-selected="true">All <span class="tab-count" id="contactQueueAllCount">0</span></button>
+        <button type="button" role="tab" data-cq-tab="selected" aria-selected="false">To contact <span class="tab-count" id="contactQueueSelectedCount">0</span></button>
+      </div>
+      <div class="fields" style="grid-template-columns:minmax(220px,1.4fr) auto;align-items:end;margin-bottom:10px">
         <div class="field">
           <label for="contactQueueMode">Ranking mode</label>
           <select id="contactQueueMode" aria-describedby="contactQueueDef"></select>
@@ -984,8 +1048,23 @@ body:not(.authed) .wrap{
         <button type="button" id="contactQueueSaveMode">Save as default</button>
       </div>
       <p class="hint" id="contactQueueDef" style="margin-top:0">Choose how leads are filtered and scored, then refresh.</p>
-      <div class="empty-card" id="contactQueueExplain" style="text-align:left;margin:0 0 12px;padding:14px 16px"></div>
+      <div class="queue-summary" id="contactQueueExplain"></div>
+      <div class="queue-search" id="contactQueueSearchWrap" role="search">
+        <span class="queue-search-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>
+        <input type="text" id="contactQueueSearch" placeholder="Search name, city, stage, channel…" aria-label="Search contact queue" autocomplete="off" spellcheck="false">
+        <button type="button" class="queue-search-clear" id="contactQueueSearchClear" title="Clear search" aria-label="Clear search">✕</button>
+      </div>
+      <div class="bulkbar" id="contactQueueSelectedBar">
+        <span id="contactQueueSelectedHint">Send messages from this list</span>
+        <button type="button" class="primary" id="contactQueueMessageNext" disabled>Message next</button>
+        <button type="button" id="contactQueueClearSelected" title="Unmark all on this list">Clear to contact</button>
+      </div>
       <div id="contactQueueList" class="leads list-shell" style="min-height:160px"></div>
+      <div class="bulkbar queue-footbar" id="contactQueueBulkBar">
+        <span id="contactQueuePickCount">0 picked</span>
+        <button type="button" class="primary" id="contactQueueMarkBtn">Mark to contact</button>
+        <button type="button" class="ghost" id="contactQueueClearPick">Clear picks</button>
+      </div>
     </section>
   </div>
 
@@ -2687,6 +2766,40 @@ async function loadMoney(){
 
 let contactQueueLeads=[];
 let contactQueueModes=[];
+let contactQueueTab='all'; // all | selected
+let contactQueuePick=new Set(); // checkbox picks on All tab (before mark)
+let contactQueueQuery='';
+
+function contactQueueSelectedLeads(){
+  return (contactQueueLeads||[]).filter(b=>b.marked_for_contact && !b.contacted && !b.opt_out);
+}
+
+function contactQueueMatchQuery(b, q){
+  if(!q) return true;
+  const ch=b.channels||{};
+  const hay=[
+    b.name, b.city, b.country, b.category, b.email, b.phone, b.website, b.why,
+    b.stage&&b.stage.name, b.stage&&b.stage.slug,
+    ch.email?'email':'', ch.whatsapp?'whatsapp phone':'', ch.instagram?'instagram':''
+  ].join(' ').toLowerCase();
+  return q.split(/\s+/).filter(Boolean).every(tok=>hay.includes(tok));
+}
+
+function contactQueueVisibleLeads(){
+  let base=contactQueueTab==='selected'?contactQueueSelectedLeads():(contactQueueLeads||[]).slice();
+  // All tab: unmarked first (work queue), already marked sink to bottom
+  if(contactQueueTab==='all'){
+    base.sort((a,b)=>{
+      const am=a.marked_for_contact?1:0;
+      const bm=b.marked_for_contact?1:0;
+      if(am!==bm) return am-bm;
+      return (Number(b.rank_score)||0)-(Number(a.rank_score)||0);
+    });
+  }
+  const q=(contactQueueQuery||'').trim().toLowerCase();
+  if(!q) return base;
+  return base.filter(b=>contactQueueMatchQuery(b,q));
+}
 
 function fillContactQueueModes(modes, active){
   const sel=$('contactQueueMode');
@@ -2706,29 +2819,69 @@ function renderContactQueueExplain(data){
   if(!box) return;
   const mode=contactQueueModes.find(m=>m.id===(data.mode||''))||{};
   const parts=(data.leads||[]).slice(0,3).map((b,i)=>`#${i+1} ${b.name||'—'} (${b.rank_score}) — ${b.why||'—'}`);
+  const shown=esc(String(data.sample_size||0));
+  const total=esc(String(data.total_candidates||0));
   box.innerHTML=`
-    <strong style="color:var(--text)">${esc(data.mode_label||mode.label||'Ranking')}</strong>
-    <p class="hint" style="margin:6px 0 0">${esc(data.definition||mode.description||'')}</p>
-    <p class="hint" style="margin:8px 0 0">Showing <strong style="color:var(--text)">${esc(String(data.sample_size||0))}</strong> of <strong style="color:var(--text)">${esc(String(data.total_candidates||0))}</strong> matching candidates.</p>
+    <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:flex-start">
+      <div style="min-width:0;flex:1 1 220px">
+        <div class="sub" style="margin:0 0 4px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;font-size:11px">Ranking balance</div>
+        <strong style="color:var(--text);font-size:15px">${esc(data.mode_label||mode.label||'Ranking')}</strong>
+        <p class="hint" style="margin:6px 0 0">${esc(data.definition||mode.description||'')}</p>
+      </div>
+      <div style="display:flex;gap:18px;flex:0 0 auto">
+        <div><div class="sub" style="margin:0">Showing</div><strong style="font-size:22px;letter-spacing:-.03em">${shown}</strong></div>
+        <div><div class="sub" style="margin:0">Candidates</div><strong style="font-size:22px;letter-spacing:-.03em">${total}</strong></div>
+      </div>
+    </div>
+    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → pick → Mark to contact (bottom) → To contact → Message.</p>
     ${parts.length?`<p class="hint" style="margin:8px 0 0"><strong style="color:var(--text)">Top why:</strong> ${esc(parts.join(' · '))}</p>`:''}
   `;
 }
 
-async function loadContactQueue(){
-  const mode=($('contactQueueMode')&&$('contactQueueMode').value)||'';
-  const qs=new URLSearchParams({product_line:'STANDALONE',limit:'100'});
-  if(mode) qs.set('mode', mode);
-  const data=await api('/api/sales/contact-queue?'+qs.toString());
-  fillContactQueueModes(data.modes||[], data.mode||'default');
-  if($('contactQueueDef')){
-    $('contactQueueDef').textContent=(data.definition||'')+` · Mode saved server-side when you click Save as default.`;
-  }
-  renderContactQueueExplain(data);
+function syncContactQueueSearchUi(){
+  const wrap=$('contactQueueSearchWrap');
+  const inp=$('contactQueueSearch');
+  if(!wrap||!inp) return;
+  wrap.classList.toggle('has-query', !!(inp.value||'').trim());
+}
+
+function syncContactQueueTabs(){
+  const q=(contactQueueQuery||'').trim().toLowerCase();
+  const allBase=contactQueueLeads||[];
+  const selBase=contactQueueSelectedLeads();
+  const allN=q?allBase.filter(b=>contactQueueMatchQuery(b,q)).length:allBase.length;
+  const selN=q?selBase.filter(b=>contactQueueMatchQuery(b,q)).length:selBase.length;
+  if($('contactQueueAllCount')) $('contactQueueAllCount').textContent=String(allN);
+  if($('contactQueueSelectedCount')) $('contactQueueSelectedCount').textContent=String(selN);
+  document.querySelectorAll('#contactQueueTabs [data-cq-tab]').forEach(btn=>{
+    const on=btn.dataset.cqTab===contactQueueTab;
+    btn.classList.toggle('active',on);
+    btn.setAttribute('aria-selected', on?'true':'false');
+  });
+  const allBar=$('contactQueueBulkBar');
+  const selBar=$('contactQueueSelectedBar');
+  if(allBar) allBar.classList.toggle('show', contactQueueTab==='all' && contactQueuePick.size>0);
+  if(selBar) selBar.classList.toggle('show', contactQueueTab==='selected' && selBase.length>0);
+  if($('contactQueuePickCount')) $('contactQueuePickCount').textContent=contactQueuePick.size+' picked';
+  if($('contactQueueSelectedHint')) $('contactQueueSelectedHint').textContent=selBase.length?`${selBase.length} to contact · send from here`:'No leads marked to contact yet';
+  if($('contactQueueMessageNext')) $('contactQueueMessageNext').disabled=!selBase.length;
+}
+
+function renderContactQueueList(){
   const list=$('contactQueueList');
-  const leads=data.leads||[];
-  contactQueueLeads=leads;
+  if(!list) return;
+  syncContactQueueTabs();
+  const isSelected=contactQueueTab==='selected';
+  const leads=contactQueueVisibleLeads();
+  const q=(contactQueueQuery||'').trim();
   if(!leads.length){
-    list.innerHTML='<div class="empty-card">No leads match this ranking mode. Try Balanced, or Discover + star prospects first.</div>';
+    if(q){
+      list.innerHTML=`<div class="empty-card">No matches for “${esc(q)}” on <strong>${isSelected?'To contact':'All'}</strong>.</div>`;
+    }else{
+      list.innerHTML=isSelected
+        ? '<div class="empty-card">Nothing marked to contact yet. On <strong>All</strong>, pick leads and use <strong>Mark to contact</strong> at the bottom.</div>'
+        : '<div class="empty-card">No leads match this ranking mode. Try Balanced, or Discover + star prospects first.</div>';
+    }
     return;
   }
   list.innerHTML=leads.map((b,i)=>{
@@ -2741,20 +2894,33 @@ async function loadContactQueue(){
       ch.instagram?'IG':'',
       b.website?'Web':''
     ].filter(Boolean).join(' · ')||'No channels';
+    const picked=contactQueuePick.has(String(b.id));
+    const already=!!b.marked_for_contact;
+    const checkCell=isSelected?'':`<div class="checkcol"><input type="checkbox" data-cq-pick="${b.id}" ${picked?'checked':''} aria-label="Pick ${esc(b.name||'lead')}"></div>`;
+    const actions=isSelected?`
+        <button type="button" class="primary" data-compose-queue="${b.id}">Message</button>
+        <button type="button" data-open-prospect="${b.id}">Open</button>
+        <button type="button" data-cq-unmark="${b.id}">Remove</button>`:`
+        <button type="button" class="primary" data-cq-mark="${b.id}" ${already?'disabled':''}>${already?'On To contact':'Mark to contact'}</button>
+        <button type="button" data-open-prospect="${b.id}">Open</button>`;
     return `
-    <div class="queue-lead" data-row="${b.id}">
+    <div class="queue-lead ${isSelected?'no-check':''}" data-row="${b.id}">
+      ${checkCell}
       <div class="queue-rank meta" style="min-width:48px;align-items:flex-start"><strong style="font-size:18px">#${i+1}</strong><span class="sub">${esc(String(b.rank_score))}</span></div>
       <div class="queue-body">
-        <div class="biz">${esc(b.name||'—')}</div>
+        <div class="biz">${esc(b.name||'—')}${already&&!isSelected?' <span class="badge queue">To contact</span>':''}</div>
         <div class="sub">${esc(b.city||'')} · ${esc((b.stage&&b.stage.name)||'—')} · ${esc(reach)}</div>
         <div class="reach" style="margin-top:6px">${chips||`<span class="chip">${esc(b.why||'ranked')}</span>`}</div>
       </div>
-      <div class="actions">
-        <button type="button" class="primary" data-open-prospect="${b.id}">Open</button>
-        <button type="button" data-compose-queue="${b.id}">Message</button>
+      <div class="actions">${actions}
       </div>
     </div>`;
   }).join('');
+  list.querySelectorAll('[data-cq-pick]').forEach(inp=>inp.addEventListener('change',()=>{
+    const id=String(inp.dataset.cqPick);
+    if(inp.checked) contactQueuePick.add(id); else contactQueuePick.delete(id);
+    syncContactQueueTabs();
+  }));
   list.querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',ev=>{
     ev.stopPropagation();
     openProspectById(btn.dataset.openProspect);
@@ -2764,11 +2930,61 @@ async function loadContactQueue(){
     const id=btn.dataset.composeQueue;
     const lead=contactQueueLeads.find(x=>String(x.id)===String(id));
     if(!lead){ toast('Lead not in queue',true); return; }
-    // Compose only — do not open the details drawer
     try{
       await openCompose(lead, availableComposeChannels(lead)[0]||'email');
     }catch(e){ toast(e.message,true); }
   }));
+  list.querySelectorAll('[data-cq-mark]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    if(btn.disabled) return;
+    try{
+      await markContactQueueIds([btn.dataset.cqMark], true);
+      contactQueueTab='selected';
+      await loadContactQueue({keepTab:true});
+      toast('Added to To contact');
+    }catch(e){ toast(e.message,true); }
+  }));
+  list.querySelectorAll('[data-cq-unmark]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    try{
+      await markContactQueueIds([btn.dataset.cqUnmark], false);
+      await loadContactQueue({keepTab:true});
+      toast('Removed from To contact');
+    }catch(e){ toast(e.message,true); }
+  }));
+}
+
+async function markContactQueueIds(ids, marked){
+  const list=(ids||[]).map(Number).filter(Boolean);
+  if(!list.length) return;
+  await api('/api/businesses/bulk',{method:'POST',body:{ids:list, marked_for_contact:!!marked}});
+  list.forEach(id=>{
+    const row=contactQueueLeads.find(x=>Number(x.id)===Number(id));
+    if(row) row.marked_for_contact=!!marked;
+    contactQueuePick.delete(String(id));
+  });
+}
+
+async function loadContactQueue(opts={}){
+  if(!opts.keepTab){ /* preserve tab when refreshing after mark */ }
+  const mode=($('contactQueueMode')&&$('contactQueueMode').value)||'';
+  const qs=new URLSearchParams({product_line:'STANDALONE',limit:'100'});
+  if(mode) qs.set('mode', mode);
+  const data=await api('/api/sales/contact-queue?'+qs.toString());
+  fillContactQueueModes(data.modes||[], data.mode||'default');
+  if($('contactQueueDef')){
+    $('contactQueueDef').textContent=(data.definition||'')+` · Pick on All → Mark to contact → message from To contact.`;
+  }
+  renderContactQueueExplain(data);
+  contactQueueLeads=data.leads||[];
+  // Drop picks that are no longer in the ranked list
+  const alive=new Set(contactQueueLeads.map(b=>String(b.id)));
+  [...contactQueuePick].forEach(id=>{ if(!alive.has(id)) contactQueuePick.delete(id); });
+  if($('contactQueueSearch') && contactQueueQuery && $('contactQueueSearch').value!==contactQueueQuery){
+    $('contactQueueSearch').value=contactQueueQuery;
+  }
+  syncContactQueueSearchUi();
+  renderContactQueueList();
 }
 
 async function saveContactQueueMode(){
@@ -2779,7 +2995,7 @@ async function saveContactQueueMode(){
     throw new Error(t||'Could not save ranking mode');
   }
   toast('Ranking mode saved');
-  await loadContactQueue();
+  await loadContactQueue({keepTab:true});
 }
 
 async function createProposalInvoiceForProspect(businessId, {provider='manual', title=''}={}){
@@ -4061,9 +4277,59 @@ $('paySetupTabs')&&$('paySetupTabs').addEventListener('click',e=>{
   paySetupSetStatus('Editing '+paySetupTab+'. Fill fields → Save → Validate.', 'info');
 });
 $('settingsRefresh')&&$('settingsRefresh').addEventListener('click',()=>loadSettings().catch(e=>toast(e.message,true)));
-$('contactQueueRefresh')&&$('contactQueueRefresh').addEventListener('click',()=>loadContactQueue().catch(e=>toast(e.message,true)));
-$('contactQueueMode')&&$('contactQueueMode').addEventListener('change',()=>loadContactQueue().catch(e=>toast(e.message,true)));
+$('contactQueueRefresh')&&$('contactQueueRefresh').addEventListener('click',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
+$('contactQueueMode')&&$('contactQueueMode').addEventListener('change',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
 $('contactQueueSaveMode')&&$('contactQueueSaveMode').addEventListener('click',()=>saveContactQueueMode().catch(e=>toast(e.message,true)));
+$('contactQueueTabs')&&$('contactQueueTabs').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-cq-tab]');
+  if(!btn) return;
+  contactQueueTab=btn.dataset.cqTab==='selected'?'selected':'all';
+  renderContactQueueList();
+});
+$('contactQueueSearch')&&$('contactQueueSearch').addEventListener('input',()=>{
+  contactQueueQuery=$('contactQueueSearch').value||'';
+  syncContactQueueSearchUi();
+  renderContactQueueList();
+});
+$('contactQueueSearchClear')&&$('contactQueueSearchClear').addEventListener('click',()=>{
+  if($('contactQueueSearch')) $('contactQueueSearch').value='';
+  contactQueueQuery='';
+  syncContactQueueSearchUi();
+  renderContactQueueList();
+  if($('contactQueueSearch')) $('contactQueueSearch').focus();
+});
+$('contactQueueMarkBtn')&&$('contactQueueMarkBtn').addEventListener('click',async()=>{
+  const ids=[...contactQueuePick];
+  if(!ids.length){ toast('Pick leads on All first',true); return; }
+  try{
+    await markContactQueueIds(ids, true);
+    contactQueueTab='selected';
+    await loadContactQueue({keepTab:true});
+    toast(ids.length+' added to To contact');
+  }catch(e){ toast(e.message,true); }
+});
+$('contactQueueClearPick')&&$('contactQueueClearPick').addEventListener('click',()=>{
+  contactQueuePick.clear();
+  renderContactQueueList();
+});
+$('contactQueueMessageNext')&&$('contactQueueMessageNext').addEventListener('click',async()=>{
+  const next=contactQueueSelectedLeads()[0];
+  if(!next){ toast('No leads on To contact',true); return; }
+  try{
+    await openCompose(next, availableComposeChannels(next)[0]||'email');
+  }catch(e){ toast(e.message,true); }
+});
+$('contactQueueClearSelected')&&$('contactQueueClearSelected').addEventListener('click',async()=>{
+  const ids=contactQueueSelectedLeads().map(b=>b.id);
+  if(!ids.length) return;
+  const ok=await uiConfirm({title:'Clear To contact?', message:'Unmarks all leads on the To contact tab (they stay in All).', confirmLabel:'Clear To contact', danger:true});
+  if(!ok) return;
+  try{
+    await markContactQueueIds(ids, false);
+    await loadContactQueue({keepTab:true});
+    toast('To contact cleared');
+  }catch(e){ toast(e.message,true); }
+});
 $('dealsRefresh')&&$('dealsRefresh').addEventListener('click',()=>loadDeals().catch(e=>toast(e.message,true)));
 $('dealCreateBtn')&&$('dealCreateBtn').addEventListener('click',()=>sendPayLinkFlow().catch(e=>toast(e.message,true)));
 $('sendPayLinkBtn')&&$('sendPayLinkBtn').addEventListener('click',()=>sendPayLinkFlow().catch(e=>toast(e.message,true)));
