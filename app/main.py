@@ -72,7 +72,18 @@ with SessionLocal() as _seed_db:
 app = FastAPI(title="AppointHive Sales OS", version="2.0.0")
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = BASE_DIR / "app" / "templates"
-app.mount("/static", StaticFiles(directory=str(TEMPLATE_DIR)), name="static")
+STATIC_DIR = BASE_DIR / "app" / "static"
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+
+@app.middleware("http")
+async def _static_asset_revalidate(request: Request, call_next):
+    """Avoid stale ES-module/CSS caches after solid frontend peels (etag alone is not enough)."""
+    response = await call_next(request)
+    path = request.url.path or ""
+    if path.startswith("/static/js/") or path.startswith("/static/css/"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
 
 
 class LoginRequest(BaseModel):

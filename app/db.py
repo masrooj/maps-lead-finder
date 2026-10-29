@@ -1,7 +1,6 @@
-"""Database engine, session, and numbered SQL migrations."""
+"""Database engine, session, and numbered SQL migrations (Postgres only)."""
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from sqlalchemy import create_engine, text
@@ -9,13 +8,16 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.config import DATABASE_URL
 
-_engine_options: dict = {"pool_pre_ping": True}
-if DATABASE_URL.startswith("sqlite"):
-    _engine_options["connect_args"] = {"check_same_thread": False}
-else:
-    _engine_options.update({"pool_size": 5, "max_overflow": 5, "pool_recycle": 300})
+if DATABASE_URL.lower().startswith("sqlite:"):
+    raise RuntimeError("SQLite is disabled — use Postgres DATABASE_URL")
 
-engine = create_engine(DATABASE_URL, **_engine_options)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=5,
+    pool_recycle=300,
+)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent / "migrations"
@@ -28,12 +30,6 @@ class Base(DeclarativeBase):
 def sql_statements(script: str) -> list[str]:
     lines = [line for line in script.splitlines() if not line.strip().startswith("--")]
     return [part.strip() for part in "\n".join(lines).split(";") if part.strip()]
-
-
-def adapt_migration_sql(statement: str) -> str:
-    if engine.dialect.name != "sqlite":
-        return statement
-    return re.sub(r"(?i)\bADD\s+COLUMN\s+IF\s+NOT\s+EXISTS\b", "ADD COLUMN", statement)
 
 
 def apply_migrations() -> None:
@@ -56,9 +52,8 @@ def apply_migrations() -> None:
             if path.name in applied:
                 continue
             for statement in sql_statements(path.read_text(encoding="utf-8")):
-                sql = adapt_migration_sql(statement)
                 try:
-                    conn.execute(text(sql))
+                    conn.execute(text(statement))
                 except Exception as e:
                     msg = str(e).lower()
                     if (

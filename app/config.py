@@ -3,7 +3,22 @@ from __future__ import annotations
 
 import os
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./local-dev.db")
+def _database_url() -> str:
+    """Postgres only. Never use SQLite (avoids dual-DB confusion)."""
+    explicit = (os.getenv("DATABASE_URL") or "").strip()
+    if explicit:
+        if explicit.lower().startswith("sqlite:"):
+            raise RuntimeError(
+                "SQLite is disabled. Set DATABASE_URL to Postgres "
+                "(Docker: postgresql+psycopg://mapsleads:…@127.0.0.1:5433/mapsleads)."
+            )
+        return explicit
+    pw = (os.getenv("POSTGRES_PASSWORD") or "change-this-password").strip()
+    port = (os.getenv("DB_PORT") or "5433").strip() or "5433"
+    return f"postgresql+psycopg://mapsleads:{pw}@127.0.0.1:{port}/mapsleads"
+
+
+DATABASE_URL = _database_url()
 LOGIN_USERNAME = "hello@appointhive.com"
 LOGIN_PASSWORD = os.getenv("LOGIN_PASSWORD", "").strip()
 SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()

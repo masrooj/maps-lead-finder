@@ -1,32 +1,35 @@
 """UI/API gates for the 21-item contact-queue / compose / deals batch."""
 
+from tests.conftest import frontend_source
+
 
 def test_index_has_21_item_markers(auth_client):
     html = auth_client.get("/").text
-    assert "window.confirm" not in html
-    assert "prompt(" not in html
+    src = frontend_source(html)
+    assert "window.confirm" not in src
+    assert "prompt(" not in src
     assert 'id="contactQueueBookingCount"' in html
     assert 'id="contactQueueChannel"' in html
-    assert "queue-tabs-sticky" in html
+    assert "queue-tabs-sticky" in src
     assert 'id="composeTabs"' in html
     assert 'id="composeMarkBtn"' in html
     assert 'id="copyComposeIconBtn"' in html
-    assert "normalizeEmailBodyBreaks" in html
-    assert "channelTagsHtml" in html
-    assert "Do not auto-open" in html
+    assert "normalizeEmailBodyBreaks" in src
+    assert "channelTagsHtml" in src
+    assert "Do not auto-open" in src
     assert 'id="brandLogoFile"' in html
     assert 'id="paylinkCreateBtn"' in html
     assert 'id="dealsPaylinksPane"' in html
-    assert 'data-dtab="proposal"' in html
-    assert 'data-dtab="appointhive"' in html
-    assert "markBookingIds" in html
-    assert "z-index:320" in html
-    assert "dismissNotification" in html
+    assert 'data-dtab="proposal"' in src
+    assert 'data-dtab="appointhive"' in src
+    assert "markBookingIds" in src
+    assert "z-index:320" in src
+    assert "dismissNotification" in src
     assert 'id="notifClearAll"' in html
-    assert "data-notif-dismiss" in html
-    assert "contactQueueIsParked" in html
+    assert "data-notif-dismiss" in src
+    assert "contactQueueIsParked" in src
     assert 'id="settingsTabs"' in html
-    assert "setSettingsTab" in html
+    assert "setSettingsTab" in src
     assert 'data-settings-tab="general"' in html
 
 
@@ -107,14 +110,15 @@ def test_get_prospect_endpoint(auth_client):
 
 def test_index_gap_closure_markers(auth_client):
     html = auth_client.get("/").text
-    assert "mapsUrlFor" in html
-    assert "copyEmailHtmlSignature" in html
-    assert "emailSignatureHtml" in html
-    assert "mergePaylinkRows" in html
-    assert "Local proposal (Manual" in html
-    assert "kept existing secret" in html
-    assert 'data-booking="' in html
-    assert "data-prospect-booking" in html
+    src = frontend_source(html)
+    assert "mapsUrlFor" in src
+    assert "copyEmailHtmlSignature" in src
+    assert "emailSignatureHtml" in src
+    assert "mergePaylinkRows" in src
+    assert "Local proposal (Manual" in src
+    assert "kept existing secret" in src
+    assert 'data-booking="' in src
+    assert "data-prospect-booking" in src
 
 
 def test_be_manual_keeps_existing_secret(auth_client):

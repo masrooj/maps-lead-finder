@@ -1,0 +1,16 @@
+:root{
+  color-scheme:dark;
+  --bg:#070b16;--bg-glow:#152445;--panel:#10182b;--panel2:#162136;--panel-elev:#1a2740;
+  --line:#2a3a56;--line-soft:#223149;--text:#eef3ff;--muted:#93a1bc;--label:#a9b7d1;
+  --accent:#7ea2ff;--accent-2:#5ce0c0;--accent-soft:rgba(126,162,255,.14);
+  --green:#3bd5a0;--red:#ff7b8b;--amber:#ffd98a;--star:#ffd98a;
+  --input:#0b1324;--input-hover:#0f182c;--input-focus:#122038;--placeholder:#6a7896;
+  --shadow:0 18px 50px rgba(0,0,0,.42);--shadow-sm:0 8px 24px rgba(0,0,0,.28);
+  --radius:14px;--radius-sm:10px;--radius-xs:8px;--control-h:44px;--control-radius:12px;
+  --focus-ring:0 0 0 3px rgba(126,162,255,.24);
+  --space-1:4px;--space-2:8px;--space-3:12px;--space-4:16px;--space-5:20px;--space-6:28px;
+  --font:"Plus Jakarta Sans",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,sans-serif;
+  --ease:cubic-bezier(.22,.61,.36,1);--z-sidebar:40;--z-topbar:45;--z-overlay:50;--z-popover:60;--z-toast:90;
+  --safe-t:env(safe-area-inset-top,0px);--safe-b:env(safe-area-inset-bottom,0px);--safe-l:env(safe-area-inset-left,0px);--safe-r:env(safe-area-inset-right,0px);
+}
+

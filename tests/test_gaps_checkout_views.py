@@ -131,18 +131,21 @@ def test_saved_views_crud(auth_client):
 
 
 def test_home_has_kanban_drag_and_refund_ui(auth_client):
+    from tests.conftest import frontend_source
+
     html = auth_client.get("/").text
-    assert 'draggable="true"' in html or "dragstart" in html
-    assert "data-refund" in html or "/refund" in html
-    assert "saved-views" in html or "saveViewBtn" in html
-    assert 'class="sidebar"' in html or "id=\"sidebar\"" in html
-    assert 'data-goto="tasks"' in html
-    assert 'data-goto="money"' in html
-    assert 'data-goto="pipeline"' in html
+    src = frontend_source(html)
+    assert 'draggable="true"' in src or "dragstart" in src
+    assert "data-refund" in src or "/refund" in src
+    assert "saved-views" in src or "saveViewBtn" in src
+    assert 'class="sidebar"' in html or 'id="sidebar"' in html
+    assert 'data-goto="tasks"' in src
+    assert 'data-goto="money"' in src
+    assert 'data-goto="pipeline"' in src
     assert 'id="uiDialog"' in html
-    assert "function uiConfirm" in html or "uiConfirm(" in html
-    assert "window.confirm" not in html
-    assert "prompt(" not in html
+    assert "function uiConfirm" in src or "uiConfirm(" in src
+    assert "window.confirm" not in src
+    assert "prompt(" not in src
     assert 'id="topbar"' in html
     assert 'id="notifBtn"' in html
     assert 'id="profileMenu"' in html
