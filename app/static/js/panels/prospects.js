@@ -1,8 +1,10 @@
 import { $ } from '../core/dom.js';
 
-import { esc, api, toast } from '../core/api.js';
+import { esc, api } from '../core/api.js';
 
 import { pageSlice, renderPager, ensurePagerHost, pagerState } from '../core/pager.js';
+
+import { tableSkeletonHtml } from '../core/skeleton.js';
 
 import { registerPanel } from './registry.js';
 
@@ -10,7 +12,7 @@ import { B } from '../app/bridge.js';
 
 import { safeRefresh } from '../shell/router.js';
 
-import { mapsUrlFor, markBookingIds } from './contact-queue.js';
+import { mapsUrlFor } from './contact-queue.js';
 
 
 
@@ -89,31 +91,14 @@ export function renderProspectsTable(){
     <td data-label="Score">${scoreHtml}</td>
     <td data-label="Actions"><div class="action-stack">
       <button type="button" data-open-prospect="${p.id}">Open</button>
-      <button type="button" data-prospect-booking="${p.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>
     </div></td>
   </tr>`;
   }).join('');
   renderPager(pagerHost, slice, renderProspectsTable);
   tb.querySelectorAll('[data-open-prospect]').forEach(el=>el.addEventListener('click',async ev=>{
-    if(ev.target.closest('[data-prospect-booking]')) return;
     ev.stopPropagation();
     const id=el.dataset.openProspect||el.closest('[data-open-prospect]')?.dataset.openProspect;
     if(id) await B.openProspectById(id);
-  }));
-  tb.querySelectorAll('[data-prospect-booking]').forEach(btn=>btn.addEventListener('click',async ev=>{
-    ev.stopPropagation();
-    try{
-      const on=btn.dataset.bookingOn==='1';
-      await markBookingIds([btn.dataset.prospectBooking], on);
-      const row=prospectsCache.find(x=>String(x.id)===String(btn.dataset.prospectBooking));
-      if(row) row.current_booking_software=on?'Has booking':'';
-      renderProspectsTable();
-      toast(on?'Marked as has booking':'Cleared booking flag');
-    }catch(e){ toast(e.message,true); }
-  }));
-  tb.querySelectorAll('tr[data-maps]').forEach(tr=>tr.addEventListener('click',ev=>{
-    if(ev.target.closest('button,a,input')) return;
-    // double-duty: open maps only when alt/meta, else open prospect (existing open handler on name/open)
   }));
 }
 
@@ -121,6 +106,13 @@ export async function loadProspects(){
   const q=($('prospectsQ')&&$('prospectsQ').value)||'';
   const country=($('prospectsCountry')&&$('prospectsCountry').value)||'';
   const city=($('prospectsCity')&&$('prospectsCity').value)||'';
+  const tb=$('prospectsTable')&&$('prospectsTable').querySelector('tbody');
+  const pagerHost=tb&&ensurePagerHost($('prospectsTable').closest('.sales-table-wrap'),'prospectsPager');
+  if(tb){
+    if($('prospectsMeta')) $('prospectsMeta').textContent='Loading prospects…';
+    tb.innerHTML=tableSkeletonHtml({rows:6, cols:7, label:'Loading prospects…'});
+    if(pagerHost) pagerHost.innerHTML='';
+  }
   // Seed full country/city menus once so filters never collapse to the active scope
   if(!Object.keys(prospectsLocCache).length){
     const seed=await api('/api/sales/prospects?limit=2000');

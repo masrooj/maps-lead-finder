@@ -99,25 +99,35 @@ def _parse_json(raw: str, default=None):
 
 
 def seed_ranking_modes(db) -> int:
+    """Idempotent seed — safe under concurrent/reseed paths (unique slug)."""
     created = 0
     for spec in DEFAULT_MODES:
         exists = db.scalar(select(ContactQueueMode).where(ContactQueueMode.slug == spec["slug"]))
         if exists:
             continue
-        db.add(
-            ContactQueueMode(
-                slug=spec["slug"],
-                name=spec["name"],
-                description=spec["description"],
-                filter_json=json.dumps(spec["filter_json"]),
-                boost_json=json.dumps(spec["boost_json"]),
-                sort_order=spec["sort_order"],
-                active=True,
-                created_at=_utcnow(),
-                updated_at=_utcnow(),
-            )
-        )
-        created += 1
+        try:
+            with db.begin_nested():
+                db.add(
+                    ContactQueueMode(
+                        slug=spec["slug"],
+                        name=spec["name"],
+                        description=spec["description"],
+                        filter_json=json.dumps(spec["filter_json"]),
+                        boost_json=json.dumps(spec["boost_json"]),
+                        sort_order=spec["sort_order"],
+                        active=True,
+                        created_at=_utcnow(),
+                        updated_at=_utcnow(),
+                    )
+                )
+                db.flush()
+            created += 1
+        except Exception:
+            # Concurrent insert won the unique slug race — treat as already seeded.
+            db.expire_all()
+            if db.scalar(select(ContactQueueMode).where(ContactQueueMode.slug == spec["slug"])):
+                continue
+            raise
     return created
 
 

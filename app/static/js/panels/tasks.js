@@ -4,6 +4,8 @@ import { esc, api, toast, plusDays } from '../core/api.js';
 
 import { pageSlice, renderPager, ensurePagerHost, pagerState } from '../core/pager.js';
 
+import { listSkeletonHtml } from '../core/skeleton.js';
+
 import { uiConfirm, uiForm } from '../core/dialog.js';
 
 import { registerPanel } from './registry.js';
@@ -72,6 +74,12 @@ export function renderTasksList(){
 }
 
 export async function loadTasks(){
+  const list=$('tasksList');
+  const pagerHost=list&&ensurePagerHost(list,'tasksPager');
+  if(list){
+    list.innerHTML=listSkeletonHtml({rows:4, label:'Loading tasks…'});
+    if(pagerHost) pagerHost.innerHTML='';
+  }
   const data=await api('/api/sales/tasks');
   tasksCache=data.tasks||[];
   if(pagerState.tasks) pagerState.tasks.page=1;

@@ -463,6 +463,21 @@ class DemoAsset(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
 
+class AuthRefreshToken(Base):
+    """Opaque refresh token (hash only). Rotated on use; reuse revokes family."""
+    __tablename__ = "auth_refresh_tokens"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    family_id: Mapped[str] = mapped_column(String(64), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    user_agent: Mapped[str] = mapped_column(String(500), default="")
+    client: Mapped[str] = mapped_column(String(40), default="mobile")  # web|mobile
+
+
 class BeDelivery(Base):
     """AppointHive Booking Engine handover row (purchase / soft request / upgrade)."""
     __tablename__ = "be_deliveries"

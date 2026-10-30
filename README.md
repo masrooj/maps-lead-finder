@@ -88,10 +88,21 @@ To stop containers without deleting the saved PostgreSQL volume, run `docker com
 - Records do not automatically sync between these databases. Use the CSV export/import workflow if you need to move data.
 - Both environments use the same Google Places API key only if you configure it in each environment. Consider separate restricted keys and usage limits.
 
+## Mobile API
+
+The web UI and native clients share the same `/api/*` surface (Discover, Contact Queue, marking, compose/`confirm-sent`, pipeline, money, settings, AppointHive bridge, etc.).
+
+1. Open **Swagger**: http://localhost:8000/docs (disable with `ENABLE_API_DOCS=false`).
+2. `POST /api/login` with `{ "username": "hello@appointhive.com", "password": "…" }`.
+3. Click **Authorize** (padlock, top right of `/docs`) → paste `access_token` only (Swagger adds `Bearer` for you) → Authorize.
+4. Call any locked feature route. Rotate with `POST /api/auth/refresh` `{ "refresh_token": "…" }`. Log out with `POST /api/auth/logout` (optional refresh body to revoke).
+
+Auth headers: `Authorization: Bearer <access_token>`. The web session cookie (`mlf_session`) still works for the browser UI. Access JWT ~30 minutes (`ACCESS_TOKEN_MINUTES`); refresh ~30 days (`REFRESH_TOKEN_DAYS`), rotated on use.
+
 ## Limits and production safety
 
 - Places Text Search is not an unrestricted export of every listing. The app requests up to 60 results for a query, subject to Google API behavior and terms.
 - Social links are best-effort links found on the business website homepage. Review response time is not supplied by the standard Places API and is shown as unavailable.
 - Vercel serverless functions have execution limits. Searching and visiting many websites for social links can time out on larger searches.
-- The app uses a single shared login (`hello@appointhive.com` + `LOGIN_PASSWORD`) with a signed session cookie. There is no signup and no per-user data isolation. Add stronger auth, rate limiting, and production hardening before wider exposure.
+- Auth uses signed session cookies (web) plus Bearer access/refresh tokens (mobile). Team users have roles (owner/sales/viewer). Enable rate limiting and set strong `SESSION_SECRET` / `LOGIN_PASSWORD` before wider exposure; set `ENABLE_API_DOCS=false` in production if you do not want public Swagger.
 - Restrict the Google API key, enable billing alerts/quotas, and follow Google Maps Platform terms, attribution, and retention requirements.

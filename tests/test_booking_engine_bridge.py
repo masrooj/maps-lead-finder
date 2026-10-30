@@ -177,7 +177,7 @@ def test_revisions_and_send_when_connected(auth_client):
         biz = Business(
             place_id="be/bridge-send-1",
             name="Bridge Salon",
-            email="buyer@example.com",
+            email="buyer@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
         )
@@ -261,7 +261,7 @@ def test_soft_request_awaits_quote(auth_client):
         biz = Business(
             place_id="be/bridge-soft-1",
             name="Soft Request Co",
-            email="buyer@example.com",
+            email="buyer@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
         )
@@ -294,7 +294,7 @@ def test_upgrade_requires_installation_id(auth_client):
         biz = Business(
             place_id="be/bridge-upg-1",
             name="Upgrade Gate Co",
-            email="buyer@example.com",
+            email="buyer@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
             be_installation_id="",
@@ -311,7 +311,9 @@ def test_upgrade_requires_installation_id(auth_client):
         json={"business_id": bid, "to_revision_id": "rev_up"},
     )
     assert r.status_code == 422
-    assert "installation_id" in r.text.lower()
+    body = r.json().get("detail") or r.json()
+    blob = json.dumps(body).lower() if isinstance(body, dict) else str(body).lower()
+    assert "installation" in blob
 
 
 def test_local_psp_blocked_when_connected(auth_client):
@@ -322,7 +324,7 @@ def test_local_psp_blocked_when_connected(auth_client):
         biz = Business(
             place_id="be/bridge-psp-1",
             name="PSP Block Co",
-            email="buyer@example.com",
+            email="buyer@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
         )
@@ -371,7 +373,7 @@ def test_payment_paid_webhook_mirrors_won(auth_client):
         biz = Business(
             place_id="be/bridge-won-1",
             name="Won Mirror Co",
-            email="buyer@example.com",
+            email="buyer@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
         )
@@ -435,7 +437,7 @@ def test_soft_after_won_does_not_demote(auth_client):
         biz = Business(
             place_id=f"be/bridge-won-soft-{uuid.uuid4().hex[:8]}",
             name="Won Soft Guard Co",
-            email="buyer@example.com",
+            email="buyer@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
         )
@@ -493,7 +495,7 @@ def test_soft_request_sends_crm_prospect(auth_client):
         biz = Business(
             place_id=f"be/bridge-soft-{uuid.uuid4().hex[:8]}",
             name="Soft Request Salon",
-            email="soft@example.com",
+            email="soft@mapsleads.test",
             phone="+61 400 000 001",
             address="1 Test St",
             city="Sydney",
@@ -525,7 +527,7 @@ def test_soft_request_sends_crm_prospect(auth_client):
     body = captured["payload"]
     assert body["externalCrmRef"] == crm_lead_id_for(bid)
     assert body["crmProspect"]["business"]["name"] == "Soft Request Salon"
-    assert "soft@example.com" in (body["contactEmail"] or "")
+    assert "soft@mapsleads.test" in (body["contactEmail"] or "")
     assert "CRM_PROSPECT_JSON" in (body["message"] or "")
 
 
@@ -536,7 +538,7 @@ def test_installation_active_webhook_stores_id(auth_client):
         biz = Business(
             place_id=f"be/bridge-install-{uuid.uuid4().hex[:8]}",
             name="Install Co",
-            email="inst@example.com",
+            email="inst@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
         )
@@ -586,7 +588,7 @@ def test_upgrade_status_webhook_sets_pay_url(auth_client):
         biz = Business(
             place_id=f"be/bridge-upg-{uuid.uuid4().hex[:8]}",
             name="Upgrade Co",
-            email="upg@example.com",
+            email="upg@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
             be_installation_id="inst_upg",
@@ -641,7 +643,7 @@ def test_soft_omits_installation_id_on_new_sale(auth_client):
         biz = Business(
             place_id=f"be/bridge-soft-omit-{uuid.uuid4().hex[:8]}",
             name="Omit Install Soft Co",
-            email="omit@example.com",
+            email="omit@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
             be_installation_id="inst_fake_should_not_send",
@@ -679,7 +681,7 @@ def test_upgrade_happy_path_mocked(auth_client):
         biz = Business(
             place_id=f"be/bridge-upg-happy-{uuid.uuid4().hex[:8]}",
             name="Upgrade Happy Co",
-            email="uphappy@example.com",
+            email="uphappy@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
             be_installation_id="inst_real_test",
@@ -741,7 +743,7 @@ def test_paid_webhook_idempotent_no_double_activity(auth_client):
         biz = Business(
             place_id=f"be/bridge-idem-{uuid.uuid4().hex[:8]}",
             name="Idempotent Pay Co",
-            email="idem@example.com",
+            email="idem@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
         )
@@ -808,7 +810,7 @@ def test_refresh_delivery_updates_pay_url(auth_client):
         biz = Business(
             place_id=f"be/bridge-refresh-{uuid.uuid4().hex[:8]}",
             name="Refresh Co",
-            email="ref@example.com",
+            email="ref@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
         )
@@ -867,7 +869,7 @@ def test_so_only_full_flow_a_b_c_without_live_be(auth_client):
         biz = Business(
             place_id=f"be/bridge-so-e2e-{uuid.uuid4().hex[:8]}",
             name="SO Only E2E Co",
-            email="so.e2e@example.com",
+            email="so.e2e@mapsleads.test",
             currency="AUD",
             product_line="STANDALONE",
             be_installation_id="",

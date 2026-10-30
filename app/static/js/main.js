@@ -11,6 +11,7 @@
  * New feature / bugfix → owning module above. Never grow index.html scripts.
  */
 import './core/dom.js'; // installs globalThis.$ early
+import './core/auth.js'; // Bearer token session for API calls
 import './shell/sidebar.js';
 import './shell/topbar.js';
 import './shell/login.js';
@@ -22,4 +23,5 @@ import './features/scoring.js';
 import './features/be-bridge.js';
 import './features/prospect-picker.js';
 import './features/invoices.js';
+import './features/email-signature.js';
 import './app/runtime.js';

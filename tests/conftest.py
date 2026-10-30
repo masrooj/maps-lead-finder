@@ -17,6 +17,7 @@ _MUTABLE_TABLES = (
     "invoices",
     "proposals",
     "be_deliveries",
+    "auth_refresh_tokens",
     "activities",
     "activity_log",
     "stage_history",
@@ -33,7 +34,7 @@ _MUTABLE_TABLES = (
     "message_templates",
     "businesses",
     "sales_territories",
-    "contact_queue_modes",
+    # contact_queue_modes stays as catalog (like stages/plans); light reseed is idempotent.
 )
 
 
@@ -110,7 +111,16 @@ def frontend_source(html: str = "") -> str:
     return "\n".join(parts)
 
 
+def _dispose_connections() -> None:
+    """Drop pooled connections so TRUNCATE is not blocked by TestClient sessions."""
+    try:
+        engine.dispose()
+    except Exception:
+        pass
+
+
 def _truncate_all_except_migrations() -> None:
+    _dispose_connections()
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -133,6 +143,7 @@ def _truncate_all_except_migrations() -> None:
 
 def _truncate_mutable() -> None:
     """Clear prospect/money/job rows; keep stages/plans/settings for speed."""
+    _dispose_connections()
     with engine.begin() as conn:
         present = []
         for name in _MUTABLE_TABLES:
@@ -168,14 +179,15 @@ def _reseed_full() -> None:
 def _reseed_light() -> None:
     """Owner + ranking modes only (catalog already present from session seed)."""
     with SessionLocal() as db:
-        seed_owner(db)
         try:
+            seed_owner(db)
             from app.services.ranking_modes import seed_ranking_modes
 
             seed_ranking_modes(db)
+            db.commit()
         except Exception:
-            pass
-        db.commit()
+            db.rollback()
+            raise
 
 
 def _reset_full() -> None:

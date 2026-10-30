@@ -229,6 +229,19 @@ body.sidebar-open .sidebar-backdrop{display:block}
 .crud-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 .crud-toolbar input,.crud-toolbar select{max-width:280px;min-width:160px}
 .empty-card{padding:28px 18px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:12px;background:rgba(11,19,36,.55)}
+@keyframes sk-shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+.sk{display:inline-block;border-radius:8px;background:linear-gradient(90deg,#162136 0%,#1e2d4a 40%,#162136 80%);background-size:200% 100%;animation:sk-shimmer 1.15s var(--ease) infinite;vertical-align:middle}
+.sk-line{display:block;max-width:100%}
+.sk-stack{display:flex;flex-direction:column;gap:10px;padding:2px 0}
+.sk-card{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:rgba(11,19,36,.45)}
+.sk-card-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+.sk-card-actions{display:flex;gap:8px;flex-shrink:0}
+.sk-tr td{padding:14px 10px;vertical-align:middle}
+.sk-drawer{display:flex;flex-direction:column;gap:16px;padding:4px 0 12px}
+.sk-tabs{display:flex;flex-wrap:wrap;gap:8px}
+.sk-pane{display:flex;flex-direction:column;gap:10px;padding:4px 0}
+.sk-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+.sk-sr-row{display:none}
 .view-chip{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--input);margin-bottom:8px}
 .view-chip .biz{font-size:13px}
 .guide-steps{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}

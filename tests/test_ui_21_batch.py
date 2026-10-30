@@ -113,12 +113,19 @@ def test_index_gap_closure_markers(auth_client):
     src = frontend_source(html)
     assert "mapsUrlFor" in src
     assert "copyEmailHtmlSignature" in src
-    assert "emailSignatureHtml" in src
+    assert "emailSignatureHtml" in src or "emailSignaturePlain" in src
+    assert "emailSignatureText" in html
+    assert "emailSignatureSave" in html
     assert "mergePaylinkRows" in src
     assert "Local proposal (Manual" in src
     assert "kept existing secret" in src
-    assert 'data-booking="' in src
-    assert "data-prospect-booking" in src
+    assert 'data-booking="' in src  # Discover row: Has booking
+    assert "data-cq-booking" in src  # Contact queue: Has booking (not Prospects / drawer)
+    assert "listSkeletonHtml" in src
+    assert "drawerSkeletonHtml" in src
+    assert "showDrawerLoading" in src
+    assert "isOutreachDrawerPanel" in src
+    assert "resolveDrawerMode" in src
 
 
 def test_be_manual_keeps_existing_secret(auth_client):

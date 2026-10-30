@@ -4,6 +4,7 @@
  */
 import { $ } from '../core/dom.js';
 import { esc, api, toast, showMessage, fmtMoney, fmtDateTime, dateOnly, plusDays } from '../core/api.js';
+import { setAuthTokens, clearAuthTokens, logoutAuth } from '../core/auth.js';
 import { pageSlice, renderPager, ensurePagerHost, PAGE_SIZE_DEFAULT, pagerState } from '../core/pager.js';
 import { closeUiDialog, openUiDialog, uiConfirm, uiForm } from '../core/dialog.js';
 import {
@@ -35,6 +36,10 @@ import {
   setContactQueueQuery, setContactQueueChannel, getContactQueueLocations
 } from '../panels/contact-queue.js';
 import {
+  brandLogoAbsoluteUrl, emailSignaturePlain, withEmailSignature,
+  refreshSignatureUi,
+} from '../features/email-signature.js';
+import {
   refreshBeConnBanners, renderBeConnDetails, beCatalogIsPlan, beCatalogRows,
   formatBePrice, renderBeCatalogBody, loadBeCatalog, isOwnerRole, applyBeConnectOwnerGate,
   setBeRole
@@ -45,6 +50,8 @@ import { loadReports, renderBars } from '../panels/reports.js';
 import { loadTasks, renderTasksList, createTaskFlow } from '../panels/tasks.js';
 import { loadDemos, renderDemosTable, loadDemoAssets, addDemoAssetFlow, uploadDemoAssetFile, createDemoFlow } from '../panels/demos.js';
 import { loadProspects, renderProspectsTable, fillProspectsLocationFilters, prospectsScopeLabel, mergeProspectsLocCache } from '../panels/prospects.js';
+import { showDrawerLoading, resolveDrawerMode, clampDrawerTab } from '../features/drawer.js';
+import { listSkeletonHtml } from '../core/skeleton.js';
 
 
 
@@ -58,6 +65,7 @@ let composeLead=null;
 let composePreferred='email';
 let drawerLead=null;
 let drawerTab='overview';
+let drawerMode='crm'; // outreach (Discover/CQ) | crm (Prospects + money flows)
 let activeTplChannel='email';
 let selectedTplId=null;
 let templatesStore=null;
@@ -718,9 +726,7 @@ async function loadMailSettings(){
 
 async function loadSettings(){
   const me=await api('/api/sales/me');
-  const settings=await api('/api/sales/settings');
-  brandLogoUrl=((settings.settings||{}).brand_logo_url)||'';
-  paintBrandLogoPreview();
+  await refreshSignatureUi().catch(()=>{});
   $('saasEnabledToggle').checked=!!me.saas_enabled;
   $('settingsMeta').innerHTML=`
     <div class="queue-card"><span>Signed in</span><strong style="font-size:14px">${esc((me.user&&me.user.email)||me.username||'')}</strong></div>
@@ -1063,7 +1069,7 @@ async function loadMoney(){
 }
 
 /* contact queue state: panels/contact-queue.js + core/state.js */
-let brandLogoUrl='';
+/* brand logo + email signature: features/email-signature.js */
 
 
 
@@ -1486,24 +1492,6 @@ async function createPaylinksFlow(){
   if(appPanel==='deals') try{ await loadDeals(); }catch(e){}
   toast(ok?`${ok} pay link invoice(s) ready`+(fail?` · ${fail} skipped`:'') : 'No invoices created', !ok);
 }
-function paintBrandLogoPreview(){
-  const img=$('brandLogoPreview');
-  if(!img) return;
-  if(brandLogoUrl){
-    img.src=brandLogoUrl;
-    img.classList.remove('hidden');
-  }else{
-    img.removeAttribute('src');
-    img.classList.add('hidden');
-  }
-}
-async function loadBrandLogoSetting(){
-  try{
-    const s=await api('/api/sales/settings');
-    brandLogoUrl=((s.settings||{}).brand_logo_url)||'';
-    paintBrandLogoPreview();
-  }catch(e){}
-}
 async function loadDeals(){
   const [props, inv, dash]=await Promise.all([
     api('/api/sales/proposals'),
@@ -1664,26 +1652,6 @@ function updateViewHint(){
   else if(viewMode==='due'){$('viewHint').textContent='Due / overdue follow-ups across all cities.';$('statTotalLabel').textContent='Shown'}
   else{$('viewHint').textContent='City leads for the selected country/city. “All cities · queue” is always global.';$('statTotalLabel').textContent='City shown'}
 }
-function apiError(detail,fallback){
-  if(typeof detail==='string'&&detail) return detail;
-  if(Array.isArray(detail)){
-    return detail.map(x=>{
-      if(!x) return '';
-      if(typeof x==='string') return x;
-      return x.msg||x.message||x.error||(typeof x.detail==='string'?x.detail:'')||JSON.stringify(x);
-    }).filter(Boolean).join('; ')||fallback;
-  }
-  if(detail&&typeof detail==='object'){
-    const nested=detail.error||detail.msg||detail.message||detail.detail;
-    if(typeof nested==='string'&&nested) return nested;
-    if(nested&&typeof nested==='object') return apiError(nested, fallback);
-    try{ const s=JSON.stringify(detail); if(s&&s!=='{}') return s; }catch(e){}
-  }
-  return fallback;
-}
-function fallbackStatus(code){return code===401?'Authentication required':code===403?'Forbidden':'Request failed ('+code+')'}
-
-
 function channelLabel(ch){return ch==='email'?'Email':ch==='whatsapp'?'WhatsApp':ch==='instagram'?'Instagram':ch==='invoice'?'Invoice':ch}
 function firstEmail(b){return String(b.email||'').split(',').map(e=>e.trim()).filter(Boolean)[0]||''}
 function phoneDigits(b){return String(b.international_phone||b.phone||'').replace(/\D/g,'')}
@@ -1709,33 +1677,11 @@ function normalizeEmailBodyBreaks(body){
   // Keep real paragraph breaks for Zoho / mailto (avoid one giant paragraph)
   return String(body||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').replace(/\n/g,'\r\n');
 }
-function brandLogoAbsoluteUrl(){
-  if(!brandLogoUrl) return '';
-  return /^https?:\/\//i.test(brandLogoUrl)?brandLogoUrl:(location.origin+brandLogoUrl);
-}
-function emailSignaturePlain(){
-  const abs=brandLogoAbsoluteUrl();
-  if(!abs) return '';
-  return '\r\n\r\n--\r\nAppointHive\r\nLogo: '+abs;
-}
-function emailSignatureHtml(){
-  const abs=brandLogoAbsoluteUrl();
-  if(!abs) return '';
-  return '<br><br>--<br><img src="'+esc(abs)+'" alt="Logo" height="48" style="max-height:48px;width:auto;display:block;margin:8px 0"><br>';
-}
-function withEmailSignature(body, {html=false}={}){
-  const base=String(body||'');
-  if(!brandLogoUrl) return base;
-  if(base.includes(brandLogoUrl) || base.includes(brandLogoAbsoluteUrl())) return base;
-  if(html){
-    const withBr=base.replace(/\r\n|\n|\r/g,'<br>');
-    return withBr+emailSignatureHtml();
-  }
-  return base+emailSignaturePlain();
-}
 async function copyEmailHtmlSignature(plainBody){
   const abs=brandLogoAbsoluteUrl();
-  if(!abs || !navigator.clipboard || !window.ClipboardItem) return false;
+  // Clipboard HTML needs a logo image OR any signature text
+  if(!navigator.clipboard || !window.ClipboardItem) return false;
+  if(!abs && !(emailSignaturePlain()||'').trim()) return false;
   const html=withEmailSignature(plainBody,{html:true});
   const plain=normalizeEmailBodyBreaks(withEmailSignature(plainBody));
   try{
@@ -2030,6 +1976,12 @@ async function load(){
     rowsData=[];paint();
     if(seq===loadSeq)await loadStats();
     return;
+  }
+  const body=$('rows');
+  const pagerHost=body&&ensurePagerHost($('leads'),'leadsPager');
+  if(body){
+    body.innerHTML=listSkeletonHtml({rows:6, label:'Loading leads…'});
+    if(pagerHost) pagerHost.innerHTML='';
   }
   try{
     const data=await api('/api/businesses?'+queryParams());
@@ -2501,18 +2453,32 @@ async function loadActivity(id){
   }
 }
 
-async function openDrawer(id){
+async function openDrawer(id, opts={}){
+  drawerMode=resolveDrawerMode(opts.panel||appPanel||sharedState.appPanel);
   let b=rowsData.find(x=>String(x.id)===String(id));
   if(!b){
+    showDrawerLoading();
     try{
-      const data=await api('/api/businesses?scope=global&status=all&include_archived=true');
-      b=(data.results||[]).find(x=>String(x.id)===String(id));
+      try{
+        b=await api('/api/sales/prospects/'+id);
+      }catch(_){
+        const data=await api('/api/businesses?scope=global&status=all&include_archived=true');
+        b=(data.results||[]).find(x=>String(x.id)===String(id));
+      }
       if(b) rowsData=[b, ...rowsData.filter(x=>String(x.id)!==String(id))];
-    }catch(e){ toast(e.message,true); return; }
+    }catch(e){
+      closeDrawer();
+      toast(e.message,true);
+      return;
+    }
   }
-  if(!b){ toast('Prospect #'+id+' not found',true); return; }
+  if(!b){
+    closeDrawer();
+    toast('Prospect #'+id+' not found',true);
+    return;
+  }
   drawerLead=b;
-  drawerTab='overview';
+  drawerTab=clampDrawerTab(opts.tab||'overview', drawerMode);
   $('drawer').classList.remove('hidden');
   document.body.style.overflow='hidden';
   renderDrawer();
@@ -2526,6 +2492,7 @@ function closeDrawer(){
   $('drawer').classList.add('hidden');
   drawerLead=null;
   drawerTab='overview';
+  drawerMode='crm';
   paint();
   if($('composeModal').classList.contains('hidden'))document.body.style.overflow='';
 }
@@ -2535,43 +2502,14 @@ function renderDrawer(){
   $('drawerTitle').textContent=b.name;
   $('drawerSub').textContent=`${b.category||'—'} · ${b.city}, ${b.country}`;
   const s=b.social_links||{};
-  const tab=drawerTab||'overview';
-  $('drawerBody').innerHTML=`
-    <div class="drawer-tabs" role="tablist">
-      <button type="button" data-dtab="overview" class="${tab==='overview'?'active':''}">Overview</button>
-      <button type="button" data-dtab="contacts" class="${tab==='contacts'?'active':''}">Contacts</button>
+  const outreach=drawerMode==='outreach';
+  const tab=clampDrawerTab(drawerTab||'overview', drawerMode);
+  drawerTab=tab;
+  const crmTabs=outreach?'':`
       <button type="button" data-dtab="sales" class="${tab==='sales'?'active':''}">Sales</button>
       <button type="button" data-dtab="proposal" class="${tab==='proposal'?'active':''}">Proposal / pay</button>
-      <button type="button" data-dtab="appointhive" class="${tab==='appointhive'?'active':''}">Delivery / pay</button>
-      <button type="button" data-dtab="pipeline" class="${tab==='pipeline'?'active':''}">Pipeline</button>
-      <button type="button" data-dtab="activity" class="${tab==='activity'?'active':''}">Activity</button>
-    </div>
-    <div class="drawer-pane ${tab==='overview'?'active':''}" data-dpane="overview">
-      <div class="field"><label>Status</label><div>${statusBadge(b)}</div></div>
-      <div class="sub">${b.rating!=null?`★ ${esc(b.rating)} · ${esc(b.reviews_count??'—')} reviews`:''}</div>
-      <div class="sub">${b.editorial_summary?esc(b.editorial_summary):''}</div>
-      <div class="sub">Labels · ${esc(b.search_labels||b.category||'—')}</div>
-      <div class="sub" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px">
-        <span>Line · ${esc(b.product_line||'STANDALONE')}</span>
-        ${b.deal_value!=null?`<span class="value-pill has">${esc(b.currency||'USD')} ${esc(b.deal_value)}</span>`:`<span class="value-pill muted-dash">No value</span>`}
-        ${b.qualification_score!=null?`<span class="score-pill has">${esc(b.qualification_score)}/10</span>`:`<span class="score-pill muted-dash">Not scored</span>`}
-      </div>
-      <div class="sub" style="margin-top:8px">Place ID · ${esc(String(b.place_id||'').replace(/^places\//,''))}</div>
-      <div class="links" style="margin-top:10px">${b.google_maps_url?`<a href="${esc(b.google_maps_url)}" target="_blank" rel="noopener noreferrer">Google Maps</a>`:''}</div>
-      <div class="drawer-actions" style="margin-top:12px">
-        <button type="button" class="primary" id="drawerMarkToContactBtn">${b.marked_for_contact?'Unmark to contact':'Mark to contact'}</button>
-        <button type="button" id="drawerMarkBookingBtn">${(b.current_booking_software||'').trim()?'Clear has booking':'Mark has booking'}</button>
-      </div>
-    </div>
-    <div class="drawer-pane ${tab==='contacts'?'active':''}" data-dpane="contacts">
-      <div class="field"><label for="drawerEmail">Email</label><input id="drawerEmail" value="${esc(b.email||'')}" placeholder="name@business.com"></div>
-      <div class="field"><label for="drawerPhone">Phone</label><input id="drawerPhone" value="${esc(b.phone||'')}" placeholder="Local phone"></div>
-      <div class="field"><label for="drawerIntlPhone">International phone</label><input id="drawerIntlPhone" value="${esc(b.international_phone||'')}" placeholder="+61…"></div>
-      <div class="field"><label for="drawerWebsite">Website</label><input id="drawerWebsite" value="${esc(b.website||'')}" placeholder="https://"></div>
-      <div class="field"><label for="drawerInstagram">Instagram URL</label><input id="drawerInstagram" value="${esc(s.instagram||'')}" placeholder="https://instagram.com/…"></div>
-      <div class="field"><label for="drawerAddress">Address</label><input id="drawerAddress" value="${esc(b.address||'')}"></div>
-      <div class="drawer-actions"><button type="button" class="primary" id="saveDrawerBtn">Save contacts & flags</button><button type="button" id="enrichDrawerBtn">Enrich</button></div>
-    </div>
+      <button type="button" data-dtab="appointhive" class="${tab==='appointhive'?'active':''}">Delivery / pay</button>`;
+  const crmPanes=outreach?'':`
     <div class="drawer-pane ${tab==='sales'?'active':''}" data-dpane="sales">
       <div class="field"><label for="drawerDealValue">Deal value</label><input id="drawerDealValue" type="number" step="0.01" value="${esc(b.deal_value??'')}" placeholder="e.g. 2500"></div>
       <div class="field"><label for="drawerCurrency">Currency</label>${currencySelectHtml(b.currency||'USD','drawerCurrency')}<p class="hint" style="margin:6px 0 0">Default is USD. Switch to AUD/EUR/etc. only when this prospect needs a local currency.</p></div>
@@ -2644,7 +2582,42 @@ function renderDrawer(){
         </div>
         <div id="beDrawerPay" class="hint" style="margin-top:8px"></div>
       </div>
+    </div>`;
+  $('drawerBody').innerHTML=`
+    <div class="drawer-tabs" role="tablist">
+      <button type="button" data-dtab="overview" class="${tab==='overview'?'active':''}">Overview</button>
+      <button type="button" data-dtab="contacts" class="${tab==='contacts'?'active':''}">Contacts</button>
+      ${crmTabs}
+      <button type="button" data-dtab="pipeline" class="${tab==='pipeline'?'active':''}">Pipeline</button>
+      <button type="button" data-dtab="activity" class="${tab==='activity'?'active':''}">Activity</button>
     </div>
+    <div class="drawer-pane ${tab==='overview'?'active':''}" data-dpane="overview">
+      <div class="field"><label>Status</label><div>${statusBadge(b)}</div></div>
+      <div class="sub">${b.rating!=null?`★ ${esc(b.rating)} · ${esc(b.reviews_count??'—')} reviews`:''}</div>
+      <div class="sub">${b.editorial_summary?esc(b.editorial_summary):''}</div>
+      <div class="sub">Labels · ${esc(b.search_labels||b.category||'—')}</div>
+      <div class="sub" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px">
+        <span>Line · ${esc(b.product_line||'STANDALONE')}</span>
+        ${b.deal_value!=null?`<span class="value-pill has">${esc(b.currency||'USD')} ${esc(b.deal_value)}</span>`:`<span class="value-pill muted-dash">No value</span>`}
+        ${b.qualification_score!=null?`<span class="score-pill has">${esc(b.qualification_score)}/10</span>`:`<span class="score-pill muted-dash">Not scored</span>`}
+      </div>
+      <div class="sub" style="margin-top:8px">Place ID · ${esc(String(b.place_id||'').replace(/^places\//,''))}</div>
+      <div class="links" style="margin-top:10px">${b.google_maps_url?`<a href="${esc(b.google_maps_url)}" target="_blank" rel="noopener noreferrer">Google Maps</a>`:''}</div>
+      ${(b.marked_for_contact||(b.current_booking_software||'').trim())?`<div class="sub" style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px">
+        ${b.marked_for_contact?'<span class="badge queue">To contact</span>':''}
+        ${(b.current_booking_software||'').trim()?'<span class="badge">Has booking</span>':''}
+      </div>`:''}
+    </div>
+    <div class="drawer-pane ${tab==='contacts'?'active':''}" data-dpane="contacts">
+      <div class="field"><label for="drawerEmail">Email</label><input id="drawerEmail" value="${esc(b.email||'')}" placeholder="name@business.com"></div>
+      <div class="field"><label for="drawerPhone">Phone</label><input id="drawerPhone" value="${esc(b.phone||'')}" placeholder="Local phone"></div>
+      <div class="field"><label for="drawerIntlPhone">International phone</label><input id="drawerIntlPhone" value="${esc(b.international_phone||'')}" placeholder="+61…"></div>
+      <div class="field"><label for="drawerWebsite">Website</label><input id="drawerWebsite" value="${esc(b.website||'')}" placeholder="https://"></div>
+      <div class="field"><label for="drawerInstagram">Instagram URL</label><input id="drawerInstagram" value="${esc(s.instagram||'')}" placeholder="https://instagram.com/…"></div>
+      <div class="field"><label for="drawerAddress">Address</label><input id="drawerAddress" value="${esc(b.address||'')}"></div>
+      <div class="drawer-actions"><button type="button" class="primary" id="saveDrawerBtn">Save contacts & flags</button><button type="button" id="enrichDrawerBtn">Enrich</button></div>
+    </div>
+    ${crmPanes}
     <div class="drawer-pane ${tab==='pipeline'?'active':''}" data-dpane="pipeline">
       <p class="hint" style="margin-top:0">Flags sync with auto-pipeline. Confirm-sent on first email/WA/IG starts tasks + activities and moves stage.</p>
       <label class="flag"><input type="checkbox" data-dfield="marked_for_contact" ${b.marked_for_contact?'checked':''}> Marked for contact</label>
@@ -2680,15 +2653,15 @@ function renderDrawer(){
       <ul class="activity" id="activityList"><li class="sub">Loading…</li></ul>
     </div>`;
   $('drawerBody').querySelectorAll('[data-dtab]').forEach(btn=>btn.addEventListener('click',()=>{
-    drawerTab=btn.dataset.dtab; renderDrawer(); refreshScorePreview(); if(drawerTab==='activity'&&drawerLead) loadActivity(drawerLead.id);
+    drawerTab=clampDrawerTab(btn.dataset.dtab, drawerMode); renderDrawer(); refreshScorePreview(); if(drawerTab==='activity'&&drawerLead) loadActivity(drawerLead.id);
   }));
   $('drawerBody').querySelectorAll('[data-dtab-jump]').forEach(btn=>btn.addEventListener('click',()=>{
-    drawerTab=btn.dataset.dtabJump; renderDrawer(); refreshScorePreview();
+    drawerTab=clampDrawerTab(btn.dataset.dtabJump, drawerMode); renderDrawer(); refreshScorePreview();
   }));
   $('drawerBody').querySelectorAll('select[data-score-key]').forEach(sel=>sel.addEventListener('change',refreshScorePreview));
-  refreshScorePreview();
-  hydrateBeDrawer().catch(()=>{});
-  if(tab==='proposal') refreshDrawerPaylinks().catch(()=>{});
+  if(!outreach) refreshScorePreview();
+  if(!outreach) hydrateBeDrawer().catch(()=>{});
+  if(!outreach && tab==='proposal') refreshDrawerPaylinks().catch(()=>{});
 }
 
 async function hydrateBeDrawer(){
@@ -2743,10 +2716,19 @@ async function hydrateBeDrawer(){
       const label=latest.purpose==='request'&&!latest.pay_url?'Awaiting AppointHive quote'
         :(latest.purpose==='upgrade'?'Upgrade · '+latest.status
         :(latest.pay_url?'Pay-ready':'Status '+latest.status));
+      const payUrl=latest.pay_url||'';
       pay.innerHTML=`<div><span class="status-pill ${esc(latest.status)}">${esc(label)}</span> · ${esc(latest.currency||'')} ${((latest.quoted_amount_cents||0)/100).toFixed(2)}</div>
-        ${latest.pay_url?`<div class="action-stack" style="margin-top:6px">
-          <button type="button" class="primary" data-be-open-pay="${esc(latest.pay_url)}">Open pay URL</button>
-          <button type="button" data-be-copy-pay="${esc(latest.pay_url)}">Copy pay URL</button>
+        ${payUrl?`<div class="paylink-card" style="margin-top:8px" data-be-pay-card>
+          <img class="paylink-qr" src="${esc(qrUrlFor(payUrl))}" alt="Pay QR" width="140" height="140" loading="lazy">
+          <div class="paylink-meta">
+            <div class="paylink-url">${esc(payUrl)}</div>
+            <div class="action-stack" style="margin-top:6px">
+              <button type="button" class="primary" data-be-open-pay="${esc(payUrl)}">Open pay URL</button>
+              <button type="button" data-be-copy-pay="${esc(payUrl)}">Copy pay URL</button>
+              <a class="chip ok" href="${esc(qrUrlFor(payUrl))}" download="appointhive-pay-qr.png" target="_blank" rel="noopener">Download QR</a>
+              <button type="button" data-be-print-pay-qr="${esc(payUrl)}">Print QR</button>
+            </div>
+          </div>
         </div>`:''}
         <div class="sub">purchase ${esc(latest.purchase_id||'—')} · inbound ${esc(latest.inbound_request_id||'—')} · install ${esc(installId||'—')}</div>
         ${installId?`<div class="sub" style="margin-top:4px">Upgrade path ready (installation_id stored). Use <strong>Send upgrade</strong> after customer is live.</div>`
@@ -2754,6 +2736,14 @@ async function hydrateBeDrawer(){
       pay.querySelectorAll('[data-be-open-pay]').forEach(btn=>btn.addEventListener('click',()=>window.open(btn.dataset.beOpenPay,'_blank','noopener')));
       pay.querySelectorAll('[data-be-copy-pay]').forEach(btn=>btn.addEventListener('click',async()=>{
         try{ await navigator.clipboard.writeText(btn.dataset.beCopyPay); toast('Pay URL copied'); }catch(e){ toast('Copy failed',true); }
+      }));
+      pay.querySelectorAll('[data-be-print-pay-qr]').forEach(btn=>btn.addEventListener('click',()=>{
+        const url=btn.dataset.bePrintPayQr||'';
+        if(!url) return;
+        const w=window.open('','_blank');
+        if(!w){ toast('Pop-up blocked',true); return; }
+        w.document.write(`<!doctype html><title>Pay QR</title><body style="font-family:sans-serif;text-align:center;padding:24px"><h2>AppointHive payment</h2><img src="${esc(qrUrlFor(url))}" width="220" height="220"><p style="word-break:break-all">${esc(url)}</p>`+'<scr'+'ipt>window.onload=()=>window.print()</scr'+'ipt></body>');
+        w.document.close();
       }));
       if(refBtn) refBtn.dataset.deliveryId=String(latest.id);
     }else if(pay){
@@ -3082,32 +3072,7 @@ $('dealsTabs')&&$('dealsTabs').addEventListener('click',e=>{
 });
 $('paylinkCreateBtn')&&$('paylinkCreateBtn').addEventListener('click',()=>createPaylinksFlow().catch(e=>toast(e.message,true)));
 $('paylinkRefreshBtn')&&$('paylinkRefreshBtn').addEventListener('click',()=>renderPaylinksHost().catch(e=>toast(e.message,true)));
-$('brandLogoFile')&&$('brandLogoFile').addEventListener('change',async ev=>{
-  const f=ev.target.files&&ev.target.files[0];
-  if(!f) return;
-  if($('brandLogoFileName')) $('brandLogoFileName').textContent=f.name||'No file chosen';
-  try{
-    const fd=new FormData(); fd.append('file', f);
-    const r=await fetch('/api/sales/brand-logo',{method:'POST',credentials:'same-origin',body:fd});
-    const data=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(data.detail||data.message||'Upload failed');
-    brandLogoUrl=data.url||'';
-    paintBrandLogoPreview();
-    toast('Brand logo saved for signatures');
-  }catch(e){ toast(e.message,true); if($('brandLogoFileName')) $('brandLogoFileName').textContent='No file chosen'; }
-  ev.target.value='';
-});
-$('brandLogoClear')&&$('brandLogoClear').addEventListener('click',async()=>{
-  const ok=await uiConfirm({title:'Remove brand logo?', message:'Email signatures will no longer include the logo URL.', confirmLabel:'Remove', danger:true});
-  if(!ok) return;
-  try{
-    await api('/api/sales/brand-logo',{method:'DELETE'});
-    brandLogoUrl='';
-    paintBrandLogoPreview();
-    if($('brandLogoFileName')) $('brandLogoFileName').textContent='No file chosen';
-    toast('Brand logo removed');
-  }catch(e){ toast(e.message,true); }
-});
+/* brand logo + email signature wired in panels/settings.js */
 $('sendPayLinkBtn')&&$('sendPayLinkBtn').addEventListener('click',()=>sendPayLinkFlow().catch(e=>toast(e.message,true)));
 $('userAddBtn')&&$('userAddBtn').addEventListener('click',()=>addUserFlow().catch(e=>toast(e.message,true)));
 $('territoryAddBtn')&&$('territoryAddBtn').addEventListener('click',()=>addTerritoryFlow().catch(e=>toast(e.message,true)));
@@ -3159,9 +3124,7 @@ window.addEventListener('focus',()=>showComposeConfirmReturn());
 $('saveSaasFlag')&&$('saveSaasFlag').addEventListener('click',async()=>{
   try{
     const on=$('saasEnabledToggle').checked;
-    const r=await fetch('/api/sales/settings/saas_enabled?value='+encodeURIComponent(on?'true':'false'),{method:'PUT',credentials:'same-origin'});
-    const text=await r.text();
-    if(!r.ok)throw Error(text||r.status);
+    await api('/api/sales/settings/saas_enabled?value='+encodeURIComponent(on?'true':'false'),{method:'PUT'});
     toast('SaaS flag saved');
     await loadSettings();
   }catch(e){toast(e.message||String(e),true)}
@@ -3178,9 +3141,7 @@ $('importFile').addEventListener('change',async e=>{
   if(!file)return;
   const fd=new FormData();fd.append('file',file);
   try{
-    const r=await fetch('/api/import.csv',{method:'POST',body:fd,credentials:'same-origin'});
-    const data=await r.json().catch(()=>({}));
-    if(!r.ok)throw Error(apiError(data.detail,'Import failed'));
+    const data=await api('/api/import.csv',{method:'POST',body:fd});
     const hints=Number(data.duplicate_hint_count||0);
     let msg=`Import complete: ${data.inserted} new, ${data.updated} updated, ${data.skipped} skipped.`;
     if(hints>0){
@@ -3430,7 +3391,10 @@ $('drawerPanel').addEventListener('click',async e=>{
     try{
       const revs=await api('/api/sales/be/revisions');
       const rows=revs.revisions||[];
-      if(!rows.length){ toast('No FINALIZED AppointHive packages',true); return; }
+      if(!rows.length){
+        toast('No finalized AppointHive packages yet. Finalize a package in AppointHive Product Factory, then retry.',true);
+        return;
+      }
       const form=await uiForm({
         title:'Send to AppointHive delivery',
         message:'Pay-ready handover. AppointHive owns cash + ZIP. Share the pay URL with the prospect.',
@@ -3442,9 +3406,9 @@ $('drawerPanel').addEventListener('click',async e=>{
       const res=await api('/api/sales/be/send-to-delivery',{method:'POST',body:{business_id:drawerLead.id, product_revision_id:form.revision_id}});
       const url=res.pay_url||(res.delivery&&res.delivery.pay_url)||'';
       if(url){ try{ await navigator.clipboard.writeText(url); }catch(e){} window.open(url,'_blank','noopener'); }
-      toast(res.label||'Sent to AppointHive');
+      toast(res.label||'Sent to AppointHive — pay link ready');
       await hydrateBeDrawer();
-    }catch(err){ toast(err.message,true); }
+    }catch(err){ toast(err.message||'Could not send to AppointHive delivery',true); }
     return;
   }
   if(e.target.id==='beSendRequestBtn'){
@@ -3453,7 +3417,7 @@ $('drawerPanel').addEventListener('click',async e=>{
       const res=await api('/api/sales/be/send-request',{method:'POST',body:{business_id:drawerLead.id, message:''}});
       toast(res.label||'Awaiting AppointHive quote');
       await hydrateBeDrawer();
-    }catch(err){ toast(err.message,true); }
+    }catch(err){ toast(err.message||'Could not send quote request to AppointHive',true); }
     return;
   }
   if(e.target.id==='beSendUpgradeBtn'){
@@ -3465,7 +3429,10 @@ $('drawerPanel').addEventListener('click',async e=>{
         rows=revs.revisions||[];
         beRevisionsCache=rows;
       }
-      if(!rows.length){ toast('No FINALIZED AppointHive packages',true); return; }
+      if(!rows.length){
+        toast('No finalized AppointHive packages yet. Finalize a package in AppointHive Product Factory, then retry.',true);
+        return;
+      }
       const form=await uiForm({
         title:'Send upgrade via AppointHive',
         message:'Requires installation id from a prior paid install. Quote + checkout stay on AppointHive.',
@@ -3477,44 +3444,20 @@ $('drawerPanel').addEventListener('click',async e=>{
       const res=await api('/api/sales/be/send-upgrade',{method:'POST',body:{business_id:drawerLead.id, to_revision_id:form.revision_id}});
       const url=res.pay_url||(res.delivery&&res.delivery.pay_url)||'';
       if(url){ try{ await navigator.clipboard.writeText(url); }catch(e){} window.open(url,'_blank','noopener'); }
-      toast(res.label||'Upgrade sent');
+      toast(res.label||'Upgrade sent to AppointHive');
       await hydrateBeDrawer();
-    }catch(err){ toast(err.message,true); }
+    }catch(err){ toast(err.message||'Could not send upgrade to AppointHive',true); }
     return;
   }
   if(e.target.id==='beRefreshDeliveryBtn'){
     if(!drawerLead)return;
     try{
       const id=e.target.dataset.deliveryId;
-      if(!id){ toast('No delivery to refresh',true); return; }
+      if(!id){ toast('No delivery to refresh yet — send to delivery first.',true); return; }
       await api('/api/sales/be/deliveries/'+id+'/refresh',{method:'POST',body:{}});
-      toast('Status refreshed');
+      toast('Delivery status refreshed');
       await hydrateBeDrawer();
-    }catch(err){ toast(err.message,true); }
-    return;
-  }
-  if(e.target.id==='drawerMarkBookingBtn'){
-    if(!drawerLead)return;
-    try{
-      const on=!(drawerLead.current_booking_software||'').trim();
-      await markBookingIds([drawerLead.id], on);
-      drawerLead.current_booking_software=on?'Has booking':'';
-      renderDrawer();
-      toast(on?'Marked as has booking':'Cleared booking flag');
-    }catch(err){toast(err.message,true)}
-    return;
-  }
-  if(e.target.id==='drawerMarkToContactBtn'){
-    if(!drawerLead)return;
-    try{
-      const on=!drawerLead.marked_for_contact;
-      await patchLead(drawerLead.id,{marked_for_contact:on});
-      drawerLead.marked_for_contact=on;
-      const row=rowsData.find(x=>String(x.id)===String(drawerLead.id));
-      if(row) row.marked_for_contact=on;
-      renderDrawer();
-      toast(on?'Marked to contact':'Unmarked to contact');
-    }catch(err){toast(err.message,true)}
+    }catch(err){ toast(err.message||'Could not refresh delivery status',true); }
     return;
   }
   if(e.target.id==='drawerRefreshPaylinksBtn'){
@@ -3684,9 +3627,10 @@ function setAuthed(username){
   setAppPanel('leads');
   loadProfileBar(username).catch(()=>{});
   refreshNotifications().catch(()=>{});
-  loadBrandLogoSetting().catch(()=>{});
+  refreshSignatureUi().catch(()=>{});
 }
 function setLoggedOut(){
+  clearAuthTokens();
   document.body.classList.remove('authed');
   const side=$('sidebar'); if(side) side.classList.remove('is-open');
   closeSidebar();
@@ -3720,11 +3664,19 @@ $('loginForm').addEventListener('submit',async e=>{
   $('loginBtn').disabled=true;showLoginError('');
   const prev=$('loginBtn').textContent;
   $('loginBtn').innerHTML='<span class="loading" aria-hidden="true"></span>Signing in…';
-  try{const d=await api('/api/login',{method:'POST',body:{username,password}});await enterApp(d.username||username)}
+  try{
+    const d=await api('/api/login',{method:'POST',body:{username,password,client:'web'}});
+    setAuthTokens(d);
+    await enterApp(d.username||username);
+  }
   catch(err){showLoginError(err.message)}
   finally{$('loginBtn').disabled=false;$('loginBtn').textContent=prev||'Sign in'}
 });
-$('logoutBtn').addEventListener('click',async()=>{try{await api('/api/logout',{method:'POST'})}catch(e){}setLoggedOut()});
+$('logoutBtn').addEventListener('click',async()=>{
+  try{await logoutAuth()}catch(e){}
+  clearAuthTokens();
+  setLoggedOut();
+});
 
 /* --- Bridge wiring (Dependency Inversion for peeled modules) --- */
 B.setAppPanel = setAppPanel;
@@ -3740,6 +3692,7 @@ B.setSettingsTab = setSettingsTab;
 B.applyBeConnectOwnerGate = applyBeConnectOwnerGate;
 B.loadBeCatalog = loadBeCatalog;
 B.loadMoney = typeof loadMoney === 'function' ? loadMoney : null;
+B.loadSettings = typeof loadSettings === 'function' ? loadSettings : null;
 B.qrUrlFor = typeof qrUrlFor === 'function' ? qrUrlFor : null;
 B.closeTopMenus = closeTopMenus;
 B.availableComposeChannels = availableComposeChannels;
@@ -3761,7 +3714,13 @@ registerPanel({ id: 'money', refresh: safeRefresh(typeof loadMoney === 'function
 /* reports registered in panels/reports.js */
 registerPanel({ id: 'appoinHive', refresh: safeRefresh(typeof loadAppointHive === 'function' ? loadAppointHive : null) });
 registerPanel({ id: 'paySetup', refresh: safeRefresh(typeof loadPaySetup === 'function' ? loadPaySetup : null) });
-registerPanel({ id: 'settings', refresh: safeRefresh(typeof loadSettings === 'function' ? loadSettings : null) });
+/* settings registered in panels/settings.js (calls B.loadSettings) */
 
-(async function boot(){try{const d=await api('/api/me');await enterApp(d.username)}catch(e){setLoggedOut()}})();
+(async function boot(){
+  try{
+    const d=await api('/api/me');
+    await enterApp(d.username);
+    refreshSignatureUi().catch(()=>{});
+  }catch(e){setLoggedOut()}
+})();
 

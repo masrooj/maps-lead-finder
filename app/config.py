@@ -24,6 +24,11 @@ LOGIN_PASSWORD = os.getenv("LOGIN_PASSWORD", "").strip()
 SESSION_SECRET = os.getenv("SESSION_SECRET", "").strip()
 SESSION_COOKIE = "mlf_session"
 SESSION_DAYS = 14
+# Mobile / Bearer tokens (ACCESS_TOKEN_SECRET falls back to SESSION_SECRET)
+ACCESS_TOKEN_SECRET = (os.getenv("ACCESS_TOKEN_SECRET") or SESSION_SECRET).strip()
+ACCESS_TOKEN_MINUTES = int((os.getenv("ACCESS_TOKEN_MINUTES") or "30").strip() or "30")
+REFRESH_TOKEN_DAYS = int((os.getenv("REFRESH_TOKEN_DAYS") or "30").strip() or "30")
+ENABLE_API_DOCS = (os.getenv("ENABLE_API_DOCS") or "true").strip().lower() in ("1", "true", "yes")
 
 # Commercial defaults (overridable via app_settings table)
 DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "USD").strip().upper() or "USD"

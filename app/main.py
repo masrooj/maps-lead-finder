@@ -12,20 +12,39 @@ from typing import Optional, Any
 from urllib.parse import unquote, urlparse
 
 import requests
-from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, Security, UploadFile
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select, and_
 
-from app.config import LOGIN_PASSWORD, LOGIN_USERNAME, SESSION_COOKIE, SESSION_DAYS, SESSION_SECRET
+from app.config import (
+    ENABLE_API_DOCS,
+    LOGIN_PASSWORD,
+    LOGIN_USERNAME,
+    SESSION_COOKIE,
+    SESSION_DAYS,
+    SESSION_SECRET,
+)
 from app.db import Base, SessionLocal, apply_migrations, engine, migration_status
-from app.models import ActivityLog, Business, MessageTemplate
+from app.models import ActivityLog, Business, MessageTemplate, User
 from app.routers import ops as ops_router
 from app.routers import sales as sales_router
+from app.schemas.auth import LoginRequest, LoginResponse, LogoutBody, MeResponse, RefreshRequest
+from app.services.auth_tokens import (
+    issue_token_pair,
+    load_active_user_by_email,
+    revoke_refresh,
+    rotate_refresh,
+    verify_access_token,
+)
 from app.services.pipeline import backfill_prospect_stages, init_new_prospect
 from app.services.seed import seed_sales_os
 from app.services.storage import uploads_root
+
+_LOGIN_FAILS: list[tuple[float, str]] = []  # (timestamp, key)
 
 CHANNELS = ("email", "whatsapp", "instagram", "invoice")
 DEFAULT_TEMPLATES = {
@@ -69,7 +88,33 @@ with SessionLocal() as _seed_db:
         # Do not block app boot if seed races; APIs can re-run backfill
         pass
 
-app = FastAPI(title="AppointHive Sales OS", version="2.0.0")
+_API_DESCRIPTION = (
+    "Web + mobile AppointHive Sales OS API.\n\n"
+    "1. Call **POST /api/login** and copy `access_token`.\n"
+    "2. Click **Authorize** (top right) → paste the token (Swagger adds `Bearer` for you).\n"
+    "3. Try any locked endpoint.\n\n"
+    "Web UI may use the `mlf_session` cookie instead of Bearer."
+)
+
+# Registers Bearer in OpenAPI so Swagger UI shows the Authorize button.
+# auto_error=False: public routes still work; require_login enforces auth.
+bearer_scheme = HTTPBearer(
+    auto_error=False,
+    bearerFormat="JWT",
+    scheme_name="BearerAuth",
+    description="Paste access_token from POST /api/login (do not include the word Bearer).",
+)
+
+app = FastAPI(
+    title="AppointHive Sales OS API",
+    version="2.1.0",
+    description=_API_DESCRIPTION,
+    docs_url="/docs" if ENABLE_API_DOCS else None,
+    redoc_url="/redoc" if ENABLE_API_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_API_DOCS else None,
+    swagger_ui_parameters={"persistAuthorization": True},
+    dependencies=[Security(bearer_scheme)],
+)
 BASE_DIR = Path(__file__).resolve().parent.parent
 TEMPLATE_DIR = BASE_DIR / "app" / "templates"
 STATIC_DIR = BASE_DIR / "app" / "static"
@@ -86,9 +131,65 @@ async def _static_asset_revalidate(request: Request, call_next):
     return response
 
 
-class LoginRequest(BaseModel):
-    username: str = Field(default="", max_length=320)
-    password: str = Field(default="", max_length=500)
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+        tags=[
+            {"name": "auth", "description": "Login, refresh, logout, me"},
+            {"name": "discover", "description": "Places search, businesses, enrich, export/import"},
+            {"name": "templates", "description": "Outreach message templates"},
+            {"name": "pipeline", "description": "Dashboard, pipeline, prospects, contact queue"},
+            {"name": "tasks", "description": "Tasks, activities, demos"},
+            {"name": "money", "description": "Plans, proposals, invoices, payments"},
+            {"name": "compliance", "description": "Compliance packs and suppressions"},
+            {"name": "settings", "description": "App settings, ranking, assets, reports"},
+            {"name": "be-bridge", "description": "AppointHive Booking Engine bridge"},
+            {"name": "ops", "description": "Users, territories, audit, jobs, webhooks"},
+            {"name": "system", "description": "Health and migrations"},
+            {"name": "sales", "description": "Sales OS routes (legacy tag)"},
+        ],
+    )
+    components = schema.setdefault("components", {})
+    schemes = components.setdefault("securitySchemes", {})
+    # Single scheme name used by Swagger Authorize dialog
+    schemes.clear()
+    schemes["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Paste access_token from POST /api/login only (no 'Bearer ' prefix).",
+    }
+    schema["security"] = [{"BearerAuth": []}]
+    public_paths = {
+        "/api/health",
+        "/api/login",
+        "/api/auth/refresh",
+        "/api/v1/public/product-pairing",
+        "/api/webhooks/stripe",
+        "/api/webhooks/paypal",
+        "/api/webhooks/payoneer",
+        "/api/webhooks/skrill",
+        "/api/webhooks/booking-engine",
+        "/api/cron/unpaid-invoices",
+    }
+    for path, methods in (schema.get("paths") or {}).items():
+        for op in methods.values():
+            if not isinstance(op, dict):
+                continue
+            if path in public_paths or path.startswith("/api/webhooks/") or path.startswith("/api/cron/"):
+                op["security"] = []
+            else:
+                op["security"] = [{"BearerAuth": []}]
+    app.openapi_schema = schema
+    return schema
+
+
+app.openapi = custom_openapi
 
 
 def auth_configured() -> bool:
@@ -176,10 +277,43 @@ def clear_session_cookie(response: Response):
     response.delete_cookie(key=SESSION_COOKIE, path="/")
 
 
+def _client_ip(request: Request) -> str:
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    return forwarded or (request.client.host if request.client else "unknown")
+
+
+def _login_rate_limited(key: str) -> bool:
+    now = time.time()
+    _LOGIN_FAILS[:] = [(t, k) for t, k in _LOGIN_FAILS if now - t < 900]
+    return sum(1 for t, k in _LOGIN_FAILS if k == key) >= 10
+
+
+def _record_login_fail(key: str) -> None:
+    _LOGIN_FAILS.append((time.time(), key))
+
+
 def require_login(request: Request) -> str:
+    """Accept Bearer access JWT (mobile) or signed session cookie (web).
+
+    Called both as a FastAPI dependency and directly from sales/ops routers
+    via bind_auth — so Bearer must be read from the request, not Depends().
+    """
+    auth = request.headers.get("authorization") or request.headers.get("Authorization") or ""
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if token:
+        claims = verify_access_token(token)
+        email = str(claims.get("sub") or "").strip().lower()
+        with SessionLocal() as db:
+            row = db.scalar(select(User).where(User.email == email))
+            if row is not None and not row.active:
+                raise HTTPException(401, detail={"code": "inactive_user", "message": "User inactive"})
+            if row is None and email != LOGIN_USERNAME.lower():
+                raise HTTPException(401, detail={"code": "inactive_user", "message": "User not found"})
+            # Active user, or bootstrap owner email before row exists
+            return email
     username = verify_session(request.cookies.get(SESSION_COOKIE))
     if not username:
-        raise HTTPException(401, "Authentication required")
+        raise HTTPException(401, detail={"code": "invalid_token", "message": "Authentication required"})
     return username
 
 
@@ -990,22 +1124,25 @@ def home():
         return f.read()
 
 
-@app.get("/api/health")
+@app.get("/api/health", tags=["system"])
 def health():
     return {"ok": True}
 
 
-@app.post("/api/login")
+@app.post("/api/login", tags=["auth"], response_model=LoginResponse)
 def login(payload: LoginRequest, request: Request, response: Response):
     if not SESSION_SECRET:
         raise HTTPException(503, "Login is not configured. Set SESSION_SECRET.")
     username = str(payload.username or "").strip().lower()
     password = str(payload.password or "")
+    rate_key = f"{_client_ip(request)}:{username or '-'}"
+    if _login_rate_limited(rate_key):
+        raise HTTPException(429, detail={"code": "rate_limited", "message": "Too many login attempts"})
     if not username or not password:
-        raise HTTPException(401, "Invalid username or password")
+        _record_login_fail(rate_key)
+        raise HTTPException(401, detail={"code": "invalid_credentials", "message": "Invalid username or password"})
 
     from app.services.passwords import verify_password
-    from app.models import User
 
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.email == username))
@@ -1023,35 +1160,95 @@ def login(payload: LoginRequest, request: Request, response: Response):
             ok = True
             role = "owner"
         if not ok:
-            raise HTTPException(401, "Invalid username or password")
+            _record_login_fail(rate_key)
+            raise HTTPException(401, detail={"code": "invalid_credentials", "message": "Invalid username or password"})
+
+        # Ensure a User row exists for token issuance (bootstrap owner)
+        if not user:
+            user = User(email=username, name="Owner", role="owner", active=True)
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif not user.active:
+            _record_login_fail(rate_key)
+            raise HTTPException(401, detail={"code": "inactive_user", "message": "User inactive"})
+
+        ua = (request.headers.get("user-agent") or "")[:500]
+        client_name = (payload.client or "web").strip().lower()[:40] or "web"
+        if client_name not in ("web", "mobile", "api"):
+            client_name = "web"
+        tokens = issue_token_pair(db, user, client=client_name, user_agent=ua)
         set_session_cookie(response, request, username)
-        return {"username": username, "role": role, "has_password": bool(user and user.password_hash)}
+        return LoginResponse(
+            username=username,
+            role=role,
+            has_password=bool(user.password_hash),
+            access_token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
+            token_type=tokens["token_type"],
+            expires_in=tokens["expires_in"],
+            user_id=user.id,
+            name=user.name or "",
+        )
 
 
-@app.post("/api/logout")
-def logout(response: Response):
+@app.post("/api/auth/refresh", tags=["auth"], response_model=LoginResponse)
+def auth_refresh(payload: RefreshRequest, request: Request):
+    if not SESSION_SECRET:
+        raise HTTPException(503, "Login is not configured. Set SESSION_SECRET.")
+    with SessionLocal() as db:
+        tokens = rotate_refresh(db, payload.refresh_token, user_agent=(request.headers.get("user-agent") or "")[:500])
+        claims = verify_access_token(tokens["access_token"])
+        email = str(claims.get("sub") or "")
+        user = load_active_user_by_email(db, email)
+        return LoginResponse(
+            username=email,
+            role=(user.role if user else str(claims.get("role") or "sales")),
+            has_password=bool(user and user.password_hash),
+            access_token=tokens["access_token"],
+            refresh_token=tokens["refresh_token"],
+            token_type=tokens["token_type"],
+            expires_in=tokens["expires_in"],
+            user_id=(user.id if user else None),
+            name=(user.name if user else ""),
+        )
+
+
+@app.post("/api/auth/logout", tags=["auth"])
+def auth_logout(request: Request, response: Response, payload: Optional[LogoutBody] = None):
     clear_session_cookie(response)
+    body = payload or LogoutBody()
+    refresh = (body.refresh_token or "").strip()
+    if refresh:
+        with SessionLocal() as db:
+            revoke_refresh(db, refresh)
     return {"ok": True}
 
 
-@app.get("/api/me")
-def me(request: Request):
-    username = verify_session(request.cookies.get(SESSION_COOKIE))
-    if not username:
-        raise HTTPException(401, "Authentication required")
-    from app.models import User
+@app.post("/api/logout", tags=["auth"])
+def logout(request: Request, response: Response, payload: Optional[LogoutBody] = None):
+    clear_session_cookie(response)
+    body = payload or LogoutBody()
+    refresh = (body.refresh_token or "").strip()
+    if refresh:
+        with SessionLocal() as db:
+            revoke_refresh(db, refresh)
+    return {"ok": True}
 
+
+@app.get("/api/me", tags=["auth"], response_model=MeResponse)
+def me(_user: str = Depends(require_login)):
     with SessionLocal() as db:
-        u = db.scalar(select(User).where(User.email == username.lower()))
-        return {
-            "username": username,
-            "role": (u.role if u else "owner"),
-            "name": (u.name if u else ""),
-            "user_id": (u.id if u else None),
-        }
+        u = db.scalar(select(User).where(User.email == _user.lower()))
+        return MeResponse(
+            username=_user,
+            role=(u.role if u else "owner"),
+            name=(u.name if u else ""),
+            user_id=(u.id if u else None),
+        )
 
 
-@app.get("/api/migrations")
+@app.get("/api/migrations", tags=["system"])
 def migrations(_user: str = Depends(require_login)):
     return migration_status()
 
@@ -1064,12 +1261,12 @@ except OSError:
     LOCATIONS = {"countries": {}}
 
 
-@app.get("/api/locations")
+@app.get("/api/locations", tags=["discover"])
 def locations(_user: str = Depends(require_login)):
     return LOCATIONS
 
 
-@app.post("/api/search")
+@app.post("/api/search", tags=["discover"])
 def search(payload: dict, _user: str = Depends(require_login)):
     country = str(payload.get("country", "")).strip()
     city = str(payload.get("city", "")).strip()
@@ -1185,7 +1382,7 @@ def search(payload: dict, _user: str = Depends(require_login)):
         }
 
 
-@app.get("/api/businesses")
+@app.get("/api/businesses", tags=["discover"])
 def list_businesses(
     q: str = "",
     country: str = "",
@@ -1211,7 +1408,7 @@ def list_businesses(
         return {"count": len(rows), "results": [business_dict(b) for b in rows]}
 
 
-@app.get("/api/stats")
+@app.get("/api/stats", tags=["discover"])
 def stats(
     country: str = "",
     city: str = "",
@@ -1255,7 +1452,7 @@ def stats(
         }
 
 
-@app.get("/api/categories")
+@app.get("/api/categories", tags=["discover"])
 def categories(country: str = "", city: str = "", scope: str = "city", _user: str = Depends(require_login)):
     with SessionLocal() as db:
         stmt = select(Business.category, Business.search_labels)
@@ -1319,7 +1516,7 @@ def enrich_business_row(b: Business, force: bool = False) -> bool:
     return changed
 
 
-@app.post("/api/businesses/enrich")
+@app.post("/api/businesses/enrich", tags=["discover"])
 def enrich_businesses(payload: EnrichRequest, _user: str = Depends(require_login)):
     ids = [int(i) for i in payload.ids if i is not None][: payload.limit]
     if not ids:
@@ -1347,7 +1544,7 @@ def enrich_businesses(payload: EnrichRequest, _user: str = Depends(require_login
     return {"enriched": enriched, "skipped": skipped, "failed": failed, "results": results}
 
 
-@app.post("/api/businesses/{business_id}/enrich")
+@app.post("/api/businesses/{business_id}/enrich", tags=["discover"])
 def enrich_one(business_id: int, force: bool = False, _user: str = Depends(require_login)):
     with SessionLocal() as db:
         b = db.get(Business, business_id)
@@ -1380,7 +1577,7 @@ class UpdateBusiness(BaseModel):
     instagram: Optional[str] = Field(default=None, max_length=500)
 
 
-@app.patch("/api/businesses/{business_id}")
+@app.patch("/api/businesses/{business_id}", tags=["discover"])
 def update_business(business_id: int, payload: UpdateBusiness, _user: str = Depends(require_login)):
     with SessionLocal() as db:
         b = db.get(Business, business_id)
@@ -1420,7 +1617,7 @@ class BulkUpdate(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=5000)
 
 
-@app.post("/api/businesses/bulk")
+@app.post("/api/businesses/bulk", tags=["discover"])
 def bulk_update(payload: BulkUpdate, _user: str = Depends(require_login)):
     ids = [int(i) for i in payload.ids if i is not None]
     if not ids:
@@ -1445,7 +1642,7 @@ class ConfirmSent(BaseModel):
     outcome: Optional[str] = Field(default=None, max_length=80)
 
 
-@app.post("/api/businesses/{business_id}/confirm-sent")
+@app.post("/api/businesses/{business_id}/confirm-sent", tags=["discover"])
 def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(require_login)):
     channel = str(payload.channel or "").strip().lower()
     if channel not in CHANNELS:
@@ -1488,7 +1685,7 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
         return business_dict(b)
 
 
-@app.get("/api/businesses/{business_id}/activity")
+@app.get("/api/businesses/{business_id}/activity", tags=["discover"])
 def business_activity(business_id: int, _user: str = Depends(require_login)):
     """Unified timeline: Discover activity_log + Sales OS activities."""
     from app.models import Activity as SalesActivity
@@ -1529,7 +1726,7 @@ def business_activity(business_id: int, _user: str = Depends(require_login)):
         return {"count": len(merged), "results": merged}
 
 
-@app.delete("/api/businesses/{business_id}")
+@app.delete("/api/businesses/{business_id}", tags=["discover"])
 def delete_business(business_id: int, hard: bool = False, _user: str = Depends(require_login)):
     with SessionLocal() as db:
         b = db.get(Business, business_id)
@@ -1550,7 +1747,7 @@ def delete_business(business_id: int, hard: bool = False, _user: str = Depends(r
         return {"deleted": False, "hard": False, "business": business_dict(b), "undo": "unarchive"}
 
 
-@app.post("/api/businesses/{business_id}/unarchive")
+@app.post("/api/businesses/{business_id}/unarchive", tags=["discover"])
 def unarchive_business(business_id: int, _user: str = Depends(require_login)):
     with SessionLocal() as db:
         b = db.get(Business, business_id)
@@ -1564,13 +1761,13 @@ def unarchive_business(business_id: int, _user: str = Depends(require_login)):
         return business_dict(b)
 
 
-@app.post("/api/businesses/bulk-archive")
+@app.post("/api/businesses/bulk-archive", tags=["discover"])
 def bulk_archive(payload: BulkUpdate, _user: str = Depends(require_login)):
     payload.archived = True
     return bulk_update(payload, _user)
 
 
-@app.post("/api/businesses/bulk-unarchive")
+@app.post("/api/businesses/bulk-unarchive", tags=["discover"])
 def bulk_unarchive(payload: BulkUpdate, _user: str = Depends(require_login)):
     payload.archived = False
     return bulk_update(payload, _user)
@@ -1590,7 +1787,7 @@ class TemplatePayload(BaseModel):
     governance_ok: bool = True
 
 
-@app.get("/api/templates")
+@app.get("/api/templates", tags=["templates"])
 def list_templates(_user: str = Depends(require_login)):
     with SessionLocal() as db:
         seed_default_templates(db)
@@ -1602,7 +1799,7 @@ def list_templates(_user: str = Depends(require_login)):
         return store
 
 
-@app.post("/api/templates")
+@app.post("/api/templates", tags=["templates"])
 def create_template(payload: TemplatePayload, _user: str = Depends(require_login)):
     channel = str(payload.channel or "").strip().lower()
     if channel not in CHANNELS:
@@ -1629,7 +1826,7 @@ def create_template(payload: TemplatePayload, _user: str = Depends(require_login
         return template_dict(t)
 
 
-@app.patch("/api/templates/{template_id}")
+@app.patch("/api/templates/{template_id}", tags=["templates"])
 def update_template(template_id: int, payload: TemplatePayload, _user: str = Depends(require_login)):
     with SessionLocal() as db:
         t = db.get(MessageTemplate, template_id)
@@ -1656,7 +1853,7 @@ def update_template(template_id: int, payload: TemplatePayload, _user: str = Dep
         return template_dict(t)
 
 
-@app.post("/api/templates/{template_id}/default")
+@app.post("/api/templates/{template_id}/default", tags=["templates"])
 def set_default_template(template_id: int, _user: str = Depends(require_login)):
     with SessionLocal() as db:
         t = db.get(MessageTemplate, template_id)
@@ -1669,7 +1866,7 @@ def set_default_template(template_id: int, _user: str = Depends(require_login)):
         return template_dict(t)
 
 
-@app.delete("/api/templates/{template_id}")
+@app.delete("/api/templates/{template_id}", tags=["templates"])
 def delete_template(template_id: int, _user: str = Depends(require_login)):
     with SessionLocal() as db:
         t = db.get(MessageTemplate, template_id)
@@ -1705,7 +1902,7 @@ def truthy(value: str) -> bool:
     return str(value or "").strip().lower() in ("1", "true", "yes", "y", "on")
 
 
-@app.get("/api/export.csv")
+@app.get("/api/export.csv", tags=["discover"])
 def export_csv(
     q: str = "",
     country: str = "",
@@ -1761,7 +1958,7 @@ def export_csv(
     )
 
 
-@app.post("/api/import.csv")
+@app.post("/api/import.csv", tags=["discover"])
 async def import_csv(file: UploadFile = File(...), _user: str = Depends(require_login)):
     raw = await file.read()
     if not raw:

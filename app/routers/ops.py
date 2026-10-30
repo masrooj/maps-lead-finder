@@ -32,7 +32,7 @@ from app.services.jobs import create_job, tick_job
 from app.services.passwords import hash_password
 from app.services.webhooks_crypto import verify_paypal_headers, verify_stripe_signature
 
-router = APIRouter(tags=["ops"])
+router = APIRouter()
 _require_login = None
 
 
@@ -99,7 +99,7 @@ class PreviewBody(BaseModel):
     body: str = ""
 
 
-@router.get("/api/sales/users")
+@router.get("/api/sales/users", tags=["ops"])
 def list_users(_user: str = Depends(require_user), db=Depends(get_db)):
     rows = db.scalars(select(User).order_by(User.id)).all()
     return {
@@ -118,7 +118,7 @@ def list_users(_user: str = Depends(require_user), db=Depends(get_db)):
     }
 
 
-@router.post("/api/sales/users")
+@router.post("/api/sales/users", tags=["ops"])
 def create_user(payload: dict[str, Any], _user: str = Depends(require_user), db=Depends(get_db)):
     actor = get_user_by_email(db, _user)
     require_role(actor, "owner")
@@ -155,8 +155,10 @@ def create_user(payload: dict[str, Any], _user: str = Depends(require_user), db=
     return {"id": u.id, "email": u.email, "role": u.role, "has_password": bool(password)}
 
 
-@router.post("/api/sales/users/{user_id}/password")
+@router.post("/api/sales/users/{user_id}/password", tags=["ops"])
 def set_user_password(user_id: int, payload: dict[str, Any], _user: str = Depends(require_user), db=Depends(get_db)):
+    from app.schemas.ops import PasswordSetBody
+
     actor = get_user_by_email(db, _user)
     if not actor:
         raise HTTPException(403, "Active user required")
@@ -166,16 +168,21 @@ def set_user_password(user_id: int, payload: dict[str, Any], _user: str = Depend
     # Owner can set any; user can set own
     if actor.role != "owner" and actor.id != target.id:
         raise HTTPException(403, "Cannot set another user's password")
-    password = str(payload.get("password") or "")
-    if len(password) < 8:
-        raise HTTPException(422, "password must be at least 8 characters")
+    try:
+        body = PasswordSetBody(password=str(payload.get("password") or ""))
+    except Exception:
+        raise HTTPException(422, "password must be at least 8 characters") from None
+    password = body.password
     target.password_hash = hash_password(password)
     _audit(db, actor.id, "user_password_set", "user", target.id, {})
     db.commit()
+    from app.services.auth_tokens import revoke_all_for_user
+
+    revoke_all_for_user(db, target.id)
     return {"ok": True, "id": target.id}
 
 
-@router.get("/api/sales/territories")
+@router.get("/api/sales/territories", tags=["ops"])
 def list_territories(_user: str = Depends(require_user), db=Depends(get_db)):
     rows = db.scalars(select(SalesTerritory).order_by(SalesTerritory.id)).all()
     return {
@@ -193,7 +200,7 @@ def list_territories(_user: str = Depends(require_user), db=Depends(get_db)):
     }
 
 
-@router.post("/api/sales/territories")
+@router.post("/api/sales/territories", tags=["ops"])
 def create_territory(body: TerritoryBody, _user: str = Depends(require_user), db=Depends(get_db)):
     actor = get_user_by_email(db, _user)
     require_role(actor, "owner")
@@ -211,7 +218,7 @@ def create_territory(body: TerritoryBody, _user: str = Depends(require_user), db
     return {"id": t.id}
 
 
-@router.post("/api/sales/territories/{territory_id}/assign-prospects")
+@router.post("/api/sales/territories/{territory_id}/assign-prospects", tags=["ops"])
 def assign_territory_prospects(territory_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     """Assign unassigned prospects matching territory country to territory.owner_id."""
     actor = get_user_by_email(db, _user)
@@ -239,7 +246,7 @@ def assign_territory_prospects(territory_id: int, _user: str = Depends(require_u
     return {"ok": True, "assigned": n, "territory_id": t.id, "owner_id": t.owner_id}
 
 
-@router.post("/api/sales/prospects/{business_id}/assign")
+@router.post("/api/sales/prospects/{business_id}/assign", tags=["ops"])
 def assign_prospect(business_id: int, body: AssignBody, _user: str = Depends(require_user), db=Depends(get_db)):
     actor = get_user_by_email(db, _user)
     require_role(actor, "owner", "sales")
@@ -256,7 +263,7 @@ def assign_prospect(business_id: int, body: AssignBody, _user: str = Depends(req
     return {"id": b.id, "owner_id": b.owner_id}
 
 
-@router.get("/api/sales/audit")
+@router.get("/api/sales/audit", tags=["ops"])
 def list_audit(limit: int = 100, _user: str = Depends(require_user), db=Depends(get_db)):
     actor = get_user_by_email(db, _user)
     require_role(actor, "owner")
@@ -277,7 +284,7 @@ def list_audit(limit: int = 100, _user: str = Depends(require_user), db=Depends(
     }
 
 
-@router.post("/api/sales/plans")
+@router.post("/api/sales/plans", tags=["money"])
 def create_plan(body: PlanBody, _user: str = Depends(require_user), db=Depends(get_db)):
     actor = get_user_by_email(db, _user)
     require_role(actor, "owner")
@@ -318,7 +325,7 @@ def create_plan(body: PlanBody, _user: str = Depends(require_user), db=Depends(g
     return {"id": plan.id, "code": plan.code}
 
 
-@router.patch("/api/sales/plans/{plan_id}")
+@router.patch("/api/sales/plans/{plan_id}", tags=["money"])
 def patch_plan(plan_id: int, payload: dict[str, Any], _user: str = Depends(require_user), db=Depends(get_db)):
     actor = get_user_by_email(db, _user)
     require_role(actor, "owner")
@@ -347,7 +354,7 @@ def patch_plan(plan_id: int, payload: dict[str, Any], _user: str = Depends(requi
     return {"id": plan.id, "ok": True}
 
 
-@router.post("/api/sales/templates/preview")
+@router.post("/api/sales/templates/preview", tags=["templates"])
 def preview_template(body: PreviewBody, _user: str = Depends(require_user), db=Depends(get_db)):
     b = db.get(Business, body.business_id)
     if not b:
@@ -375,7 +382,7 @@ def preview_template(body: PreviewBody, _user: str = Depends(require_user), db=D
     return {"ok": True, "subject": subject, "body": text, "blocked": False}
 
 
-@router.post("/api/jobs")
+@router.post("/api/jobs", tags=["ops"])
 def start_job(job_type: str = "unpaid_invoice_followups", _user: str = Depends(require_user), db=Depends(get_db)):
     actor = get_user_by_email(db, _user)
     require_role(actor, "owner")
@@ -383,7 +390,7 @@ def start_job(job_type: str = "unpaid_invoice_followups", _user: str = Depends(r
     return {"id": job.id, "status": job.status, "job_type": job.job_type}
 
 
-@router.post("/api/sales/jobs")
+@router.post("/api/sales/jobs", tags=["ops"])
 async def start_sales_job(request: Request, _user: str = Depends(require_user), db=Depends(get_db)):
     actor = get_user_by_email(db, _user)
     require_role(actor, "owner", "sales")
@@ -399,12 +406,12 @@ async def start_sales_job(request: Request, _user: str = Depends(require_user), 
     return {"id": job.id, "status": job.status, "job_type": job.job_type}
 
 
-@router.post("/api/jobs/{job_id}/tick")
+@router.post("/api/jobs/{job_id}/tick", tags=["ops"])
 def job_tick(job_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     return tick_job(db, job_id)
 
 
-@router.post("/api/cron/unpaid-invoices")
+@router.post("/api/cron/unpaid-invoices", tags=["ops"])
 def cron_unpaid(request: Request, x_cron_secret: str = Header(default=""), db=Depends(get_db)):
     # If CRON_SECRET is configured: header must match (session alone is not enough).
     # If CRON_SECRET is empty: Owner session may run manually.
@@ -425,7 +432,7 @@ def cron_unpaid(request: Request, x_cron_secret: str = Header(default=""), db=De
     return result
 
 
-@router.post("/api/webhooks/stripe")
+@router.post("/api/webhooks/stripe", tags=["ops"])
 async def stripe_webhook(request: Request, db=Depends(get_db)):
     payload = await request.body()
     verify_stripe_signature(payload, request.headers.get("stripe-signature", ""), sec.stripe_webhook_secret())
@@ -452,7 +459,7 @@ async def stripe_webhook(request: Request, db=Depends(get_db)):
     return {"ok": True}
 
 
-@router.post("/api/webhooks/paypal")
+@router.post("/api/webhooks/paypal", tags=["ops"])
 async def paypal_webhook(request: Request, db=Depends(get_db)):
     raw = await request.body()
     verify_paypal_headers(
@@ -506,7 +513,7 @@ def _find_invoice_by_ref(db, data: dict) -> Optional[Invoice]:
     return db.scalar(select(Invoice).where(Invoice.number == ref))
 
 
-@router.post("/api/webhooks/payoneer")
+@router.post("/api/webhooks/payoneer", tags=["ops"])
 async def payoneer_webhook(request: Request, db=Depends(get_db)):
     """Mark invoice paid from Payoneer notify. Header: X-Webhook-Secret."""
     _require_shared_webhook_secret(request, sec.payoneer_webhook_secret())
@@ -528,7 +535,7 @@ async def payoneer_webhook(request: Request, db=Depends(get_db)):
     return {"ok": True, "ignored": True}
 
 
-@router.post("/api/webhooks/skrill")
+@router.post("/api/webhooks/skrill", tags=["ops"])
 async def skrill_webhook(request: Request, db=Depends(get_db)):
     """Mark invoice paid from Skrill status URL / notify. Header: X-Webhook-Secret."""
     _require_shared_webhook_secret(request, sec.skrill_webhook_secret())
@@ -565,7 +572,7 @@ async def skrill_webhook(request: Request, db=Depends(get_db)):
     return {"ok": True, "ignored": True}
 
 
-@router.get("/api/sales/me")
+@router.get("/api/sales/me", tags=["auth"])
 def sales_me(_user: str = Depends(require_user), db=Depends(get_db)):
     u = get_user_by_email(db, _user)
     settings = {r.key: r.value for r in db.scalars(select(AppSetting)).all()}
@@ -588,7 +595,7 @@ class ProductPairingBody(BaseModel):
     productBaseUrl: str = Field(min_length=8, max_length=500)
 
 
-@router.post("/api/v1/public/product-pairing")
+@router.post("/api/v1/public/product-pairing", tags=["ops"])
 def public_product_pairing(body: ProductPairingBody, request: Request, db=Depends(get_db)):
     """Booking Engine Super Admin pairs here with a one-time Owner code."""
     import time
@@ -619,7 +626,7 @@ def public_product_pairing(body: ProductPairingBody, request: Request, db=Depend
     }
 
 
-@router.post("/api/webhooks/booking-engine")
+@router.post("/api/webhooks/booking-engine", tags=["be-bridge"])
 async def booking_engine_webhook(request: Request, db=Depends(get_db)):
     """Inbound AppointHive events. Bearer shared secret. Never creates local product PSP invoices."""
     from app.services.booking_engine.connect import get_be_shared_secret, get_connection_status, is_bridge_enabled

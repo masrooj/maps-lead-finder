@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.models import Activity, BeDelivery, Business, PipelineStage
 from app.services.booking_engine.client import BeClientError, BookingEngineClient
 from app.services.booking_engine.connect import crm_lead_id_for, require_be_connected, set_connection_status
+from app.services.booking_engine.errors import be_http_detail
 from app.services.booking_engine.prospect import (
     build_crm_prospect,
     buyer_fields_from_prospect,
@@ -22,7 +23,16 @@ def _require_prospect(db, business: Business) -> dict:
     prospect = build_crm_prospect(db, business)
     email, _name, _phone = buyer_fields_from_prospect(prospect)
     if not email:
-        raise HTTPException(422, "Buyer email required on prospect (or primary contact) before handover")
+        raise HTTPException(
+            422,
+            detail={
+                "error": (
+                    "This prospect needs one valid buyer email before Send to delivery. "
+                    "Open the Contact tab, set a real email, then retry."
+                ),
+                "code": "BUYER_EMAIL_REQUIRED",
+            },
+        )
     return prospect
 
 
@@ -96,7 +106,7 @@ def send_purchase(
     require_be_connected(db)
     business = db.get(Business, business_id)
     if not business:
-        raise HTTPException(404, "Prospect not found")
+        raise HTTPException(404, detail={"error": "Prospect not found", "code": "PROSPECT_NOT_FOUND"})
     lead = crm_lead_id_for(business.id)
     prospect = _require_prospect(db, business)
     buyer_email, buyer_name, buyer_phone = buyer_fields_from_prospect(prospect)
@@ -148,7 +158,7 @@ def send_purchase(
     try:
         res = client.create_purchase(payload)
     except BeClientError as exc:
-        raise HTTPException(exc.status or 502, detail={"error": str(exc), "be": exc.body}) from exc
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
 
     purchase_id = str(res.get("purchaseId") or "")
     # Prefer BE-mirrored inbound hub id (always returned after createCheckout Path B).
@@ -198,7 +208,7 @@ def send_request(
     require_be_connected(db)
     business = db.get(Business, business_id)
     if not business:
-        raise HTTPException(404, "Prospect not found")
+        raise HTTPException(404, detail={"error": "Prospect not found", "code": "PROSPECT_NOT_FOUND"})
     lead = crm_lead_id_for(business.id)
     prospect = _require_prospect(db, business)
     buyer_email, buyer_name, buyer_phone = buyer_fields_from_prospect(prospect)
@@ -237,7 +247,7 @@ def send_request(
     try:
         res = client.create_request(payload)
     except BeClientError as exc:
-        raise HTTPException(exc.status or 502, detail={"error": str(exc), "be": exc.body}) from exc
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
     request_id = str(res.get("id") or (existing.inbound_request_id if existing else "") or "")
     row = _upsert_by_request(db, request_id) or existing
     if not row:
@@ -282,7 +292,7 @@ def send_upgrade(
     require_be_connected(db)
     business = db.get(Business, business_id)
     if not business:
-        raise HTTPException(404, "Prospect not found")
+        raise HTTPException(404, detail={"error": "Prospect not found", "code": "PROSPECT_NOT_FOUND"})
     install_id = (business.be_installation_id or "").strip()
     if not install_id:
         # Try latest delivery
@@ -294,7 +304,16 @@ def send_upgrade(
         if last:
             install_id = last.installation_id
     if not install_id:
-        raise HTTPException(422, "installation_id required before upgrade — wait for AppointHive install webhook")
+        raise HTTPException(
+            422,
+            detail={
+                "error": (
+                    "This prospect has no AppointHive installation yet. "
+                    "Wait until a paid install is active, then send the upgrade."
+                ),
+                "code": "INSTALLATION_REQUIRED",
+            },
+        )
 
     lead = crm_lead_id_for(business.id)
     prospect = _require_prospect(db, business)
@@ -306,7 +325,7 @@ def send_upgrade(
     try:
         quote = client.upgrade_quote(quote_params)
     except BeClientError as exc:
-        raise HTTPException(exc.status or 502, detail={"error": str(exc), "be": exc.body}) from exc
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
 
     try:
         req = client.create_request(
@@ -325,7 +344,7 @@ def send_upgrade(
             }
         )
     except BeClientError as exc:
-        raise HTTPException(exc.status or 502, detail={"error": str(exc), "be": exc.body}) from exc
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
     request_id = str(req.get("id") or "")
     checkout_body: dict[str, Any] = {}
     if provider:
@@ -333,7 +352,7 @@ def send_upgrade(
     try:
         checkout = client.request_checkout(request_id, checkout_body)
     except BeClientError as exc:
-        raise HTTPException(exc.status or 502, detail={"error": str(exc), "be": exc.body}) from exc
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
 
     pay_url = str(checkout.get("payUrl") or checkout.get("checkoutUrl") or checkout.get("hostedCheckoutUrl") or "")
     row = _upsert_by_request(db, request_id) or BeDelivery(business_id=business.id, purpose="upgrade")
@@ -370,7 +389,10 @@ def refresh_delivery(db, delivery_id: int) -> dict:
     require_be_connected(db)
     row = db.get(BeDelivery, delivery_id)
     if not row:
-        raise HTTPException(404, "Delivery not found")
+        raise HTTPException(
+            404,
+            detail={"error": "No delivery record found for this prospect yet.", "code": "DELIVERY_NOT_FOUND"},
+        )
     client = BookingEngineClient(db=db)
     be: dict = {}
     try:
@@ -415,7 +437,7 @@ def refresh_delivery(db, delivery_id: int) -> dict:
                 if biz:
                     biz.be_installation_id = row.installation_id
     except BeClientError as exc:
-        raise HTTPException(exc.status or 502, detail={"error": str(exc), "be": exc.body}) from exc
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
     row.last_event_json = json.dumps({"refresh": be}, default=str)[:8000]
     db.commit()
     db.refresh(row)

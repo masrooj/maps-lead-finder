@@ -36,11 +36,12 @@ from app.services.billing.service import (
     provider_status,
     void_invoice,
 )
+from app.schemas.settings import EmailSignatureBody
 from app.services.metrics import dashboard_bundle
 from app.services.pipeline import backfill_prospect_stages, list_stages, move_stage, stage_dict
 from app.services.scoring import apply_score, score_payload
 
-router = APIRouter(prefix="/api/sales", tags=["sales"])
+router = APIRouter(prefix="/api/sales")
 
 
 def get_db():
@@ -220,27 +221,27 @@ def _parse_dt(value: Optional[str]):
         raise HTTPException(422, f"Invalid datetime: {e}") from e
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", tags=["pipeline"])
 def sales_dashboard(product_line: str = "STANDALONE", _user: str = Depends(require_user), db=Depends(get_db)):
     return dashboard_bundle(db, product_line.upper())
 
 
-@router.get("/providers")
+@router.get("/providers", tags=["money"])
 def sales_providers(_user: str = Depends(require_user)):
     return provider_status()
 
 
-@router.get("/stages")
+@router.get("/stages", tags=["pipeline"])
 def sales_stages(product_line: str = "STANDALONE", _user: str = Depends(require_user), db=Depends(get_db)):
     return {"stages": [stage_dict(s) for s in list_stages(db, product_line.upper())]}
 
 
-@router.post("/backfill")
+@router.post("/backfill", tags=["pipeline"])
 def sales_backfill(_user: str = Depends(require_user), db=Depends(get_db)):
     return backfill_prospect_stages(db)
 
 
-@router.get("/pipeline")
+@router.get("/pipeline", tags=["pipeline"])
 def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import can_view_business, get_user_by_email
 
@@ -276,7 +277,7 @@ def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(requir
     return {"product_line": product_line.upper(), "columns": columns, "unstaged": [prospect_sales_dict(p) for p in unstaged]}
 
 
-@router.post("/prospects/{business_id}/stage")
+@router.post("/prospects/{business_id}/stage", tags=["pipeline"])
 def sales_move_stage(business_id: int, body: StageMoveBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.models import PipelineStage
 
@@ -297,7 +298,7 @@ def sales_move_stage(business_id: int, body: StageMoveBody, _user: str = Depends
     return prospect_sales_dict(b, stage)
 
 
-@router.post("/prospects/{business_id}/undo-stage")
+@router.post("/prospects/{business_id}/undo-stage", tags=["pipeline"])
 def sales_undo_stage(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     """Revert to previous pipeline stage using StageHistory (auto or manual)."""
     from app.models import PipelineStage, StageHistory
@@ -326,7 +327,7 @@ def sales_undo_stage(business_id: int, _user: str = Depends(require_user), db=De
     return {"ok": True, "prospect": prospect_sales_dict(b, stage)}
 
 
-@router.post("/prospects/{business_id}/link")
+@router.post("/prospects/{business_id}/link", tags=["pipeline"])
 def sales_link_prospect(business_id: int, payload: dict[str, Any], _user: str = Depends(require_user), db=Depends(get_db)):
     """Bidirectional STANDALONE ↔ SAAS (or any) prospect link."""
     other_id = int(payload.get("linked_prospect_id") or 0)
@@ -342,7 +343,7 @@ def sales_link_prospect(business_id: int, payload: dict[str, Any], _user: str = 
     return {"ok": True, "a": a.id, "b": other.id}
 
 
-@router.post("/duplicates/resolve")
+@router.post("/duplicates/resolve", tags=["pipeline"])
 def sales_resolve_duplicate(payload: dict[str, Any], _user: str = Depends(require_user), db=Depends(get_db)):
     """CSV soft-duplicate actions: merge | link | ignore."""
     from app.services.authz import get_user_by_email, require_role
@@ -403,7 +404,7 @@ def sales_resolve_duplicate(payload: dict[str, Any], _user: str = Depends(requir
     return {"ok": True, "action": "merge", "primary_id": primary_id, "archived_secondary": secondary_id}
 
 
-@router.get("/prospects/{business_id}")
+@router.get("/prospects/{business_id}", tags=["pipeline"])
 def sales_get_prospect(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     b = db.get(Business, business_id)
     if not b:
@@ -414,7 +415,7 @@ def sales_get_prospect(business_id: int, _user: str = Depends(require_user), db=
     return prospect_sales_dict(b, stage)
 
 
-@router.patch("/prospects/{business_id}")
+@router.patch("/prospects/{business_id}", tags=["pipeline"])
 def sales_patch_prospect(business_id: int, body: ProspectPatch, _user: str = Depends(require_user), db=Depends(get_db)):
     b = db.get(Business, business_id)
     if not b:
@@ -441,7 +442,7 @@ def sales_patch_prospect(business_id: int, body: ProspectPatch, _user: str = Dep
     return prospect_sales_dict(b, stage)
 
 
-@router.post("/prospects/{business_id}/score")
+@router.post("/prospects/{business_id}/score", tags=["pipeline"])
 def sales_score(business_id: int, body: ScoreBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email
     from app.services.automation import on_score_saved
@@ -462,7 +463,7 @@ def sales_score(business_id: int, body: ScoreBody, _user: str = Depends(require_
     return payload
 
 
-@router.get("/prospects/{business_id}/score")
+@router.get("/prospects/{business_id}/score", tags=["pipeline"])
 def sales_get_score(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     b = db.get(Business, business_id)
     if not b:
@@ -470,7 +471,7 @@ def sales_get_score(business_id: int, _user: str = Depends(require_user), db=Dep
     return score_payload(b)
 
 
-@router.get("/tasks")
+@router.get("/tasks", tags=["tasks"])
 def sales_tasks(view: str = "open", _user: str = Depends(require_user), db=Depends(get_db)):
     stmt = select(Task).order_by(Task.due_at.asc(), Task.id.desc())
     if view != "all":
@@ -499,7 +500,7 @@ def sales_tasks(view: str = "open", _user: str = Depends(require_user), db=Depen
     return {"tasks": [ser(t) for t in tasks]}
 
 
-@router.post("/tasks")
+@router.post("/tasks", tags=["tasks"])
 def sales_create_task(body: TaskBody, _user: str = Depends(require_user), db=Depends(get_db)):
     owner = db.scalar(select(User).where(User.email == _user.lower()))
     t = Task(
@@ -517,7 +518,7 @@ def sales_create_task(body: TaskBody, _user: str = Depends(require_user), db=Dep
     return {"id": t.id, "title": t.title, "due_at": _iso(t.due_at), "status": t.status}
 
 
-@router.post("/tasks/{task_id}/complete")
+@router.post("/tasks/{task_id}/complete", tags=["tasks"])
 def sales_complete_task(task_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     t = db.get(Task, task_id)
     if not t:
@@ -535,7 +536,7 @@ class RescheduleBody(BaseModel):
     priority: Optional[str] = None
 
 
-@router.post("/tasks/{task_id}/reschedule")
+@router.post("/tasks/{task_id}/reschedule", tags=["tasks"])
 def sales_reschedule_task(
     task_id: int,
     body: Optional[RescheduleBody] = None,
@@ -562,7 +563,7 @@ def sales_reschedule_task(
     return {"ok": True, "id": t.id, "due_at": _iso(t.due_at), "title": t.title}
 
 
-@router.delete("/tasks/{task_id}")
+@router.delete("/tasks/{task_id}", tags=["tasks"])
 def sales_delete_task(task_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     t = db.get(Task, task_id)
     if not t:
@@ -572,7 +573,7 @@ def sales_delete_task(task_id: int, _user: str = Depends(require_user), db=Depen
     return {"ok": True, "deleted": task_id}
 
 
-@router.delete("/activities/{activity_id}")
+@router.delete("/activities/{activity_id}", tags=["tasks"])
 def sales_delete_activity(activity_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     a = db.get(Activity, activity_id)
     if not a:
@@ -582,7 +583,7 @@ def sales_delete_activity(activity_id: int, _user: str = Depends(require_user), 
     return {"ok": True, "deleted": activity_id}
 
 
-@router.delete("/demos/{demo_id}")
+@router.delete("/demos/{demo_id}", tags=["tasks"])
 def sales_delete_demo(demo_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     d = db.get(DemoNote, demo_id)
     if not d:
@@ -592,7 +593,7 @@ def sales_delete_demo(demo_id: int, _user: str = Depends(require_user), db=Depen
     return {"ok": True, "deleted": demo_id}
 
 
-@router.get("/activities")
+@router.get("/activities", tags=["tasks"])
 def sales_activities(business_id: Optional[int] = None, limit: int = 50, _user: str = Depends(require_user), db=Depends(get_db)):
     stmt = select(Activity).order_by(Activity.created_at.desc()).limit(min(limit, 200))
     if business_id:
@@ -621,7 +622,7 @@ def sales_activities(business_id: Optional[int] = None, limit: int = 50, _user: 
     }
 
 
-@router.post("/activities")
+@router.post("/activities", tags=["tasks"])
 def sales_add_activity(body: ActivityBody, _user: str = Depends(require_user), db=Depends(get_db)):
     if not db.get(Business, body.business_id):
         raise HTTPException(404, "Prospect not found")
@@ -645,7 +646,7 @@ def sales_add_activity(body: ActivityBody, _user: str = Depends(require_user), d
     return {"id": a.id}
 
 
-@router.get("/plans")
+@router.get("/plans", tags=["money"])
 def sales_plans(product_line: str = "STANDALONE", _user: str = Depends(require_user), db=Depends(get_db)):
     plans = db.scalars(
         select(Plan).where(Plan.product_line == product_line.upper(), Plan.active.is_(True)).order_by(Plan.sort_order)
@@ -671,7 +672,7 @@ def sales_plans(product_line: str = "STANDALONE", _user: str = Depends(require_u
     return {"plans": out}
 
 
-@router.post("/proposals")
+@router.post("/proposals", tags=["money"])
 def sales_create_proposal(body: ProposalBody, _user: str = Depends(require_user), db=Depends(get_db)):
     b = db.get(Business, body.business_id)
     if not b:
@@ -713,7 +714,7 @@ def sales_create_proposal(body: ProposalBody, _user: str = Depends(require_user)
     }
 
 
-@router.get("/proposals")
+@router.get("/proposals", tags=["money"])
 def sales_list_proposals(business_id: Optional[int] = None, _user: str = Depends(require_user), db=Depends(get_db)):
     stmt = select(Proposal).order_by(Proposal.id.desc())
     if business_id:
@@ -736,7 +737,7 @@ def sales_list_proposals(business_id: Optional[int] = None, _user: str = Depends
     }
 
 
-@router.post("/proposals/{proposal_id}/send")
+@router.post("/proposals/{proposal_id}/send", tags=["money"])
 def sales_send_proposal(proposal_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email
     from app.services.automation import on_proposal_sent
@@ -762,7 +763,7 @@ def sales_send_proposal(proposal_id: int, _user: str = Depends(require_user), db
     return {"ok": True, "status": p.status}
 
 
-@router.post("/invoices")
+@router.post("/invoices", tags=["money"])
 def sales_create_invoice(body: InvoiceBody, _user: str = Depends(require_user), db=Depends(get_db)):
     prop = db.get(Proposal, body.proposal_id)
     if not prop:
@@ -799,7 +800,7 @@ def sales_create_invoice(body: InvoiceBody, _user: str = Depends(require_user), 
     }
 
 
-@router.get("/invoices")
+@router.get("/invoices", tags=["money"])
 def sales_list_invoices(
     business_id: Optional[int] = None,
     _user: str = Depends(require_user),
@@ -836,7 +837,7 @@ def sales_list_invoices(
     }
 
 
-@router.post("/invoices/{invoice_id}/confirm-paid")
+@router.post("/invoices/{invoice_id}/confirm-paid", tags=["money"])
 def sales_confirm_paid(invoice_id: int, body: ConfirmPayBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_owner_for_money
 
@@ -856,7 +857,7 @@ class VoidInvoiceBody(BaseModel):
     reason: str = ""
 
 
-@router.post("/invoices/{invoice_id}/void")
+@router.post("/invoices/{invoice_id}/void", tags=["money"])
 def sales_void_invoice(invoice_id: int, body: VoidInvoiceBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_owner_for_money
 
@@ -873,7 +874,7 @@ def sales_void_invoice(invoice_id: int, body: VoidInvoiceBody, _user: str = Depe
     }
 
 
-@router.get("/payments")
+@router.get("/payments", tags=["money"])
 def sales_payments(_user: str = Depends(require_user), db=Depends(get_db)):
     rows = db.scalars(select(Payment).order_by(Payment.id.desc()).limit(200)).all()
     return {
@@ -894,7 +895,7 @@ def sales_payments(_user: str = Depends(require_user), db=Depends(get_db)):
     }
 
 
-@router.get("/payments/export.csv")
+@router.get("/payments/export.csv", tags=["money"])
 def sales_payments_export(_user: str = Depends(require_user), db=Depends(get_db)):
     import csv
     import io
@@ -911,7 +912,7 @@ def sales_payments_export(_user: str = Depends(require_user), db=Depends(get_db)
     return StreamingResponse(iter([buf.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=payments.csv"})
 
 
-@router.get("/compliance/{country_code}")
+@router.get("/compliance/{country_code}", tags=["compliance"])
 def sales_compliance(country_code: str, _user: str = Depends(require_user), db=Depends(get_db)):
     pack = db.scalar(select(CompliancePack).where(CompliancePack.country_code == country_code.upper()))
     if not pack:
@@ -933,13 +934,13 @@ def sales_compliance(country_code: str, _user: str = Depends(require_user), db=D
     }
 
 
-@router.get("/suppressions")
+@router.get("/suppressions", tags=["compliance"])
 def sales_suppressions(_user: str = Depends(require_user), db=Depends(get_db)):
     rows = db.scalars(select(Suppression).order_by(Suppression.id.desc()).limit(500)).all()
     return {"suppressions": [{"id": s.id, "kind": s.kind, "value": s.value, "reason": s.reason} for s in rows]}
 
 
-@router.post("/suppressions")
+@router.post("/suppressions", tags=["compliance"])
 def sales_add_suppression(kind: str, value: str, reason: str = "", _user: str = Depends(require_user), db=Depends(get_db)):
     if kind not in ("email", "phone", "domain"):
         raise HTTPException(422, "kind must be email|phone|domain")
@@ -949,17 +950,39 @@ def sales_add_suppression(kind: str, value: str, reason: str = "", _user: str = 
     return {"id": s.id}
 
 
-@router.get("/settings")
+@router.get("/settings", tags=["settings"])
 def sales_settings(_user: str = Depends(require_user), db=Depends(get_db)):
     rows = db.scalars(select(AppSetting)).all()
     return {"settings": {r.key: r.value for r in rows}, "providers": provider_status()}
 
 
-@router.put("/settings/{key}")
+# Owner-writable keys via generic PUT (secrets + signature use dedicated endpoints).
+_SETTINGS_PUT_ALLOW = frozenset(
+    {
+        "saas_enabled",
+        "contact_queue_mode",
+        "won_on",
+        "default_currency",
+        "default_timezone",
+        "demo_data_enabled",
+        "currency_by_country",
+        "tax_rate_AU",
+        "tax_label_AU",
+    }
+)
+
+
+@router.put("/settings/{key}", tags=["settings"])
 def sales_put_setting(key: str, value: str, _user: str = Depends(require_user), db=Depends(get_db)):
     owner = db.scalar(select(User).where(User.email == _user.lower()))
     if owner and owner.role != "owner":
         raise HTTPException(403, "Only Owner can change settings")
+    if key.startswith("pay.") or key.startswith("mail.") or key.startswith("be."):
+        raise HTTPException(422, "Use the dedicated settings endpoint for this key")
+    if key in ("email_signature_text", "email_signature_include_logo", "brand_logo_url"):
+        raise HTTPException(422, "Use /api/sales/email-signature or /api/sales/brand-logo")
+    if key not in _SETTINGS_PUT_ALLOW:
+        raise HTTPException(422, f"Unknown or non-writable setting key: {key}")
     row = db.scalar(select(AppSetting).where(AppSetting.key == key))
     if not row:
         row = AppSetting(key=key, value=value)
@@ -970,7 +993,7 @@ def sales_put_setting(key: str, value: str, _user: str = Depends(require_user), 
     return {"key": key, "value": value}
 
 
-@router.get("/search")
+@router.get("/search", tags=["pipeline"])
 def sales_search(q: str, _user: str = Depends(require_user), db=Depends(get_db)):
     like = f"%{q.strip()}%"
     if len(q.strip()) < 2:
@@ -987,7 +1010,7 @@ def sales_search(q: str, _user: str = Depends(require_user), db=Depends(get_db))
     }
 
 
-@router.post("/prospects/{business_id}/discovery")
+@router.post("/prospects/{business_id}/discovery", tags=["pipeline"])
 def sales_discovery(business_id: int, payload: dict[str, Any], _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email
     from app.services.automation import on_discovery_saved
@@ -1023,7 +1046,7 @@ def sales_discovery(business_id: int, payload: dict[str, Any], _user: str = Depe
     return {"id": note.id, "reranked": True}
 
 
-@router.post("/prospects/{business_id}/demo")
+@router.post("/prospects/{business_id}/demo", tags=["pipeline"])
 def sales_demo(business_id: int, payload: dict[str, Any], _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email
     from app.services.automation import on_demo_saved
@@ -1050,7 +1073,7 @@ def sales_demo(business_id: int, payload: dict[str, Any], _user: str = Depends(r
     return {"id": note.id}
 
 
-@router.get("/contacts/{business_id}")
+@router.get("/contacts/{business_id}", tags=["pipeline"])
 def sales_contacts(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     rows = db.scalars(select(Contact).where(Contact.business_id == business_id)).all()
     return {
@@ -1069,7 +1092,7 @@ def sales_contacts(business_id: int, _user: str = Depends(require_user), db=Depe
     }
 
 
-@router.post("/contacts")
+@router.post("/contacts", tags=["pipeline"])
 def sales_add_contact(payload: dict[str, Any], _user: str = Depends(require_user), db=Depends(get_db)):
     bid = int(payload.get("business_id") or 0)
     if not db.get(Business, bid):
@@ -1098,7 +1121,7 @@ class RefundBody(BaseModel):
     reason: str = ""
 
 
-@router.post("/proposals/{proposal_id}/accept")
+@router.post("/proposals/{proposal_id}/accept", tags=["money"])
 def sales_accept_proposal(proposal_id: int, body: AcceptProposalBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.pipeline import get_stage, move_stage
     from app.services.authz import get_user_by_email
@@ -1136,7 +1159,7 @@ def sales_accept_proposal(proposal_id: int, body: AcceptProposalBody, _user: str
     return {"ok": True, "status": p.status, "won": False}
 
 
-@router.post("/payments/{payment_id}/refund")
+@router.post("/payments/{payment_id}/refund", tags=["money"])
 def sales_refund(payment_id: int, body: RefundBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_owner_for_money
     from app.services.billing.service import record_refund
@@ -1158,7 +1181,7 @@ def sales_refund(payment_id: int, body: RefundBody, _user: str = Depends(require
     }
 
 
-@router.get("/prospects")
+@router.get("/prospects", tags=["pipeline"])
 def sales_prospects(
     q: str = "",
     product_line: str = "",
@@ -1195,7 +1218,7 @@ def sales_prospects(
     return {"prospects": out, "sample_size": len(out), "total": int(total)}
 
 
-@router.get("/demos")
+@router.get("/demos", tags=["tasks"])
 def sales_demos(limit: int = 50, _user: str = Depends(require_user), db=Depends(get_db)):
     rows = db.scalars(select(DemoNote).order_by(DemoNote.id.desc()).limit(min(limit, 200))).all()
     return {
@@ -1221,7 +1244,7 @@ def _saas_mrr_by_currency(db) -> dict[str, float]:
     return out
 
 
-@router.get("/reports/summary")
+@router.get("/reports/summary", tags=["settings"])
 def sales_reports(product_line: str = "STANDALONE", _user: str = Depends(require_user), db=Depends(get_db)):
     from app.models import PipelineStage
     from app.services.metrics import collected_revenue, invoiced_outstanding, open_pipeline_and_forecast
@@ -1331,7 +1354,7 @@ def sales_reports(product_line: str = "STANDALONE", _user: str = Depends(require
     }
 
 
-@router.get("/contact-queue")
+@router.get("/contact-queue", tags=["pipeline"])
 def sales_contact_queue(
     product_line: str = "STANDALONE",
     limit: int = 2000,
@@ -1353,7 +1376,7 @@ def sales_contact_queue(
     )
 
 
-@router.post("/prospects/auto-setup")
+@router.post("/prospects/auto-setup", tags=["pipeline"])
 def sales_auto_setup_prospects(_user: str = Depends(require_user), db=Depends(get_db)):
     """Backfill product_line, currency, stage, and follow-up tasks for all prospects."""
     from app.services.authz import get_user_by_email, require_role
@@ -1365,7 +1388,7 @@ def sales_auto_setup_prospects(_user: str = Depends(require_user), db=Depends(ge
     return {"ok": True, **result}
 
 
-@router.post("/prospects/normalize-currency")
+@router.post("/prospects/normalize-currency", tags=["pipeline"])
 def sales_normalize_currency(
     from_currency: str = "AUD",
     to_currency: str = "USD",
@@ -1415,7 +1438,7 @@ def sales_normalize_currency(
     }
 
 
-@router.post("/demo-data/wipe")
+@router.post("/demo-data/wipe", tags=["settings"])
 def wipe_demo_data(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
 
@@ -1435,7 +1458,7 @@ class SavedViewBody(BaseModel):
     filters: dict[str, Any] = Field(default_factory=dict)
 
 
-@router.get("/saved-views")
+@router.get("/saved-views", tags=["settings"])
 def list_saved_views(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email
 
@@ -1464,7 +1487,7 @@ def list_saved_views(_user: str = Depends(require_user), db=Depends(get_db)):
     return {"views": out}
 
 
-@router.post("/saved-views")
+@router.post("/saved-views", tags=["settings"])
 def create_saved_view(body: SavedViewBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
 
@@ -1481,7 +1504,7 @@ def create_saved_view(body: SavedViewBody, _user: str = Depends(require_user), d
     return {"id": view.id, "name": view.name, "filters": body.filters or {}}
 
 
-@router.delete("/saved-views/{view_id}")
+@router.delete("/saved-views/{view_id}", tags=["settings"])
 def delete_saved_view(view_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
 
@@ -1508,14 +1531,14 @@ class RankingModeBody(BaseModel):
     active: bool = True
 
 
-@router.get("/ranking-modes")
+@router.get("/ranking-modes", tags=["settings"])
 def list_ranking_modes(include_inactive: bool = False, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services import ranking_modes as rm
 
     return {"modes": rm.list_modes(db, active_only=not include_inactive)}
 
 
-@router.post("/ranking-modes")
+@router.post("/ranking-modes", tags=["settings"])
 def create_ranking_mode(body: RankingModeBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services import ranking_modes as rm
@@ -1541,7 +1564,7 @@ def create_ranking_mode(body: RankingModeBody, _user: str = Depends(require_user
     return rm.mode_to_dict(row)
 
 
-@router.put("/ranking-modes/{mode_id}")
+@router.put("/ranking-modes/{mode_id}", tags=["settings"])
 def update_ranking_mode(mode_id: int, body: RankingModeBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services import ranking_modes as rm
@@ -1568,7 +1591,7 @@ def update_ranking_mode(mode_id: int, body: RankingModeBody, _user: str = Depend
     return rm.mode_to_dict(row)
 
 
-@router.delete("/ranking-modes/{mode_id}")
+@router.delete("/ranking-modes/{mode_id}", tags=["settings"])
 def delete_ranking_mode(mode_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.models import ContactQueueMode
@@ -1613,7 +1636,7 @@ def _demo_dict(a) -> dict:
     }
 
 
-@router.get("/demo-assets")
+@router.get("/demo-assets", tags=["settings"])
 def list_demo_assets(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.models import DemoAsset
 
@@ -1621,7 +1644,7 @@ def list_demo_assets(_user: str = Depends(require_user), db=Depends(get_db)):
     return {"assets": [_demo_dict(a) for a in rows]}
 
 
-@router.post("/demo-assets")
+@router.post("/demo-assets", tags=["settings"])
 def create_demo_asset(body: DemoAssetBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.models import DemoAsset
@@ -1644,7 +1667,7 @@ def create_demo_asset(body: DemoAssetBody, _user: str = Depends(require_user), d
     return _demo_dict(a)
 
 
-@router.put("/demo-assets/{asset_id}")
+@router.put("/demo-assets/{asset_id}", tags=["settings"])
 def update_demo_asset(asset_id: int, body: DemoAssetBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.models import DemoAsset
@@ -1664,7 +1687,7 @@ def update_demo_asset(asset_id: int, body: DemoAssetBody, _user: str = Depends(r
     return _demo_dict(a)
 
 
-@router.delete("/demo-assets/{asset_id}")
+@router.delete("/demo-assets/{asset_id}", tags=["settings"])
 def delete_demo_asset(asset_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.models import DemoAsset
@@ -1679,7 +1702,7 @@ def delete_demo_asset(asset_id: int, _user: str = Depends(require_user), db=Depe
     return {"ok": True, "deleted": asset_id}
 
 
-@router.post("/demo-assets/upload")
+@router.post("/demo-assets/upload", tags=["settings"])
 async def upload_demo_asset(request: Request, _user: str = Depends(require_user), db=Depends(get_db)):
     """Multipart: title, notes, file. Local disk, Vercel Blob (BLOB_READ_WRITE_TOKEN), or optional S3."""
     from pathlib import Path
@@ -1720,7 +1743,7 @@ async def upload_demo_asset(request: Request, _user: str = Depends(require_user)
     return _demo_dict(a)
 
 
-@router.post("/brand-logo")
+@router.post("/brand-logo", tags=["settings"])
 async def upload_brand_logo(request: Request, _user: str = Depends(require_user), db=Depends(get_db)):
     """Owner: upload logo for email signatures. Stored under uploads/brand/ + AppSetting brand_logo_url."""
     from pathlib import Path
@@ -1757,7 +1780,7 @@ async def upload_brand_logo(request: Request, _user: str = Depends(require_user)
     return {"ok": True, "url": url}
 
 
-@router.delete("/brand-logo")
+@router.delete("/brand-logo", tags=["settings"])
 def clear_brand_logo(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
 
@@ -1770,8 +1793,32 @@ def clear_brand_logo(_user: str = Depends(require_user), db=Depends(get_db)):
     return {"ok": True, "url": ""}
 
 
+@router.get("/email-signature", tags=["settings"])
+def get_email_signature(_user: str = Depends(require_user), db=Depends(get_db)):
+    """Any signed-in user (Bearer or cookie): load signature for compose + Settings."""
+    from app.services.email_signature import signature_payload
+
+    return signature_payload(db)
+
+
+@router.put("/email-signature", tags=["settings"])
+def put_email_signature(body: EmailSignatureBody, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Owner: update email signature text and logo toggle via authenticated API."""
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.email_signature import update_signature
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner")
+    try:
+        payload = update_signature(db, text=body.text, include_logo=body.include_logo)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    db.commit()
+    return {"ok": True, **payload}
+
+
 # —— Payment provider settings (Owner) ——
-@router.get("/payment-settings")
+@router.get("/payment-settings", tags=["money"])
 def get_payment_settings(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services.secrets import payment_settings_public
@@ -1786,7 +1833,7 @@ class PaymentSettingBody(BaseModel):
     value: str = ""
 
 
-@router.put("/payment-settings")
+@router.put("/payment-settings", tags=["money"])
 def put_payment_setting(body: PaymentSettingBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services.secrets import PAY_SETTING_KEYS, payment_settings_public, store_setting_value
@@ -1805,7 +1852,7 @@ class PaymentSettingsBulkBody(BaseModel):
     settings: dict[str, str] = Field(default_factory=dict)
 
 
-@router.put("/payment-settings/bulk")
+@router.put("/payment-settings/bulk", tags=["money"])
 def put_payment_settings_bulk(body: PaymentSettingsBulkBody, _user: str = Depends(require_user), db=Depends(get_db)):
     """Save many payment keys from the configure form. Empty string clears DB override."""
     from app.services.authz import get_user_by_email, require_role
@@ -1831,7 +1878,7 @@ class PaymentValidateBody(BaseModel):
     provider: str = Field(min_length=2, max_length=40)
 
 
-@router.post("/payment-settings/validate")
+@router.post("/payment-settings/validate", tags=["money"])
 def validate_payment_provider(body: PaymentValidateBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services.payment_validate import validate_provider
@@ -1841,7 +1888,7 @@ def validate_payment_provider(body: PaymentValidateBody, _user: str = Depends(re
     return validate_provider(body.provider)
 
 
-@router.post("/payment-settings/fill-local-defaults")
+@router.post("/payment-settings/fill-local-defaults", tags=["money"])
 def fill_local_payment_defaults(_user: str = Depends(require_user), db=Depends(get_db)):
     """
     Owner-only LOCAL helpers: test/sandbox modes, public URL, Payoneer/Skrill payee + webhook secrets.
@@ -1878,7 +1925,7 @@ def fill_local_payment_defaults(_user: str = Depends(require_user), db=Depends(g
     }
 
 
-@router.get("/mail-settings")
+@router.get("/mail-settings", tags=["money"])
 def get_mail_settings(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services.mail import mail_settings_public, smtp_configured
@@ -1889,7 +1936,7 @@ def get_mail_settings(_user: str = Depends(require_user), db=Depends(get_db)):
     return {"settings": mail_settings_public(db=db), "smtp_ready": smtp_configured(db=db), "storage": store.storage_status()}
 
 
-@router.put("/mail-settings")
+@router.put("/mail-settings", tags=["money"])
 def put_mail_setting(body: PaymentSettingBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services.mail import MAIL_SETTING_KEYS, mail_settings_public
@@ -1927,13 +1974,13 @@ def _invoice_context(db, invoice_id: int):
     return inv, payload
 
 
-@router.get("/invoices/{invoice_id}/view")
+@router.get("/invoices/{invoice_id}/view", tags=["money"])
 def invoice_view(invoice_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     _inv, payload = _invoice_context(db, invoice_id)
     return payload
 
 
-@router.get("/invoices/{invoice_id}/pdf")
+@router.get("/invoices/{invoice_id}/pdf", tags=["money"])
 def invoice_pdf(invoice_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     from fastapi.responses import Response
     from app.services.invoices_pdf import build_invoice_pdf_bytes
@@ -1951,7 +1998,7 @@ def invoice_pdf(invoice_id: int, _user: str = Depends(require_user), db=Depends(
     )
 
 
-@router.get("/invoices/{invoice_id}/compose-copy")
+@router.get("/invoices/{invoice_id}/compose-copy", tags=["money"])
 def invoice_compose_copy(
     invoice_id: int,
     template_id: Optional[int] = None,
@@ -2006,7 +2053,7 @@ class InvoiceSendBody(BaseModel):
     template_id: Optional[int] = None
 
 
-@router.post("/invoices/{invoice_id}/send-email")
+@router.post("/invoices/{invoice_id}/send-email", tags=["money"])
 def invoice_send_email(
     invoice_id: int,
     body: InvoiceSendBody,
@@ -2098,14 +2145,14 @@ class BeSendUpgradeBody(BaseModel):
     provider: Optional[str] = None
 
 
-@router.get("/be/connection")
+@router.get("/be/connection", tags=["be-bridge"])
 def be_get_connection(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.booking_engine.connect import be_connection_public
 
     return be_connection_public(db=db)
 
 
-@router.post("/be/connection/pair-code")
+@router.post("/be/connection/pair-code", tags=["be-bridge"])
 def be_pair_code(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services.booking_engine.connect import generate_pairing_code
@@ -2115,7 +2162,7 @@ def be_pair_code(_user: str = Depends(require_user), db=Depends(get_db)):
     return generate_pairing_code(db)
 
 
-@router.post("/be/connection/manual")
+@router.post("/be/connection/manual", tags=["be-bridge"])
 def be_manual_connect(body: BeManualConnectBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services.booking_engine.connect import save_manual_connection
@@ -2125,7 +2172,7 @@ def be_manual_connect(body: BeManualConnectBody, _user: str = Depends(require_us
     return save_manual_connection(db, base_url=body.base_url, shared_secret=body.shared_secret)
 
 
-@router.post("/be/connection/test")
+@router.post("/be/connection/test", tags=["be-bridge"])
 def be_test_connection(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services.booking_engine.connect import test_be_connection
@@ -2135,7 +2182,7 @@ def be_test_connection(_user: str = Depends(require_user), db=Depends(get_db)):
     return test_be_connection(db)
 
 
-@router.post("/be/connection/disconnect")
+@router.post("/be/connection/disconnect", tags=["be-bridge"])
 def be_disconnect(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email, require_role
     from app.services.booking_engine.connect import disconnect_be
@@ -2145,31 +2192,33 @@ def be_disconnect(_user: str = Depends(require_user), db=Depends(get_db)):
     return disconnect_be(db)
 
 
-@router.get("/be/catalog")
+@router.get("/be/catalog", tags=["be-bridge"])
 def be_catalog(product_line: str = "STANDALONE", _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.booking_engine.client import BeClientError, BookingEngineClient
+    from app.services.booking_engine.errors import be_http_detail
 
     client = BookingEngineClient(db=db)
     try:
         return client.get_catalog(product_line)
     except BeClientError as exc:
-        raise HTTPException(exc.status or 502, detail={"error": str(exc), "be": exc.body}) from exc
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
     except HTTPException:
         raise
 
 
-@router.get("/be/revisions")
+@router.get("/be/revisions", tags=["be-bridge"])
 def be_revisions(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.booking_engine.client import BeClientError, BookingEngineClient
+    from app.services.booking_engine.errors import be_http_detail
 
     client = BookingEngineClient(db=db)
     try:
         return client.list_revisions()
     except BeClientError as exc:
-        raise HTTPException(exc.status or 502, detail={"error": str(exc), "be": exc.body}) from exc
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
 
 
-@router.get("/be/upgrade-quote")
+@router.get("/be/upgrade-quote", tags=["be-bridge"])
 def be_upgrade_quote(
     installation_id: Optional[str] = None,
     from_revision_id: Optional[str] = None,
@@ -2179,6 +2228,7 @@ def be_upgrade_quote(
     db=Depends(get_db),
 ):
     from app.services.booking_engine.client import BeClientError, BookingEngineClient
+    from app.services.booking_engine.errors import be_http_detail
 
     params = {}
     if installation_id:
@@ -2193,10 +2243,10 @@ def be_upgrade_quote(
     try:
         return client.upgrade_quote(params)
     except BeClientError as exc:
-        raise HTTPException(exc.status or 502, detail={"error": str(exc), "be": exc.body}) from exc
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
 
 
-@router.post("/be/send-to-delivery")
+@router.post("/be/send-to-delivery", tags=["be-bridge"])
 def be_send_to_delivery(body: BeSendPurchaseBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email
     from app.services.booking_engine.handoff import send_purchase
@@ -2212,7 +2262,7 @@ def be_send_to_delivery(body: BeSendPurchaseBody, _user: str = Depends(require_u
     )
 
 
-@router.post("/be/send-request")
+@router.post("/be/send-request", tags=["be-bridge"])
 def be_send_request(body: BeSendRequestBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email
     from app.services.booking_engine.handoff import send_request
@@ -2227,7 +2277,7 @@ def be_send_request(body: BeSendRequestBody, _user: str = Depends(require_user),
     )
 
 
-@router.post("/be/send-upgrade")
+@router.post("/be/send-upgrade", tags=["be-bridge"])
 def be_send_upgrade(body: BeSendUpgradeBody, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import get_user_by_email
     from app.services.booking_engine.handoff import send_upgrade
@@ -2243,7 +2293,7 @@ def be_send_upgrade(body: BeSendUpgradeBody, _user: str = Depends(require_user),
     )
 
 
-@router.get("/be/deliveries")
+@router.get("/be/deliveries", tags=["be-bridge"])
 def be_list_deliveries(business_id: Optional[int] = None, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.models import BeDelivery
     from app.services.booking_engine.handoff import delivery_dict
@@ -2255,7 +2305,7 @@ def be_list_deliveries(business_id: Optional[int] = None, _user: str = Depends(r
     return {"deliveries": [delivery_dict(r) for r in rows]}
 
 
-@router.post("/be/deliveries/{delivery_id}/refresh")
+@router.post("/be/deliveries/{delivery_id}/refresh", tags=["be-bridge"])
 def be_refresh_delivery(delivery_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.booking_engine.handoff import refresh_delivery
 

@@ -116,8 +116,7 @@ export async function uploadDemoAssetFile(file){
   const fd=new FormData();
   fd.append('file', file);
   fd.append('title', file.name||'Demo video');
-  const r=await fetch('/api/sales/demo-assets/upload',{method:'POST',credentials:'same-origin',body:fd});
-  if(!r.ok) throw new Error(await r.text()||'Upload failed');
+  await api('/api/sales/demo-assets/upload',{method:'POST',body:fd});
   toast('Video uploaded'); await loadDemoAssets();
 }
 

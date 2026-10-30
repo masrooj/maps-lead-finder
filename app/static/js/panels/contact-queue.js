@@ -4,6 +4,8 @@ import { esc, api, toast, fmtMoney, fmtDateTime } from '../core/api.js';
 
 import { pageSlice, renderPager, ensurePagerHost, pagerState } from '../core/pager.js';
 
+import { listSkeletonHtml } from '../core/skeleton.js';
+
 import { uiConfirm, openUiDialog } from '../core/dialog.js';
 
 import { registerPanel } from './registry.js';
@@ -350,6 +352,12 @@ export async function markBookingIds(ids, hasBooking){
 
 export async function loadContactQueue(opts={}){
   if(!opts.keepTab){ /* preserve tab when refreshing after mark */ }
+  const list=$('contactQueueList');
+  const pagerHost=list&&ensurePagerHost(list,'contactQueuePager');
+  if(list){
+    list.innerHTML=listSkeletonHtml({rows:5, label:'Loading contact queue…'});
+    if(pagerHost) pagerHost.innerHTML='';
+  }
   const mode=($('contactQueueMode')&&$('contactQueueMode').value)||'';
   const country=($('contactQueueCountry')&&$('contactQueueCountry').value)||'';
   const city=($('contactQueueCity')&&$('contactQueueCity').value)||'';
@@ -381,11 +389,7 @@ export async function loadContactQueue(opts={}){
 
 export async function saveContactQueueMode(){
   const mode=($('contactQueueMode')&&$('contactQueueMode').value)||'default';
-  const r=await fetch('/api/sales/settings/contact_queue_mode?value='+encodeURIComponent(mode),{method:'PUT',credentials:'same-origin'});
-  if(!r.ok){
-    const t=await r.text();
-    throw new Error(t||'Could not save ranking mode');
-  }
+  await api('/api/sales/settings/contact_queue_mode?value='+encodeURIComponent(mode),{method:'PUT'});
   toast('Ranking mode saved');
   await loadContactQueue({keepTab:true});
 }

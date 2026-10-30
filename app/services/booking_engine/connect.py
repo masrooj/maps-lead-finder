@@ -78,10 +78,13 @@ def is_bridge_enabled(db=None) -> bool:
 
 
 def require_be_connected(db=None) -> None:
+    msg = (
+        "AppointHive is not connected. Open AppointHive → Connect, pair or paste the shared secret, then retry."
+    )
     if get_connection_status(db=db) != "connected" or not is_bridge_enabled(db=db):
-        raise HTTPException(409, detail={"error": "CRM not connected"})
+        raise HTTPException(409, detail={"error": msg, "code": "CRM_NOT_CONNECTED"})
     if not get_be_base_url(db=db) or not get_be_shared_secret(db=db):
-        raise HTTPException(409, detail={"error": "CRM not connected"})
+        raise HTTPException(409, detail={"error": msg, "code": "CRM_NOT_CONNECTED"})
 
 
 def be_connection_public(db=None) -> dict:

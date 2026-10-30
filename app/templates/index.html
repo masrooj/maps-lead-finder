@@ -534,6 +534,23 @@
           </div>
         </div>
         <button type="button" class="primary" id="normalizeCurrencyBtn">Bulk convert currencies</button>
+        <h3 class="panel-title">Email signature</h3>
+        <p class="hint" style="margin-top:0">Appended to compose / mailto / Zoho. Loaded and saved via <code>/api/sales/email-signature</code> (session or Bearer).</p>
+        <div class="fields" style="margin:0 0 12px;max-width:560px">
+          <div class="field">
+            <label for="emailSignatureText">Signature text</label>
+            <textarea id="emailSignatureText" rows="4" placeholder="AppointHive&#10;Sales team" aria-label="Email signature text" style="min-height:96px;width:100%;resize:vertical"></textarea>
+          </div>
+          <label class="check-row" style="display:flex;align-items:center;gap:8px;margin:8px 0">
+            <input type="checkbox" id="emailSignatureIncludeLogo" checked>
+            <span>Include brand logo under the signature</span>
+          </label>
+          <div class="crud-toolbar" style="margin:0">
+            <button type="button" class="primary" id="emailSignatureSave">Save signature</button>
+          </div>
+          <p class="hint" style="margin:10px 0 4px">Preview</p>
+          <pre id="emailSignaturePreview" class="hint" style="white-space:pre-wrap;margin:0;padding:10px;border:1px solid var(--border, #ddd);border-radius:8px;background:var(--surface-2, #f7f7f8);max-width:560px"></pre>
+        </div>
         <h3 class="panel-title">Brand logo (email &amp; invoices)</h3>
         <p class="hint" style="margin-top:0">Used in email signatures and invoice View/PDF. Stored under uploads.</p>
         <div class="crud-toolbar" style="margin:0">
@@ -864,7 +881,7 @@
 </div>
 
 
-<script type="module" src="/static/js/main.js?v=20261028b"></script>
+<script type="module" src="/static/js/main.js?v=20261030bearer"></script>
 
 </body>
 </html>

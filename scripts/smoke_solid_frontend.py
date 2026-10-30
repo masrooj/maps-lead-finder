@@ -74,9 +74,12 @@ def main() -> int:
         "/static/js/shell/router.js",
         "/static/js/shell/sidebar.js",
         "/static/js/core/dialog.js",
+        "/static/js/core/auth.js",
         "/static/js/core/notifications.js",
         "/static/js/features/invoices.js",
+        "/static/js/features/email-signature.js",
         "/static/js/panels/contact-queue.js",
+        "/static/js/panels/settings.js",
         "/static/js/app/runtime.js",
         "/static/js/app/bridge.js",
         "/static/css/tokens.css",
@@ -107,6 +110,7 @@ def main() -> int:
         "/api/sales/invoices?product_line=STANDALONE&limit=10",
         "/api/sales/reports/summary?product_line=STANDALONE",
         "/api/sales/settings",
+        "/api/sales/email-signature",
         "/api/sales/payment-settings",
         "/api/sales/be/connection",
         "/api/templates",
@@ -197,6 +201,13 @@ def main() -> int:
     m = re.search(r"<script>(.*?)</script>", raw, re.S)
     orig = set(re.findall(r"(?:async\s+)?function\s+(\w+)\s*\(", m.group(1)))
     curf = set(re.findall(r"(?:async\s+)?function\s+(\w+)\s*\(", js))
+    # Known renames / peels (old name still "missing" but replacement exists)
+    renames = {
+        "loadBrandLogoSetting": "refreshSignatureUi",
+    }
+    for old, new in renames.items():
+        if old in orig and new in curf:
+            orig.discard(old)
     missing = sorted(orig - curf)
     print("FN_MISSING", missing or "none")
 

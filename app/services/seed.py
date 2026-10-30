@@ -308,6 +308,12 @@ def seed_settings(db) -> None:
     ensure_setting(db, "tax_rate_AU", "0.10")
     ensure_setting(db, "tax_label_AU", "GST")
     ensure_setting(db, "contact_queue_mode", "default")
+    try:
+        from app.services.email_signature import ensure_defaults
+
+        ensure_defaults(db)
+    except Exception:
+        pass
 
 
 def seed_sales_os(db) -> None:
