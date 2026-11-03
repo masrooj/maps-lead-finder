@@ -8,7 +8,7 @@ import { listSkeletonHtml } from '../core/skeleton.js';
 
 import { uiConfirm, uiForm } from '../core/dialog.js';
 
-import { registerPanel } from './registry.js';
+import { registerPanel, getPanel } from './registry.js';
 
 import { B } from '../app/bridge.js';
 
@@ -66,10 +66,21 @@ export function renderTasksList(){
     toast('Task updated'); await loadTasks();
   }));
   list.querySelectorAll('[data-del-task]').forEach(btn=>btn.addEventListener('click',async()=>{
-    const ok=await uiConfirm({title:'Delete task?', confirmLabel:'Delete', danger:true});
+    const ok=await uiConfirm({
+      title:'Delete task?',
+      message:'If this prospect was Contacted, they will move back to To contact.',
+      confirmLabel:'Delete',
+      danger:true
+    });
     if(!ok) return;
-    await api('/api/sales/tasks/'+btn.dataset.delTask,{method:'DELETE'});
-    toast('Task deleted'); await loadTasks(); refreshNotifications().catch(()=>{});
+    const res=await api('/api/sales/tasks/'+btn.dataset.delTask,{method:'DELETE'});
+    toast(res&&res.reverted_to_contact?'Task deleted — prospect back on To contact':'Task deleted');
+    await loadTasks();
+    refreshNotifications().catch(()=>{});
+    if(res&&res.reverted_to_contact){
+      const cq=getPanel('contactQueue');
+      if(cq&&typeof cq.refresh==='function') cq.refresh().catch(()=>{});
+    }
   }));
 }
 

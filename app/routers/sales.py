@@ -327,6 +327,26 @@ def sales_undo_stage(business_id: int, _user: str = Depends(require_user), db=De
     return {"ok": True, "prospect": prospect_sales_dict(b, stage)}
 
 
+@router.post("/prospects/{business_id}/revert-to-contact", tags=["pipeline"])
+def sales_revert_to_contact(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Move a Contacted prospect back onto To contact (clears sent flags + contacted)."""
+    from app.models import PipelineStage
+    from app.services.automation import revert_to_to_contact
+
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    actor = db.scalar(select(User).where(User.email == _user.lower()))
+    result = revert_to_to_contact(
+        db,
+        b,
+        actor_id=actor.id if actor else None,
+        note="Manual revert to To contact",
+    )
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    return {"ok": True, **result, "prospect": prospect_sales_dict(b, stage)}
+
+
 @router.post("/prospects/{business_id}/link", tags=["pipeline"])
 def sales_link_prospect(business_id: int, payload: dict[str, Any], _user: str = Depends(require_user), db=Depends(get_db)):
     """Bidirectional STANDALONE ↔ SAAS (or any) prospect link."""
@@ -565,12 +585,30 @@ def sales_reschedule_task(
 
 @router.delete("/tasks/{task_id}", tags=["tasks"])
 def sales_delete_task(task_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Delete task; if linked prospect was Contacted, revert them to To contact."""
+    from app.services.automation import _is_contacted_queue_state, revert_to_to_contact
+
     t = db.get(Task, task_id)
     if not t:
         raise HTTPException(404, "Task not found")
+    business_id = t.business_id
     db.delete(t)
+    db.flush()
+    reverted = False
+    if business_id:
+        b = db.get(Business, business_id)
+        if b and _is_contacted_queue_state(b):
+            actor = db.scalar(select(User).where(User.email == _user.lower()))
+            revert_to_to_contact(
+                db,
+                b,
+                actor_id=actor.id if actor else None,
+                note=f"Task #{task_id} deleted",
+            )
+            reverted = True
+            return {"ok": True, "deleted": task_id, "reverted_to_contact": True, "business_id": business_id}
     db.commit()
-    return {"ok": True, "deleted": task_id}
+    return {"ok": True, "deleted": task_id, "reverted_to_contact": reverted, "business_id": business_id}
 
 
 @router.delete("/activities/{activity_id}", tags=["tasks"])

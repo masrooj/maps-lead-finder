@@ -130,6 +130,61 @@ def on_outreach_confirmed(
     return {"ok": True, "channel": channel}
 
 
+def _is_contacted_queue_state(b: Business) -> bool:
+    return bool(b.contacted or b.email_sent or b.whatsapp_sent or b.instagram_sent)
+
+
+def revert_to_to_contact(
+    db,
+    b: Business,
+    *,
+    actor_id: Optional[int] = None,
+    note: str = "",
+    move_pipeline: bool = True,
+) -> dict:
+    """Undo confirm-sent: back on To contact (marked, not contacted, channel flags cleared)."""
+    was_contacted = _is_contacted_queue_state(b)
+    b.contacted = False
+    b.email_sent = False
+    b.whatsapp_sent = False
+    b.instagram_sent = False
+    b.marked_for_contact = True
+    b.last_contacted_at = None
+    b.next_follow_up_at = None
+    b.updated_at = _utcnow()
+    db.add(
+        Activity(
+            business_id=b.id,
+            activity_type="reverted_to_contact",
+            summary="Reverted from Contacted to To contact",
+            outcome=(note or "")[:500],
+            created_by=actor_id,
+        )
+    )
+    moved = False
+    if move_pipeline:
+        pl = (b.product_line or "STANDALONE").upper()
+        target = get_stage(db, pl, "ready_to_contact")
+        current = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+        terminal = ("won", "lost", "nurture", "subscribed", "churned")
+        early = ("identified", "ready_to_contact", "contacted", "follow_up")
+        if target and (not current or current.slug in early) and not (current and current.slug in terminal):
+            if not current or current.slug != "ready_to_contact":
+                move_stage(
+                    db,
+                    b,
+                    target.id,
+                    actor_id=actor_id,
+                    note=note or "Reverted to To contact",
+                    force=True,
+                )
+                moved = True
+                return {"ok": True, "reverted": True, "was_contacted": was_contacted, "stage_moved": moved}
+    db.commit()
+    db.refresh(b)
+    return {"ok": True, "reverted": True, "was_contacted": was_contacted, "stage_moved": moved}
+
+
 def on_marked_for_contact(db, b: Business, *, actor_id: Optional[int] = None) -> None:
     advance_at_least(db, b, "ready_to_contact", actor_id=actor_id, note="Auto: marked for contact")
 

@@ -301,6 +301,7 @@ export function renderContactQueueList(){
     }else if(isContacted){
       actions=`
         ${composeChannelButtonsHtml(b)}
+        <button type="button" data-cq-revert="${b.id}">Back to To contact</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>`;
     }else{
       actions=`
@@ -358,6 +359,21 @@ export function renderContactQueueList(){
       await markContactQueueIds([btn.dataset.cqUnmark], false);
       await loadContactQueue({keepTab:true});
       toast('Removed from To contact');
+    }catch(e){ toast(e.message,true); }
+  }));
+  list.querySelectorAll('[data-cq-revert]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    const ok=await uiConfirm({
+      title:'Back to To contact?',
+      message:'Clears Contacted / channel-sent flags and returns this lead to To contact.',
+      confirmLabel:'Move back',
+      danger:false
+    });
+    if(!ok) return;
+    try{
+      await api('/api/sales/prospects/'+btn.dataset.cqRevert+'/revert-to-contact',{method:'POST',body:{}});
+      await loadContactQueue({keepTab:true});
+      toast('Moved back to To contact');
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('[data-cq-booking]').forEach(btn=>btn.addEventListener('click',async ev=>{

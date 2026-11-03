@@ -170,6 +170,11 @@ def move_stage(
         business.lost = False
     elif to_stage.slug == "ready_to_contact":
         business.marked_for_contact = True
+        business.contacted = False
+        business.lost = False
+    elif to_stage.slug == "identified":
+        business.contacted = False
+        business.lost = False
 
     business.updated_at = _utcnow()
     db.add(
