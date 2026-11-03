@@ -146,7 +146,7 @@
       <p class="hint" style="margin-top:0">Use this loop for every city. Click a step to jump there.</p>
       <div class="guide-steps" id="guideSteps">
         <button type="button" class="guide-step" data-goto="leads"><strong>1. Discover</strong><span>Search Places (Fetch: All for city scan). Star ★ leads. Prospects auto-setup on import.</span></button>
-        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → mark to contact → To contact → send message. Re-ranks after discovery.</span></button>
+        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → mark to contact → WA / Email / IG → Confirm sent → Contacted tab.</span></button>
         <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>Stages advance automatically on confirm-sent, discovery, demo, and score. Drag only to override.</span></button>
         <button type="button" class="guide-step" data-goto="tasks"><strong>4. Tasks</strong><span>Follow-ups auto-create when you confirm email/WA/IG sent. Complete or reschedule.</span></button>
         <button type="button" class="guide-step" data-goto="activities"><strong>5. Communication</strong><span>Outreach + invoices grouped by lead. Closing stays under Deals.</span></button>
@@ -330,6 +330,7 @@
         <button type="button" role="tab" class="active" data-cq-tab="all" aria-selected="true">All <span class="tab-count" id="contactQueueAllCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="selected" aria-selected="false">To contact <span class="tab-count" id="contactQueueSelectedCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="booking" aria-selected="false">Has booking <span class="tab-count" id="contactQueueBookingCount">0</span></button>
+        <button type="button" role="tab" data-cq-tab="contacted" aria-selected="false">Contacted <span class="tab-count" id="contactQueueContactedCount">0</span></button>
       </div>
       <div class="fields filter-bar" style="margin-bottom:10px">
         <div class="field">
@@ -816,7 +817,11 @@
     </div>
     <div class="modal-scroll">
       <div class="compose-pane active" data-compose-pane="message">
-        <div class="field"><label for="composeChannel">Channel</label><select id="composeChannel"></select></div>
+        <div class="field">
+          <label for="composeChannel">Channel</label>
+          <select id="composeChannel" class="compose-channel-select"></select>
+          <div id="composeChannelControls" class="compose-channel-controls" aria-live="polite"></div>
+        </div>
         <div class="field"><label for="composeTemplate">Template</label><select id="composeTemplate"></select></div>
         <div class="field" id="composeSubjectField"><label for="composeSubject">Subject</label><input id="composeSubject"></div>
         <div class="field">

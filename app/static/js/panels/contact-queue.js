@@ -14,6 +14,8 @@ import { B } from '../app/bridge.js';
 
 import { state } from '../core/state.js';
 
+import { availableComposeChannels as composeChannels, channelLabel, preferredColdChannel } from '../features/compose.js';
+
 let contactQueueModes = [];
 let contactQueuePick = new Set();
 let contactQueueQuery = '';
@@ -23,7 +25,8 @@ let contactQueueLocations = {};
 export function getContactQueuePick() { return contactQueuePick; }
 export function clearContactQueuePick() { contactQueuePick.clear(); }
 export function setContactQueueTab(tab) {
-  state.contactQueueTab = (tab === 'selected' || tab === 'booking') ? tab : 'all';
+  if (tab === 'selected' || tab === 'booking' || tab === 'contacted') state.contactQueueTab = tab;
+  else state.contactQueueTab = 'all';
 }
 export function setContactQueueQuery(q) { contactQueueQuery = q || ''; }
 export function setContactQueueChannel(ch) { contactQueueChannel = ch || ''; }
@@ -31,12 +34,20 @@ export function getContactQueueLocations() { return contactQueueLocations; }
 
 function availableComposeChannels(b) {
   if (typeof B.availableComposeChannels === 'function') return B.availableComposeChannels(b);
-  return ['email'];
+  return composeChannels(b);
 }
 
 
 export function contactQueueSelectedLeads(){
   return (state.contactQueueLeads||[]).filter(b=>b.marked_for_contact && !b.contacted && !b.opt_out);
+}
+
+/** Marked businesses whose first cold message was confirmed sent. */
+export function contactQueueContactedLeads(){
+  return (state.contactQueueLeads||[]).filter(b=>{
+    if (b.opt_out) return false;
+    return !!(b.contacted || b.email_sent || b.whatsapp_sent || b.instagram_sent);
+  });
 }
 
 export function fillContactQueueLocationFilters(locations, keepCountry, keepCity){
@@ -98,6 +109,7 @@ export function contactQueueVisibleLeads(){
   let base;
   if(state.contactQueueTab==='selected') base=contactQueueSelectedLeads();
   else if(state.contactQueueTab==='booking') base=contactQueueBookingLeads();
+  else if(state.contactQueueTab==='contacted') base=contactQueueContactedLeads();
   else base=(state.contactQueueLeads||[]).slice();
   // All: ranked open leads first; to-contact + has-booking parked at bottom
   if(state.contactQueueTab==='all'){
@@ -105,6 +117,13 @@ export function contactQueueVisibleLeads(){
       const aPark=contactQueueIsParked(a);
       const bPark=contactQueueIsParked(b);
       if(aPark!==bPark) return aPark?1:-1;
+      return (Number(b.rank_score)||0)-(Number(a.rank_score)||0);
+    });
+  } else if(state.contactQueueTab==='contacted'){
+    base.sort((a,b)=>{
+      const aAt=a.last_contacted_at||'';
+      const bAt=b.last_contacted_at||'';
+      if(aAt!==bAt) return aAt<bAt?1:-1;
       return (Number(b.rank_score)||0)-(Number(a.rank_score)||0);
     });
   }
@@ -147,7 +166,7 @@ export function renderContactQueueExplain(data){
         <div><div class="sub" style="margin:0">In scope</div><strong style="font-size:22px;letter-spacing:-.03em">${total}</strong></div>
       </div>
     </div>
-    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → pick → Mark to contact / Has booking (both sink to bottom of All) → work To contact / Has booking tabs → Message.</p>
+    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → pick → Mark to contact → Message (WA / Email / IG) → Confirm sent moves them to Contacted.</p>
     ${parts.length?`<p class="hint" style="margin:8px 0 0"><strong style="color:var(--text)">Top why:</strong> ${esc(parts.join(' · '))}</p>`:''}
   `;
 }
@@ -170,9 +189,11 @@ export function syncContactQueueTabs(){
   const allBase=state.contactQueueLeads||[];
   const selBase=contactQueueSelectedLeads();
   const bookBase=contactQueueBookingLeads();
+  const contactedBase=contactQueueContactedLeads();
   if($('contactQueueAllCount')) $('contactQueueAllCount').textContent=String(pass(allBase).length);
   if($('contactQueueSelectedCount')) $('contactQueueSelectedCount').textContent=String(pass(selBase).length);
   if($('contactQueueBookingCount')) $('contactQueueBookingCount').textContent=String(pass(bookBase).length);
+  if($('contactQueueContactedCount')) $('contactQueueContactedCount').textContent=String(pass(contactedBase).length);
   document.querySelectorAll('#contactQueueTabs [data-cq-tab]').forEach(btn=>{
     const on=btn.dataset.cqTab===state.contactQueueTab;
     btn.classList.toggle('active',on);
@@ -183,7 +204,7 @@ export function syncContactQueueTabs(){
   if(allBar) allBar.classList.toggle('show', state.contactQueueTab==='all' && contactQueuePick.size>0);
   if(selBar) selBar.classList.toggle('show', state.contactQueueTab==='selected' && selBase.length>0);
   if($('contactQueuePickCount')) $('contactQueuePickCount').textContent=contactQueuePick.size+' picked';
-  if($('contactQueueSelectedHint')) $('contactQueueSelectedHint').textContent=selBase.length?`${selBase.length} to contact · send from here`:'No leads marked to contact yet';
+  if($('contactQueueSelectedHint')) $('contactQueueSelectedHint').textContent=selBase.length?`${selBase.length} to contact · send WA / Email / IG from here`:'No leads marked to contact yet';
   if($('contactQueueMessageNext')) $('contactQueueMessageNext').disabled=!selBase.length;
 }
 
@@ -207,16 +228,39 @@ export function channelTagsHtml(b){
   return tags.map(t=>`<span class="ch-tag ${t.cls}${t.on?'':' off'}">${t.label}</span>`).join(' ');
 }
 
+function composeChannelButtonsHtml(b){
+  const channels=availableComposeChannels(b);
+  if(!channels.length){
+    return `<button type="button" class="primary" data-compose-queue="${b.id}">Message</button>`;
+  }
+  const short={whatsapp:'WA',email:'Email',instagram:'IG'};
+  return channels.map((ch,i)=>{
+    const cls=i===0?'primary':'';
+    const label=short[ch]||channelLabel(ch);
+    return `<button type="button" class="${cls}" data-compose-queue="${b.id}" data-compose-channel="${ch}" title="Open ${channelLabel(ch)} compose">${label}</button>`;
+  }).join('');
+}
+
+function sentChannelsHtml(b){
+  const bits=[];
+  if(b.whatsapp_sent) bits.push('<span class="ch-tag wa">WA sent</span>');
+  if(b.email_sent) bits.push('<span class="ch-tag email">Email sent</span>');
+  if(b.instagram_sent) bits.push('<span class="ch-tag ig">IG sent</span>');
+  if(!bits.length && b.contacted) bits.push('<span class="badge contacted">Contacted</span>');
+  return bits.join(' ');
+}
+
 export function renderContactQueueList(){
   const list=$('contactQueueList');
   if(!list) return;
   syncContactQueueTabs();
   const isSelected=state.contactQueueTab==='selected';
   const isBooking=state.contactQueueTab==='booking';
+  const isContacted=state.contactQueueTab==='contacted';
   const leads=contactQueueVisibleLeads();
   const q=(contactQueueQuery||'').trim();
   const pagerHost=ensurePagerHost(list,'contactQueuePager');
-  const tabLabel=isSelected?'To contact':(isBooking?'Has booking':'All');
+  const tabLabel=isSelected?'To contact':(isBooking?'Has booking':(isContacted?'Contacted':'All'));
   if(!leads.length){
     if(q || contactQueueChannel){
       list.innerHTML=`<div class="empty-card">No matches on <strong>${tabLabel}</strong> for this search/filter.</div>`;
@@ -225,6 +269,8 @@ export function renderContactQueueList(){
         ? '<div class="empty-card">Nothing marked to contact yet. On <strong>All</strong>, pick leads and use <strong>Mark to contact</strong> at the bottom.</div>'
         : isBooking
           ? '<div class="empty-card">No leads marked as already having booking. Use <strong>Has booking</strong> on a row.</div>'
+          : isContacted
+            ? '<div class="empty-card">No confirmed cold sends yet. From <strong>To contact</strong>, open WA / Email / IG, then <strong>Confirm sent</strong>.</div>'
           : '<div class="empty-card">No leads match this ranking mode. Try Balanced, or Discover + star prospects first.</div>';
     }
     if(pagerHost) pagerHost.innerHTML='';
@@ -239,31 +285,36 @@ export function renderContactQueueList(){
     const hasBook=!!(b.has_booking||(b.current_booking_software||'').trim());
     const rankNo=slice.start+i+1;
     const mapsUrl=mapsUrlFor(b);
-    const checkCell=(isSelected||isBooking)?'':`<div class="checkcol"><input type="checkbox" data-cq-pick="${b.id}" ${picked?'checked':''} aria-label="Pick ${esc(b.name||'lead')}"></div>`;
+    const checkCell=(isSelected||isBooking||isContacted)?'':`<div class="checkcol"><input type="checkbox" data-cq-pick="${b.id}" ${picked?'checked':''} aria-label="Pick ${esc(b.name||'lead')}"></div>`;
     let actions='';
     if(isSelected){
       actions=`
-        <button type="button" class="primary" data-compose-queue="${b.id}">Message</button>
+        ${composeChannelButtonsHtml(b)}
         <button type="button" data-open-prospect="${b.id}">Open</button>
         <button type="button" data-cq-unmark="${b.id}">Remove</button>
         <button type="button" data-cq-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>`;
     }else if(isBooking){
       actions=`
-        <button type="button" class="primary" data-compose-queue="${b.id}">Message</button>
+        ${composeChannelButtonsHtml(b)}
         <button type="button" data-open-prospect="${b.id}">Open</button>
         <button type="button" data-cq-booking="${b.id}" data-booking-on="0">Clear booking</button>`;
+    }else if(isContacted){
+      actions=`
+        ${composeChannelButtonsHtml(b)}
+        <button type="button" data-open-prospect="${b.id}">Open</button>`;
     }else{
       actions=`
         <button type="button" class="primary" data-cq-mark="${b.id}" ${already?'disabled':''}>${already?'On To contact':'Mark to contact'}</button>
         <button type="button" data-cq-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>`;
     }
+    const contactedBadge=isContacted?` ${sentChannelsHtml(b)}`:'';
     return `
-    <article class="queue-lead ${(isSelected||isBooking)?'no-check':''}" data-row="${b.id}" data-maps="${esc(mapsUrl)}" title="${mapsUrl?'Open Google Maps':''}">
+    <article class="queue-lead ${(isSelected||isBooking||isContacted)?'no-check':''}" data-row="${b.id}" data-maps="${esc(mapsUrl)}" title="${mapsUrl?'Open Google Maps':''}">
       ${checkCell}
       <div class="queue-rank meta" style="min-width:48px;align-items:flex-start"><strong style="font-size:18px">#${rankNo}</strong><span class="sub">${esc(String(b.rank_score))}</span></div>
       <div class="queue-body">
-        <div class="biz">${esc(b.name||'—')}${already&&!isSelected?' <span class="badge queue">To contact</span>':''}${hasBook?' <span class="badge">Booking</span>':''}</div>
+        <div class="biz">${esc(b.name||'—')}${already&&!isSelected&&!isContacted?' <span class="badge queue">To contact</span>':''}${hasBook?' <span class="badge">Booking</span>':''}${contactedBadge}</div>
         <div class="sub"><span>${esc(b.country||'—')}</span> · <span>${esc(b.city||'—')}</span> · ${esc((b.stage&&b.stage.name)||'—')}</div>
         <div class="reach" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${channelTagsHtml(b)}</div>
         <div class="reach" style="margin-top:6px">${chips||`<span class="chip">${esc(b.why||'ranked')}</span>`}</div>
@@ -287,8 +338,9 @@ export function renderContactQueueList(){
     const id=btn.dataset.composeQueue;
     const lead=state.contactQueueLeads.find(x=>String(x.id)===String(id));
     if(!lead){ toast('Lead not in queue',true); return; }
+    const preferred=preferredColdChannel(lead, btn.dataset.composeChannel||'');
     try{
-      await B.openCompose(lead, availableComposeChannels(lead)[0]||'email');
+      await B.openCompose(lead, preferred);
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('[data-cq-mark]').forEach(btn=>btn.addEventListener('click',async ev=>{
@@ -372,7 +424,7 @@ export async function loadContactQueue(opts={}){
   if($('contactQueueDef')){
     $('contactQueueDef').textContent=(data.definition||'')
       +(scope?` · Scoped to ${scope}.`:' · All countries/cities combined — pick a country then city to separate.')
-      +` · Pick on All → Mark to contact → message from To contact.`;
+      +` · Pick on All → Mark to contact → WA/Email/IG from To contact → Confirm sent → Contacted.`;
   }
   renderContactQueueExplain(data);
   state.contactQueueLeads=data.leads||[];

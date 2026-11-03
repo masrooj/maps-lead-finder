@@ -52,10 +52,15 @@ import { loadDemos, renderDemosTable, loadDemoAssets, addDemoAssetFlow, uploadDe
 import { loadProspects, renderProspectsTable, fillProspectsLocationFilters, prospectsScopeLabel, mergeProspectsLocCache } from '../panels/prospects.js';
 import { showDrawerLoading, resolveDrawerMode, clampDrawerTab } from '../features/drawer.js';
 import { listSkeletonHtml } from '../core/skeleton.js';
-
-
-
-
+import {
+  channelLabel as composeChannelLabel,
+  firstEmail as composeFirstEmail,
+  phoneDigits as composePhoneDigits,
+  contactChannels as composeContactChannels,
+  availableComposeChannels as composeAvailableChannels,
+  preferredColdChannel,
+  composeChannelControlsHtml,
+} from '../features/compose.js';
 
 const CHANNELS=['email','whatsapp','instagram','invoice'];
 let rowsData=[];
@@ -1652,10 +1657,10 @@ function updateViewHint(){
   else if(viewMode==='due'){$('viewHint').textContent='Due / overdue follow-ups across all cities.';$('statTotalLabel').textContent='Shown'}
   else{$('viewHint').textContent='City leads for the selected country/city. “All cities · queue” is always global.';$('statTotalLabel').textContent='City shown'}
 }
-function channelLabel(ch){return ch==='email'?'Email':ch==='whatsapp'?'WhatsApp':ch==='instagram'?'Instagram':ch==='invoice'?'Invoice':ch}
-function firstEmail(b){return String(b.email||'').split(',').map(e=>e.trim()).filter(Boolean)[0]||''}
-function phoneDigits(b){return String(b.international_phone||b.phone||'').replace(/\D/g,'')}
-function contactChannels(b){const s=b.social_links||{};return{email:!!firstEmail(b),whatsapp:phoneDigits(b).length>=8,instagram:!!s.instagram}}
+function channelLabel(ch){return composeChannelLabel(ch)}
+function firstEmail(b){return composeFirstEmail(b)}
+function phoneDigits(b){return composePhoneDigits(b)}
+function contactChannels(b){return composeContactChannels(b)}
 function siteLabel(url){try{return new URL(url).hostname.replace(/^www\./,'')}catch(e){return url}}
 function instagramHandle(url){
   try{
@@ -2089,7 +2094,34 @@ async function toggleMark(id){
   }catch(e){toast(e.message,true)}
 }
 
-function availableComposeChannels(b){const c=contactChannels(b);return CHANNELS.filter(ch=>c[ch])}
+function availableComposeChannels(b){return composeAvailableChannels(b)}
+
+function renderComposeChannelControls(){
+  const host=$('composeChannelControls');
+  if(!host||!composeLead) return;
+  const channels=availableComposeChannels(composeLead);
+  const active=($('composeChannel')&&$('composeChannel').value)||composePreferred||channels[0]||'email';
+  host.innerHTML=composeChannelControlsHtml(channels, active, {mobile:isMobileClient()});
+  host.querySelectorAll('[data-compose-ch]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const ch=btn.dataset.composeCh;
+      if(!ch||!$('composeChannel')) return;
+      $('composeChannel').value=ch;
+      fillComposeTemplates(ch);
+    });
+  });
+  host.querySelectorAll('[data-compose-open]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const ch=btn.dataset.composeOpen;
+      if(!ch||!$('composeChannel')) return;
+      if($('composeChannel').value!==ch){
+        $('composeChannel').value=ch;
+        fillComposeTemplates(ch);
+      }
+      openChannelApp().catch(e=>toast(e.message,true));
+    });
+  });
+}
 
 function composeContactInfo(b,channel){
   const s=b.social_links||{};
@@ -2238,6 +2270,7 @@ function applyComposeTemplate(){
         ?(mobile?'Open WhatsApp app':'Open WhatsApp Web')
         :(mobile?'Open Instagram app':'Open Instagram');
   }
+  renderComposeChannelControls();
 }
 async function copyComposeMessage(){
   if(!composeLead)return;
@@ -2276,7 +2309,7 @@ async function openCompose(b,preferred){
   const channels=availableComposeChannels(b);
   if(!channels.length){showMessage('No email, WhatsApp, or Instagram on this lead. Edit contacts in Details or run Enrich.',true);return}
   if(!templatesStore){try{await loadTemplates()}catch(e){}}
-  composePreferred=channels.includes(preferred)?preferred:channels[0];
+  composePreferred=preferredColdChannel(b, preferred);
   $('composeLead').textContent=`${b.name} · ${b.city}, ${b.country}`;
   $('composeChannel').innerHTML=channels.map(ch=>`<option value="${ch}" ${ch===composePreferred?'selected':''}>${channelLabel(ch)}</option>`).join('');
   $('composeOutcome').value=b.outcome||'';
@@ -2294,6 +2327,7 @@ async function openCompose(b,preferred){
   $('composeBody').focus();
   // Do not auto-open WhatsApp / Zoho / IG — user opens the message modal first, then Open app
   syncComposeMarkBtn();
+  renderComposeChannelControls();
 }
 function setComposeTab(name){
   document.querySelectorAll('#composeTabs [data-compose-tab]').forEach(btn=>{
@@ -2341,7 +2375,7 @@ function nextWorkLead(afterId){
 function openNextLead(afterId){
   const next=nextWorkLead(afterId);
   if(!next){toast('No more leads in this view.');return false}
-  openCompose(next,availableComposeChannels(next)[0]||'email');
+  openCompose(next, preferredColdChannel(next));
   return true;
 }
 
@@ -2432,10 +2466,33 @@ async function confirmSent(opts={}){
     if(outcome)body.outcome=outcome;
     if(notes)body.notes=notes;
     const updated=await api('/api/businesses/'+composeLead.id+'/confirm-sent',{method:'POST',body});
+    // Patch Discover + Contact queue caches so Contacted tab / badges update immediately
+    const patch={
+      contacted:true,
+      last_contacted_at:updated.last_contacted_at||new Date().toISOString(),
+      email_sent:!!updated.email_sent,
+      whatsapp_sent:!!updated.whatsapp_sent,
+      instagram_sent:!!updated.instagram_sent,
+      next_follow_up_at:updated.next_follow_up_at||'',
+      outcome:updated.outcome||'',
+    };
+    const row=rowsData.find(x=>String(x.id)===String(currentId));
+    if(row) Object.assign(row, patch);
+    const qRow=(sharedState.contactQueueLeads||[]).find(x=>String(x.id)===String(currentId));
+    if(qRow) Object.assign(qRow, patch, updated.stage?{stage:updated.stage}:{});
     closeCompose();
-    toast(`Confirmed ${channelLabel(channel)} sent for ${updated.name}.`);
+    toast(`Confirmed ${channelLabel(channel)} sent — marked contacted.`);
     // Always refresh current view so Global queue / Due lists drop completed leads
     await load();
+    if(appPanel==='contactQueue' || sharedState.appPanel==='contactQueue'){
+      try{
+        await loadContactQueue({keepTab:true});
+        if(!opts.next){
+          setContactQueueTab('contacted');
+          renderContactQueueList();
+        }
+      }catch(e){}
+    }
     if(opts.next)openNextLead(currentId);
   }catch(e){toast(e.message,true)}
 }
@@ -3008,8 +3065,7 @@ $('contactQueueSaveMode')&&$('contactQueueSaveMode').addEventListener('click',()
 $('contactQueueTabs')&&$('contactQueueTabs').addEventListener('click',e=>{
   const btn=e.target.closest('[data-cq-tab]');
   if(!btn) return;
-  const tab=btn.dataset.cqTab;
-  setContactQueueTab((tab==='selected'||tab==='booking')?tab:'all');
+  setContactQueueTab(btn.dataset.cqTab||'all');
   renderContactQueueList();
 });
 $('contactQueueChannel')&&$('contactQueueChannel').addEventListener('change',()=>{
@@ -3045,7 +3101,7 @@ $('contactQueueMessageNext')&&$('contactQueueMessageNext').addEventListener('cli
   const next=contactQueueSelectedLeads()[0];
   if(!next){ toast('No leads on To contact',true); return; }
   try{
-    await openCompose(next, availableComposeChannels(next)[0]||'email');
+    await openCompose(next, preferredColdChannel(next));
   }catch(e){ toast(e.message,true); }
 });
 $('contactQueueClearSelected')&&$('contactQueueClearSelected').addEventListener('click',async()=>{
@@ -3692,7 +3748,6 @@ B.setSettingsTab = setSettingsTab;
 B.applyBeConnectOwnerGate = applyBeConnectOwnerGate;
 B.loadBeCatalog = loadBeCatalog;
 B.loadMoney = typeof loadMoney === 'function' ? loadMoney : null;
-B.loadSettings = typeof loadSettings === 'function' ? loadSettings : null;
 B.qrUrlFor = typeof qrUrlFor === 'function' ? qrUrlFor : null;
 B.closeTopMenus = closeTopMenus;
 B.availableComposeChannels = availableComposeChannels;
@@ -3714,13 +3769,7 @@ registerPanel({ id: 'money', refresh: safeRefresh(typeof loadMoney === 'function
 /* reports registered in panels/reports.js */
 registerPanel({ id: 'appoinHive', refresh: safeRefresh(typeof loadAppointHive === 'function' ? loadAppointHive : null) });
 registerPanel({ id: 'paySetup', refresh: safeRefresh(typeof loadPaySetup === 'function' ? loadPaySetup : null) });
-/* settings registered in panels/settings.js (calls B.loadSettings) */
+registerPanel({ id: 'settings', refresh: safeRefresh(typeof loadSettings === 'function' ? loadSettings : null) });
 
-(async function boot(){
-  try{
-    const d=await api('/api/me');
-    await enterApp(d.username);
-    refreshSignatureUi().catch(()=>{});
-  }catch(e){setLoggedOut()}
-})();
+(async function boot(){try{const d=await api('/api/me');await enterApp(d.username)}catch(e){setLoggedOut()}})();
 

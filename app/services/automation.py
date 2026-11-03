@@ -341,6 +341,7 @@ def rank_contact_queue(
                 "email_sent": bool(b.email_sent),
                 "whatsapp_sent": bool(b.whatsapp_sent),
                 "instagram_sent": bool(b.instagram_sent),
+                "last_contacted_at": b.last_contacted_at.isoformat() if getattr(b, "last_contacted_at", None) else "",
                 "channels": {
                     "email": ch["has_email"],
                     "whatsapp": ch["has_phone"],
