@@ -91,20 +91,29 @@ def on_outreach_confirmed(
     follow_up_at: Optional[datetime] = None,
     outcome: str = "",
     notes: str = "",
+    message: str = "",
 ) -> dict:
     """Email/WA/IG confirm-sent: activity + follow-up task + auto stage advance."""
+    biz_name = (b.name or f"#{b.id}").strip()
+    msg = (message or "").strip()
+    note = (notes or "").strip()
+    # Prefer full sent body for history; keep operator notes on the activity outcome line.
+    stored_message = msg or note
+    outcome_bits = [x for x in (outcome.strip() if outcome else "", f"note: {note}" if msg and note else "") if x]
     db.add(
         Activity(
             business_id=b.id,
             activity_type="outreach_sent",
             channel=channel,
-            summary=f"Confirmed {channel} send",
-            outcome=outcome or "",
-            next_action=(notes or "")[:500],
+            summary=f"{biz_name} · Confirmed {channel} send",
+            outcome=" · ".join(outcome_bits),
+            next_action=stored_message,
             created_by=actor_id,
         )
     )
     due = follow_up_at or (_utcnow() + timedelta(days=3))
+    title = f"{biz_name} · Follow up after {channel}"
+    description = msg or note or "Auto-created when outreach was confirmed sent"
     existing = db.scalar(
         select(Task).where(
             Task.business_id == b.id,
@@ -112,12 +121,18 @@ def on_outreach_confirmed(
             Task.title.ilike("%follow%"),
         )
     )
-    if not existing:
+    if existing:
+        existing.title = title
+        existing.description = description
+        existing.due_at = due
+        existing.priority = existing.priority or "high"
+        existing.updated_at = _utcnow()
+    else:
         db.add(
             Task(
                 business_id=b.id,
-                title=f"Follow up after {channel}",
-                description="Auto-created when outreach was confirmed sent",
+                title=title,
+                description=description,
                 priority="high",
                 status="open",
                 due_at=due,

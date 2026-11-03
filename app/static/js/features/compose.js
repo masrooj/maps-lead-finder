@@ -15,7 +15,12 @@ export function channelLabel(ch) {
     : ch;
 }
 
-/** Parse @username from an Instagram profile URL (or bare handle). */
+const IG_BLOCKED_PATHS = new Set([
+  'p', 'reel', 'reels', 'stories', 'direct', 'explore', 'accounts', 'account',
+  'about', 'legal', 'developer', 'directory', 'nametag', 'login', 'signup',
+]);
+
+/** Parse @username from an Instagram profile URL (or bare handle). Never returns login paths. */
 export function instagramHandle(url) {
   const raw = String(url || '').trim();
   if (!raw) return '';
@@ -23,33 +28,54 @@ export function instagramHandle(url) {
     return raw.replace(/^@/, '').split('?')[0].trim();
   }
   try {
-    const path = decodeURIComponent(new URL(raw).pathname).replace(/^\/+|\/+$/g, '');
+    const u = new URL(raw);
+    const host = (u.hostname || '').toLowerCase();
+    if (host && !host.includes('instagram.com')) return '';
+    const path = decodeURIComponent(u.pathname || '').replace(/^\/+|\/+$/g, '');
     const part = (path.split('/').filter(Boolean)[0] || '').replace(/^@/, '');
-    if (!part || ['p', 'reel', 'reels', 'stories', 'direct', 'explore', 'accounts'].includes(part.toLowerCase())) {
-      return '';
-    }
+    if (!part || IG_BLOCKED_PATHS.has(part.toLowerCase())) return '';
     return part;
   } catch (e) {
     return '';
   }
 }
 
-/** Browser profile URL — uses the signed-in Instagram web session (not ig.me login walls). */
-export function instagramProfileWebUrl(handle, profileUrl) {
-  const h = String(handle || '').replace(/^@/, '').trim();
+/** Slug a business display name into a possible IG username fallback. */
+export function instagramHandleFromBusinessName(name) {
+  const raw = String(name || '').trim().toLowerCase();
+  if (!raw) return '';
+  return raw
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9._]+/g, '')
+    .replace(/^[._]+|[._]+$/g, '')
+    .slice(0, 30);
+}
+
+/**
+ * Browser profile URL — always www.instagram.com/{handle}/ (never accounts/login).
+ * @param {string} handle
+ * @param {string} [profileUrl]
+ * @param {string} [businessName] fallback when URL is a login wall / missing handle
+ */
+export function instagramProfileWebUrl(handle, profileUrl, businessName) {
+  const fromHandle = String(handle || '').replace(/^@/, '').trim();
+  const fromUrl = instagramHandle(profileUrl);
+  const fromBiz = instagramHandleFromBusinessName(businessName);
+  const h = fromHandle || fromUrl || fromBiz;
   if (h) return `https://www.instagram.com/${encodeURIComponent(h)}/`;
-  const fallback = String(profileUrl || '').trim();
-  return fallback || 'https://www.instagram.com/';
+  return '';
 }
 
 /**
  * Open the lead's Instagram profile: native app on mobile, logged-in web profile on desktop.
- * Avoids ig.me/m blind DM links that force a login interstitial.
+ * Avoids ig.me/m and accounts/login walls.
  * @returns {{ app: string, web: string, handle: string }}
  */
-export function instagramOpenUrls(profileUrl, handle, { mobile = false } = {}) {
-  const h = String(handle || instagramHandle(profileUrl) || '').replace(/^@/, '').trim();
-  const web = instagramProfileWebUrl(h, profileUrl);
+export function instagramOpenUrls(profileUrl, handle, { mobile = false, businessName = '' } = {}) {
+  const h = String(
+    handle || instagramHandle(profileUrl) || instagramHandleFromBusinessName(businessName) || ''
+  ).replace(/^@/, '').trim();
+  const web = instagramProfileWebUrl(h, profileUrl, businessName);
   if (h && mobile) {
     return {
       app: `instagram://user?username=${encodeURIComponent(h)}`,

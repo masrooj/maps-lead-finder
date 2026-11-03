@@ -192,6 +192,10 @@ export async function api(url,options={}){
 
 export function toast(text,error=false,action){
   const wrap=$('toastWrap');
+  if(!wrap){
+    try{ console[error?'warn':'info'](text); }catch(_){}
+    return;
+  }
   const el=document.createElement('div');
   el.className='toast '+(error?'error':'ok');
   const msg=document.createElement('span');msg.className='toast-msg';msg.textContent=text;el.appendChild(msg);
@@ -216,12 +220,25 @@ export function fmtMoney(amount, currency){
   return amount==null||amount===''?'—':String(amount);
 }
 
+/** Shoptime-style stamp: weekday, day month year, 24h time — e.g. Tue, 3 November 2026, 15:05 */
 export function fmtDateTime(iso){
   if(!iso) return '—';
   const d=new Date(iso);
   if(Number.isNaN(d.getTime())) return String(iso).replace('T',' ').slice(0,16);
-  try{return new Intl.DateTimeFormat(undefined,{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}).format(d)}
-  catch(e){return String(iso).replace('T',' ').slice(0,16)}
+  try{
+    const parts=new Intl.DateTimeFormat(undefined,{
+      weekday:'short', day:'numeric', month:'long', year:'numeric',
+      hour:'2-digit', minute:'2-digit', hour12:false, hourCycle:'h23'
+    }).formatToParts(d);
+    const pick=t=>parts.find(p=>p.type===t)?.value||'';
+    const hour=pick('hour');
+    const minute=pick('minute');
+    const time=hour&&minute?`${hour}:${minute}`:(hour||minute||'');
+    return `${pick('weekday')}, ${pick('day')} ${pick('month')} ${pick('year')}, ${time}`;
+  }catch(e){
+    try{return new Intl.DateTimeFormat(undefined,{year:'numeric',month:'long',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).format(d)}
+    catch(err){return String(iso).replace('T',' ').slice(0,16)}
+  }
 }
 
 export function dateOnly(iso){if(!iso)return '';return String(iso).slice(0,10)}

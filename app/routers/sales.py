@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -500,21 +501,35 @@ def sales_tasks(view: str = "open", _user: str = Depends(require_user), db=Depen
     now = datetime.now(timezone.utc)
     today = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
 
+    biz_ids = {t.business_id for t in tasks if t.business_id}
+    names: dict[int, str] = {}
+    if biz_ids:
+        for b in db.scalars(select(Business).where(Business.id.in_(biz_ids))).all():
+            names[b.id] = b.name or f"#{b.id}"
+
     def ser(t: Task) -> dict:
         due = t.due_at
         if due and due.tzinfo is None:
             due = due.replace(tzinfo=timezone.utc)
         overdue = bool(due and t.status == "open" and due < today)
+        channel = ""
+        title = t.title or ""
+        m = re.search(r"after\s+(\w+)\s*$", title, re.I)
+        if m:
+            channel = m.group(1).lower()
         return {
             "id": t.id,
             "business_id": t.business_id,
-            "title": t.title,
+            "business_name": names.get(t.business_id) if t.business_id else "",
+            "title": title,
             "description": t.description or "",
             "priority": t.priority,
             "status": t.status,
             "due_at": _iso(t.due_at),
             "completed_at": _iso(t.completed_at),
             "overdue": overdue,
+            "channel": channel,
+            "message": t.description or "",
         }
 
     return {"tasks": [ser(t) for t in tasks]}
@@ -652,6 +667,7 @@ def sales_activities(business_id: Optional[int] = None, limit: int = 50, _user: 
                 "summary": a.summary,
                 "outcome": a.outcome,
                 "next_action": a.next_action,
+                "message": a.next_action or "",
                 "channel": a.channel,
                 "created_at": _iso(a.created_at),
             }

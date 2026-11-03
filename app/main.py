@@ -1640,6 +1640,7 @@ class ConfirmSent(BaseModel):
     next_follow_up_at: Optional[str] = None
     notes: Optional[str] = Field(default=None, max_length=5000)
     outcome: Optional[str] = Field(default=None, max_length=80)
+    message: Optional[str] = Field(default=None, max_length=20000)
 
 
 @app.post("/api/businesses/{business_id}/confirm-sent", tags=["discover"])
@@ -1679,6 +1680,7 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
             follow_up_at=follow,
             outcome=str(payload.outcome or ""),
             notes=str(payload.notes or ""),
+            message=str(payload.message or ""),
         )
         db.commit()
         db.refresh(b)
@@ -1718,6 +1720,8 @@ def business_activity(business_id: int, _user: str = Depends(require_login)):
                     "action": a.activity_type,
                     "channel": a.channel or "",
                     "note": a.summary or a.outcome or "",
+                    "message": a.next_action or "",
+                    "outcome": a.outcome or "",
                     "created_at": a.created_at.isoformat() if a.created_at else "",
                     "sort_at": a.created_at.isoformat() if a.created_at else "",
                 }

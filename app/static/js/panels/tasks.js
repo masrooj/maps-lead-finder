@@ -1,6 +1,6 @@
 import { $ } from '../core/dom.js';
 
-import { esc, api, toast, plusDays } from '../core/api.js';
+import { esc, api, toast, plusDays, fmtDateTime } from '../core/api.js';
 
 import { pageSlice, renderPager, ensurePagerHost, pagerState } from '../core/pager.js';
 
@@ -18,10 +18,17 @@ import { pickProspectField } from '../features/prospect-picker.js';
 
 import { refreshNotifications } from '../core/notifications.js';
 
+import { channelLabel } from '../features/compose.js';
+
 
 
 let tasksCache = [];
 
+function channelFromTask(t){
+  if(t.channel) return String(t.channel).toLowerCase();
+  const m=String(t.title||'').match(/after\s+(\w+)\s*$/i);
+  return m?m[1].toLowerCase():'';
+}
 
 export function renderTasksList(){
   const tasks=tasksCache||[];
@@ -33,25 +40,50 @@ export function renderTasksList(){
     return;
   }
   const slice=pageSlice(tasks,'tasks');
-  list.innerHTML=slice.items.map(t=>`
+  list.innerHTML=slice.items.map(t=>{
+    const biz=t.business_name||(t.business_id?('#'+t.business_id):'');
+    const ch=channelFromTask(t);
+    const msg=t.message||t.description||'';
+    const dueLabel=t.due_at?fmtDateTime(t.due_at):(t.due_at||'—');
+    return `
     <article class="task-row ${t.overdue?'overdue':''}">
-      <div>
-        <div class="biz">${esc(t.title)}</div>
-        <div class="sub">${t.overdue?'Overdue · ':''}Due ${esc(t.due_at||'—')} · priority ${esc(t.priority||'normal')} · prospect #${t.business_id||'—'}</div>
+      <div class="task-main">
+        <div class="biz">${esc(t.title||'Task')}</div>
+        <div class="sub">${t.overdue?'Overdue · ':''}Due ${esc(dueLabel)} · priority ${esc(t.priority||'normal')}${biz?' · '+esc(biz):''}${ch?' · '+esc(channelLabel(ch)):''}</div>
+        ${msg?`<pre class="sent-message">${esc(msg)}</pre>`:''}
       </div>
       <div class="action-stack">
+        ${t.business_id?`<button type="button" class="primary" data-followup-task="${t.id}" data-business="${t.business_id}" data-channel="${esc(ch)}" title="Open compose with this message">Follow up</button>`:''}
         ${t.business_id?`<button type="button" data-open-prospect="${t.business_id}">Open</button>`:''}
         <button type="button" data-reschedule="${t.id}" data-due="${esc(t.due_at||'')}" data-title="${esc(t.title)}">Reschedule</button>
-        <button type="button" class="primary" data-complete="${t.id}">Done</button>
+        <button type="button" data-complete="${t.id}">Done</button>
         <button type="button" class="danger" data-del-task="${t.id}">Delete</button>
       </div>
-    </article>`).join('');
+    </article>`;
+  }).join('');
   renderPager(pagerHost, slice, renderTasksList);
   list.querySelectorAll('[data-complete]').forEach(btn=>btn.addEventListener('click',async()=>{
     await api('/api/sales/tasks/'+btn.dataset.complete+'/complete',{method:'POST',body:{}});
     toast('Task completed'); await loadTasks(); refreshNotifications().catch(()=>{});
   }));
   list.querySelectorAll('[data-open-prospect]').forEach(btn=>btn.addEventListener('click',()=>B.openProspectById(btn.dataset.openProspect)));
+  list.querySelectorAll('[data-followup-task]').forEach(btn=>btn.addEventListener('click',async()=>{
+    const task=tasksCache.find(x=>String(x.id)===String(btn.dataset.followupTask));
+    const bid=btn.dataset.business;
+    if(!bid){ toast('No prospect on this task',true); return; }
+    try{
+      const lead=await api('/api/sales/prospects/'+bid);
+      const channel=btn.dataset.channel||channelFromTask(task||{})||'';
+      if(typeof B.openCompose==='function'){
+        await B.openCompose(lead, channel||undefined);
+        const msg=(task&&(task.message||task.description))||'';
+        if(msg && $('composeBody')) $('composeBody').value=msg;
+        toast('Follow-up ready — edit and send');
+      }else if(typeof B.openProspectById==='function'){
+        B.openProspectById(bid);
+      }
+    }catch(e){ toast(e.message||'Could not open follow-up',true); }
+  }));
   list.querySelectorAll('[data-reschedule]').forEach(btn=>btn.addEventListener('click',async()=>{
     const form=await uiForm({
       title:'Reschedule task',
@@ -119,4 +151,3 @@ export async function createTaskFlow(){
 
 
 registerPanel({ id: 'tasks', refresh: safeRefresh(loadTasks) });
-

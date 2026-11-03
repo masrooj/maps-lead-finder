@@ -12,12 +12,37 @@ import { safeRefresh } from '../shell/router.js';
 
 
 
+const PANEL_ALIASES={
+  discover:'leads',
+  discovery:'leads',
+  queue:'contactQueue',
+  contact:'contactQueue',
+  comms:'activities',
+  communication:'activities',
+};
+
+function resolveGoto(raw){
+  const value=String(raw||'').trim();
+  if(!value) return '';
+  if(value.includes(':')){
+    const [panel,...rest]=value.split(':');
+    const mapped=PANEL_ALIASES[panel]||panel;
+    return [mapped, ...rest].join(':');
+  }
+  return PANEL_ALIASES[value]||value;
+}
+
 export function bindDashKpis(root){
   if(!root) return;
   root.querySelectorAll('[data-goto]').forEach(el=>{
-    el.addEventListener('click',()=>B.setAppPanel(el.dataset.goto));
+    const go=()=>{
+      const target=resolveGoto(el.getAttribute('data-goto')||el.dataset.goto||'');
+      if(!target) return;
+      if(typeof B.setAppPanel==='function') B.setAppPanel(target);
+    };
+    el.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); go(); });
     el.addEventListener('keydown',e=>{
-      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); B.setAppPanel(el.dataset.goto); }
+      if(e.key==='Enter'||e.key===' '){ e.preventDefault(); e.stopPropagation(); go(); }
     });
   });
 }

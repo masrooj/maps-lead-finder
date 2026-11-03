@@ -276,7 +276,7 @@ body.sidebar-open .sidebar-backdrop{display:block}
 .field textarea,.drawer textarea,.modal textarea,.template-editor textarea,#tplBody{
   min-height:96px;height:auto;resize:vertical;padding-top:12px;padding-bottom:12px;line-height:1.5
 }
-.modal textarea#composeBody{min-height:110px;max-height:220px}
+.modal textarea#composeBody{min-height:110px;max-height:none}
 .modal textarea#composeNotes{min-height:64px}
 .field input:not([type=checkbox]):not([type=radio]):hover,.field select:hover,.field textarea:hover,
 .toolbar input:hover,.toolbar select:hover,.crud-toolbar input:hover,.crud-toolbar select:hover,
@@ -549,7 +549,14 @@ label.file-btn input[type=file],label.pill input[type=file][hidden]{position:abs
 .toast .toast-msg{flex:1;min-width:140px}
 .snooze{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .snooze button{padding:5px 9px;font-size:11px;min-height:0}
-.ig-copy{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--input);font-size:12px;white-space:pre-wrap;max-height:100px;overflow:auto}
+.ig-copy{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--input);font-size:12px;white-space:pre-wrap;max-height:none;overflow:visible}
+.sent-message{
+  margin:8px 0 0;padding:10px 12px;border-radius:10px;border:1px solid var(--line-soft);
+  background:#0d1527;color:var(--text);font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;max-height:none
+}
+.task-main{min-width:0;flex:1 1 auto}
+.task-row .biz{overflow:visible;text-overflow:unset;white-space:normal}
 .view-hint{font-size:12px;color:var(--muted);margin:-4px 0 12px}
 .footer{padding:16px 4px;color:var(--muted);font-size:11px;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .footer a{color:#b7caff}

@@ -107,9 +107,20 @@ function setAppPanel(panel, opts){
     target=parts[0];
     tabHint=parts[1]||'';
   }
-  // Alias common misspelling appointHive → appoinHive (panel id)
-  if(target==='appointHive' || target==='appointHIve') target='appoinHive';
-  appPanel=allowed.includes(target)?target:'leads';
+  // Alias common misspelling / shorthand panel ids from KPIs & guide
+  const aliases={
+    appointHive:'appoinHive', appointHIve:'appoinHive',
+    discover:'leads', discovery:'leads',
+    queue:'contactQueue', contact:'contactQueue',
+    comms:'activities', communication:'activities',
+  };
+  if(aliases[target]) target=aliases[target];
+  if(!allowed.includes(target)){
+    // Keep current panel if goto is unknown — never silent-dump every KPI onto Discover
+    if(allowed.includes(appPanel)) target=appPanel;
+    else target='leads';
+  }
+  appPanel=target;
   B.appPanel=appPanel;
   sharedState.appPanel=appPanel;
   if(tabHint){
@@ -297,16 +308,20 @@ function renderActivitiesFeed(){
         </div>
       </div>
       <div class="lead-group-body">
-        ${g.items.map(a=>`
+        ${g.items.map(a=>{
+          const msg=a.message||a.next_action||'';
+          return `
           <article class="task-row">
-            <div>
-              <div class="biz">${esc(a.activity_type)}${a.channel?' · '+esc(a.channel):''}</div>
-              <div class="sub">${esc(a.summary||'')} ${a.outcome?'· '+esc(a.outcome):''} · ${esc(fmtDateTime(a.created_at||''))}</div>
+            <div class="task-main">
+              <div class="biz">${esc(a.summary||a.activity_type)}${a.channel?' · '+esc(a.channel):''}</div>
+              <div class="sub">${a.outcome?esc(a.outcome)+' · ':''}${esc(fmtDateTime(a.created_at||''))}</div>
+              ${msg?`<pre class="sent-message">${esc(msg)}</pre>`:''}
             </div>
             <div class="action-stack">
               <button type="button" class="danger" data-del-activity="${a.id}">Delete</button>
             </div>
-          </article>`).join('')}
+          </article>`;
+        }).join('')}
       </div>
     </section>`).join('');
   renderPager(pagerHost, slice, renderActivitiesFeed);
@@ -1716,12 +1731,16 @@ function whatsappAppUrl(phone,body){
   // iOS / other: wa.me hands off to WhatsApp or WhatsApp Business (system chooser)
   return waMe;
 }
-function instagramAppUrl(profileUrl, handle){
-  // Profile deep-link (IG app) / www.instagram.com/{user}/ (browser session) — not ig.me login walls
-  return instagramOpenUrls(profileUrl, handle, { mobile: isMobileClient() });
+function instagramAppUrl(profileUrl, handle, businessName){
+  // Profile deep-link (IG app) / www.instagram.com/{user}/ (browser session) — never accounts/login
+  return instagramOpenUrls(profileUrl, handle, { mobile: isMobileClient(), businessName: businessName||'' });
 }
-function openInstagramProfile(profileUrl, handle){
-  const links=instagramAppUrl(profileUrl, handle);
+function openInstagramProfile(profileUrl, handle, businessName){
+  const links=instagramAppUrl(profileUrl, handle, businessName);
+  if(!links.web && !links.app){
+    toast('Instagram profile URL missing — set @handle on the lead', true);
+    return;
+  }
   if(links.app) launchAppWithFallback(links.app, links.web, 800);
   else launchExternal(links.web);
 }
@@ -1917,9 +1936,9 @@ function reachCell(b){
   if(b.website)parts.push(`<a class="chip" href="${esc(b.website)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(siteLabel(b.website))}</a>`);
   const ig=(b.social_links||{}).instagram;
   if(ig){
-    const handle=instagramHandle(ig);
-    const href=instagramProfileWebUrl(handle, ig);
-    parts.push(`<button type="button" class="chip ok" data-open-ig-profile="${esc(ig)}" data-ig-handle="${esc(handle)}" title="${esc(handle?('@'+handle):href)}">Instagram</button>`);
+    const handle=instagramHandle(ig) || '';
+    const href=instagramProfileWebUrl(handle, ig, b.name||'');
+    parts.push(`<button type="button" class="chip ok" data-open-ig-profile="${esc(ig)}" data-ig-handle="${esc(handle)}" data-ig-biz="${esc(b.name||'')}" title="${esc(handle?('@'+handle):href)}">Instagram</button>`);
   }
   return parts.length?`<div class="reach">${parts.join('')}</div>`:'<div class="sub">No contact details</div>';
 }
@@ -2138,8 +2157,8 @@ function composeContactInfo(b,channel){
     if(!s.instagram) return{label:'Instagram',html:'No Instagram'};
     const handle=instagramHandle(s.instagram);
     const label=handle?('@'+handle):'Open profile';
-    // Button (not blind <a href>) so mobile uses instagram:// and desktop uses logged-in www profile
-    return{label:'Instagram',html:`<button type="button" class="linkish" data-open-ig-profile="${esc(s.instagram)}" data-ig-handle="${esc(handle)}">${esc(label)}</button>`};
+    // Button (not blind <a href>) so mobile uses instagram:// and desktop uses www.instagram.com/{handle}/
+    return{label:'Instagram',html:`<button type="button" class="linkish" data-open-ig-profile="${esc(s.instagram)}" data-ig-handle="${esc(handle)}" data-ig-biz="${esc(b.name||'')}">${esc(label)}</button>`};
   }
   return{label:'Contact',html:'—'};
 }
@@ -2254,7 +2273,7 @@ function applyComposeTemplate(){
   if(igBtn){
     igBtn.addEventListener('click',ev=>{
       ev.preventDefault();
-      openInstagramProfile(igBtn.dataset.openIgProfile||'', igBtn.dataset.igHandle||'');
+      openInstagramProfile(igBtn.dataset.openIgProfile||'', igBtn.dataset.igHandle||'', igBtn.dataset.igBiz||(composeLead&&composeLead.name)||'');
     });
   }
   const mobile=isMobileClient();
@@ -2295,7 +2314,7 @@ async function copyComposeMessage(){
   if(!text){ toast('Nothing to copy',true); return; }
   try{
     await navigator.clipboard.writeText(text);
-    toast('Copied — paste into '+channelLabel(channel)+', then Confirm sent');
+    toast('Copied');
   }catch(e){
     // Fallback select
     const ta=$('composeBody');
@@ -2432,14 +2451,15 @@ async function openChannelApp(){
     $('igCopyBox').textContent=body||'(empty message)';
     $('igCopyBox').classList.remove('hidden');
     const copied=await copyTextQuiet(body);
+    if(copied) toast('Copied');
     if(!copied){
       try{const range=document.createRange();range.selectNodeContents($('igCopyBox'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range)}catch(err){}
     }
-    openInstagramProfile(s.instagram, instagramHandle(s.instagram));
+    openInstagramProfile(s.instagram, instagramHandle(s.instagram), b.name||'');
     tip=copied
       ?(mobile
         ?'Instagram app opening on their profile. Paste the copied message into DM, then Confirm sent.'
-        :'Instagram profile opening in your browser session. Paste into DM, then Confirm sent.')
+        :'Instagram profile opening. Paste into DM, then Confirm sent.')
       :(mobile
         ?'Instagram app opening. Copy from the box below, paste into DM, then Confirm sent.'
         :'Instagram profile opening. Copy from the box below, paste into DM, then Confirm sent.');
@@ -2467,8 +2487,10 @@ async function confirmSent(opts={}){
     else if(followTouched)body.next_follow_up_at=null;
     const outcome=$('composeOutcome').value;
     const notes=$('composeNotes').value.trim();
+    const message=($('composeBody')&&$('composeBody').value||'').trim();
     if(outcome)body.outcome=outcome;
     if(notes)body.notes=notes;
+    if(message)body.message=message;
     const updated=await api('/api/businesses/'+composeLead.id+'/confirm-sent',{method:'POST',body});
     // Patch Discover + Contact queue caches so Contacted tab / badges update immediately
     const patch={
@@ -2949,12 +2971,16 @@ $('notifMenu')&&$('notifMenu').addEventListener('click',e=>e.stopPropagation());
 $('profileMenu')&&$('profileMenu').addEventListener('click',e=>e.stopPropagation());
 document.addEventListener('click',e=>{
   const gotoBtn=e.target.closest('[data-goto]');
-  if(gotoBtn && gotoBtn.dataset.goto){
-    e.preventDefault();
-    closeTopMenus();
-    if(!$('drawer').classList.contains('hidden')) closeDrawer();
-    setAppPanel(gotoBtn.dataset.goto);
-    return;
+  if(gotoBtn){
+    const raw=gotoBtn.getAttribute('data-goto')||gotoBtn.dataset.goto||'';
+    if(raw){
+      e.preventDefault();
+      closeTopMenus();
+      const drawer=$('drawer');
+      if(drawer && !drawer.classList.contains('hidden')) closeDrawer();
+      setAppPanel(raw);
+      return;
+    }
   }
   closeTopMenus();
 });
@@ -3320,7 +3346,8 @@ $('rows').addEventListener('click',async e=>{
   const igProf=e.target.closest('[data-open-ig-profile]');
   if(igProf){
     e.stopPropagation();
-    openInstagramProfile(igProf.dataset.openIgProfile||'', igProf.dataset.igHandle||'');
+    const rowBiz=(rowsData.find(x=>String(x.id)===String(igProf.closest('[data-row]')?.dataset?.row))||{}).name||'';
+    openInstagramProfile(igProf.dataset.openIgProfile||'', igProf.dataset.igHandle||'', igProf.dataset.igBiz||rowBiz);
     return;
   }
   const compose=e.target.closest('[data-compose]');
@@ -3376,6 +3403,16 @@ $('skipNextBtn').addEventListener('click',()=>{
 $('closeDrawerBtn').addEventListener('click',closeDrawer);
 $('drawer').addEventListener('click',e=>{if(e.target===$('drawer'))closeDrawer()});
 $('drawerPanel').addEventListener('click',async e=>{
+  const igProf=e.target.closest('[data-open-ig-profile]');
+  if(igProf){
+    e.preventDefault();
+    openInstagramProfile(
+      igProf.dataset.openIgProfile||'',
+      igProf.dataset.igHandle||'',
+      igProf.dataset.igBiz||(drawerLead&&drawerLead.name)||''
+    );
+    return;
+  }
   const snooze=e.target.closest('[data-drawer-snooze]');
   if(snooze){$('drawerFollowUp').value=plusDays(Number(snooze.dataset.drawerSnooze));return}
   if(e.target.id==='saveDrawerBtn'){await saveDrawer();return}
