@@ -20,12 +20,38 @@ const IG_BLOCKED_PATHS = new Set([
   'about', 'legal', 'developer', 'directory', 'nametag', 'login', 'signup',
 ]);
 
+/**
+ * Coerce stored IG values into something URL()/handle parsing can read.
+ * Handles: @user, user, instagram.com/user, www.instagram.com/user, //instagram.com/user
+ */
+function normalizeInstagramInput(url) {
+  let raw = String(url || '').trim();
+  if (!raw) return '';
+  if (raw.startsWith('//')) raw = `https:${raw}`;
+  // Scheme-less host paths — new URL('instagram.com/x') throws and used to yield ''
+  if (/^(www\.)?instagram\.com([\/?#]|$)/i.test(raw)) {
+    raw = `https://${raw}`;
+  }
+  return raw;
+}
+
+/** True Instagram username chars only (no @, no path). */
+function sanitizeIgUsername(part) {
+  const h = String(part || '').replace(/^@/, '').trim().split(/[/?#]/)[0].trim();
+  if (!h) return '';
+  if (!/^[A-Za-z0-9._]{1,30}$/.test(h)) return '';
+  if (IG_BLOCKED_PATHS.has(h.toLowerCase())) return '';
+  return h;
+}
+
 /** Parse @username from an Instagram profile URL (or bare handle). Never returns login paths. */
 export function instagramHandle(url) {
-  const raw = String(url || '').trim();
-  if (!raw) return '';
-  if (!/^https?:\/\//i.test(raw) && !raw.includes('/')) {
-    return raw.replace(/^@/, '').split('?')[0].trim();
+  const raw0 = String(url || '').trim();
+  if (!raw0) return '';
+  const raw = normalizeInstagramInput(raw0);
+  if (!/^https?:\/\//i.test(raw)) {
+    // Bare @handle / handle (never treat as a relative page href)
+    return sanitizeIgUsername(raw);
   }
   try {
     const u = new URL(raw);
@@ -33,14 +59,20 @@ export function instagramHandle(url) {
     if (host && !host.includes('instagram.com')) return '';
     const path = decodeURIComponent(u.pathname || '').replace(/^\/+|\/+$/g, '');
     const part = (path.split('/').filter(Boolean)[0] || '').replace(/^@/, '');
-    if (!part || IG_BLOCKED_PATHS.has(part.toLowerCase())) return '';
-    return part;
+    return sanitizeIgUsername(part);
   } catch (e) {
     return '';
   }
 }
 
-/** Slug a business display name into a possible IG username fallback. */
+/** Absolute https://www.instagram.com/{handle}/ — never bare @slug (browsers resolve that relative to localhost). */
+export function instagramProfileHref(handleOrUrl) {
+  const h = sanitizeIgUsername(handleOrUrl) || instagramHandle(handleOrUrl);
+  if (!h) return '';
+  return `https://www.instagram.com/${encodeURIComponent(h)}/`;
+}
+
+/** Slug a business display name into a possible IG username (display/guess only — not used for open). */
 export function instagramHandleFromBusinessName(name) {
   const raw = String(name || '').trim().toLowerCase();
   if (!raw) return '';
@@ -52,30 +84,33 @@ export function instagramHandleFromBusinessName(name) {
 }
 
 /**
- * Browser profile URL — always www.instagram.com/{handle}/ (never accounts/login).
+ * Browser profile URL — always https://www.instagram.com/{handle}/ (never accounts/login, never bare @slug).
+ * Does not guess from business name (that opens the wrong user → "User not found").
  * @param {string} handle
  * @param {string} [profileUrl]
- * @param {string} [businessName] fallback when URL is a login wall / missing handle
+ * @param {string} [_businessName] kept for call-site compat; ignored for open URL
  */
-export function instagramProfileWebUrl(handle, profileUrl, businessName) {
-  const fromHandle = String(handle || '').replace(/^@/, '').trim();
+export function instagramProfileWebUrl(handle, profileUrl, _businessName) {
+  // If "handle" is actually a stored URL / @slug, parse it — never prefix @ onto the href
+  const fromHandle = instagramHandle(handle) || sanitizeIgUsername(handle);
   const fromUrl = instagramHandle(profileUrl);
-  const fromBiz = instagramHandleFromBusinessName(businessName);
-  const h = fromHandle || fromUrl || fromBiz;
-  if (h) return `https://www.instagram.com/${encodeURIComponent(h)}/`;
-  return '';
+  const h = fromHandle || fromUrl;
+  return h ? instagramProfileHref(h) : '';
 }
 
 /**
  * Open the lead's Instagram profile: native app on mobile, logged-in web profile on desktop.
- * Avoids ig.me/m and accounts/login walls.
+ * Avoids ig.me/m, accounts/login walls, and relative @{slug} navigations.
  * @returns {{ app: string, web: string, handle: string }}
  */
-export function instagramOpenUrls(profileUrl, handle, { mobile = false, businessName = '' } = {}) {
-  const h = String(
-    handle || instagramHandle(profileUrl) || instagramHandleFromBusinessName(businessName) || ''
-  ).replace(/^@/, '').trim();
-  const web = instagramProfileWebUrl(h, profileUrl, businessName);
+export function instagramOpenUrls(profileUrl, handle, { mobile = false, businessName: _businessName = '' } = {}) {
+  const h = (
+    sanitizeIgUsername(handle)
+    || instagramHandle(handle)
+    || instagramHandle(profileUrl)
+    || ''
+  );
+  const web = instagramProfileHref(h);
   if (h && mobile) {
     return {
       app: `instagram://user?username=${encodeURIComponent(h)}`,

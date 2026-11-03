@@ -1737,26 +1737,37 @@ function instagramAppUrl(profileUrl, handle, businessName){
 }
 function openInstagramProfile(profileUrl, handle, businessName){
   const links=instagramAppUrl(profileUrl, handle, businessName);
-  if(!links.web && !links.app){
+  // Never launch bare @slug / relative paths — browser resolves those against localhost
+  const web=links.web && /^https:\/\/(www\.)?instagram\.com\//i.test(links.web) ? links.web : '';
+  const app=links.app && /^instagram:\/\//i.test(links.app) ? links.app : '';
+  if(!web && !app){
     toast('Instagram profile URL missing — set @handle on the lead', true);
     return;
   }
-  if(links.app) launchAppWithFallback(links.app, links.web, 800);
-  else launchExternal(links.web);
+  if(app) launchAppWithFallback(app, web, 800);
+  else launchExternal(web);
 }
 function launchExternal(url){
   if(!url) return;
+  const raw=String(url).trim();
+  // Bare @handle must never become a.href — browser resolves it as http://localhost/@handle
+  if(raw.startsWith('@')){
+    const fixed=instagramProfileWebUrl(raw, raw, '');
+    if(fixed){ launchExternal(fixed); return; }
+    toast('Instagram profile URL missing — set @handle on the lead', true);
+    return;
+  }
   // Custom schemes + mailto hand off more reliably via <a> than window.open on mobile Safari/Chrome
   try{
     const a=document.createElement('a');
-    a.href=url;
+    a.href=raw;
     a.target='_blank';
     a.rel='noopener noreferrer';
     document.body.appendChild(a);
     a.click();
     a.remove();
   }catch(e){
-    try{ window.open(url,'_blank','noopener,noreferrer'); }catch(err){ window.location.href=url; }
+    try{ window.open(raw,'_blank','noopener,noreferrer'); }catch(err){ window.location.href=raw; }
   }
 }
 function launchAppWithFallback(appUrl, webUrl, waitMs){
