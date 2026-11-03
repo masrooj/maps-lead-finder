@@ -60,6 +60,9 @@ import {
   availableComposeChannels as composeAvailableChannels,
   preferredColdChannel,
   composeChannelControlsHtml,
+  instagramHandle as composeInstagramHandle,
+  instagramOpenUrls,
+  instagramProfileWebUrl,
 } from '../features/compose.js';
 
 const CHANNELS=['email','whatsapp','instagram','invoice'];
@@ -1662,14 +1665,7 @@ function firstEmail(b){return composeFirstEmail(b)}
 function phoneDigits(b){return composePhoneDigits(b)}
 function contactChannels(b){return composeContactChannels(b)}
 function siteLabel(url){try{return new URL(url).hostname.replace(/^www\./,'')}catch(e){return url}}
-function instagramHandle(url){
-  try{
-    const path=decodeURIComponent(new URL(url).pathname).replace(/^\/+|\/+$/g,'');
-    const part=(path.split('/').filter(Boolean)[0]||'').replace(/^@/,'');
-    if(!part||['p','reel','reels','stories','direct','explore','accounts'].includes(part.toLowerCase()))return '';
-    return part;
-  }catch(e){return ''}
-}
+function instagramHandle(url){ return composeInstagramHandle(url); }
 function isMobileClient(){
   const ua=navigator.userAgent||'';
   if(/Android|iPhone|iPad|iPod|Mobile|IEMobile|Opera Mini/i.test(ua)) return true;
@@ -1721,15 +1717,13 @@ function whatsappAppUrl(phone,body){
   return waMe;
 }
 function instagramAppUrl(profileUrl, handle){
-  const h=(handle||'').replace(/^@/,'');
-  if(h){
-    if(isMobileClient()){
-      // App scheme first path via launchExternal; https ig.me opens DM in app when installed
-      return { app:`instagram://user?username=${encodeURIComponent(h)}`, web:`https://ig.me/m/${encodeURIComponent(h)}` };
-    }
-    return { app:'', web:`https://ig.me/m/${encodeURIComponent(h)}` };
-  }
-  return { app:'', web:profileUrl||'https://www.instagram.com/direct/inbox/' };
+  // Profile deep-link (IG app) / www.instagram.com/{user}/ (browser session) — not ig.me login walls
+  return instagramOpenUrls(profileUrl, handle, { mobile: isMobileClient() });
+}
+function openInstagramProfile(profileUrl, handle){
+  const links=instagramAppUrl(profileUrl, handle);
+  if(links.app) launchAppWithFallback(links.app, links.web, 800);
+  else launchExternal(links.web);
 }
 function launchExternal(url){
   if(!url) return;
@@ -1922,7 +1916,11 @@ function reachCell(b){
   if(email)parts.push(`<span class="chip ok" title="${esc(email)}">${esc(email)}</span>`);
   if(b.website)parts.push(`<a class="chip" href="${esc(b.website)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(siteLabel(b.website))}</a>`);
   const ig=(b.social_links||{}).instagram;
-  if(ig)parts.push(`<a class="chip ok" href="${esc(ig)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Instagram</a>`);
+  if(ig){
+    const handle=instagramHandle(ig);
+    const href=instagramProfileWebUrl(handle, ig);
+    parts.push(`<button type="button" class="chip ok" data-open-ig-profile="${esc(ig)}" data-ig-handle="${esc(handle)}" title="${esc(handle?('@'+handle):href)}">Instagram</button>`);
+  }
   return parts.length?`<div class="reach">${parts.join('')}</div>`:'<div class="sub">No contact details</div>';
 }
 
@@ -2139,8 +2137,9 @@ function composeContactInfo(b,channel){
   if(channel==='instagram'){
     if(!s.instagram) return{label:'Instagram',html:'No Instagram'};
     const handle=instagramHandle(s.instagram);
-    const href=handle?`https://ig.me/m/${encodeURIComponent(handle)}`:s.instagram;
-    return{label:'Instagram',html:`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(handle?('@'+handle):'Open profile')}</a>`};
+    const label=handle?('@'+handle):'Open profile';
+    // Button (not blind <a href>) so mobile uses instagram:// and desktop uses logged-in www profile
+    return{label:'Instagram',html:`<button type="button" class="linkish" data-open-ig-profile="${esc(s.instagram)}" data-ig-handle="${esc(handle)}">${esc(label)}</button>`};
   }
   return{label:'Contact',html:'—'};
 }
@@ -2251,6 +2250,13 @@ function applyComposeTemplate(){
   const info=composeContactInfo(composeLead,channel);
   $('composeContactLabel').textContent='Sending via '+channelLabel(channel);
   $('composeContactValue').innerHTML=info.html;
+  const igBtn=$('composeContactValue').querySelector('[data-open-ig-profile]');
+  if(igBtn){
+    igBtn.addEventListener('click',ev=>{
+      ev.preventDefault();
+      openInstagramProfile(igBtn.dataset.openIgProfile||'', igBtn.dataset.igHandle||'');
+    });
+  }
   const mobile=isMobileClient();
   $('composeNote').textContent=channel==='email'
     ?(mobile
@@ -2429,16 +2435,14 @@ async function openChannelApp(){
     if(!copied){
       try{const range=document.createRange();range.selectNodeContents($('igCopyBox'));const sel=window.getSelection();sel.removeAllRanges();sel.addRange(range)}catch(err){}
     }
-    const handle=instagramHandle(s.instagram);
-    const links=instagramAppUrl(s.instagram, handle);
-    if(mobile && links.app){
-      launchAppWithFallback(links.app, links.web, 800);
-    }else{
-      launchExternal(links.web);
-    }
+    openInstagramProfile(s.instagram, instagramHandle(s.instagram));
     tip=copied
-      ?'Instagram opening. Paste the copied message into DM, then Confirm sent.'
-      :'Instagram opening. Copy from the box below, paste into DM, then Confirm sent.';
+      ?(mobile
+        ?'Instagram app opening on their profile. Paste the copied message into DM, then Confirm sent.'
+        :'Instagram profile opening in your browser session. Paste into DM, then Confirm sent.')
+      :(mobile
+        ?'Instagram app opening. Copy from the box below, paste into DM, then Confirm sent.'
+        :'Instagram profile opening. Copy from the box below, paste into DM, then Confirm sent.');
   }else{
     return;
   }
@@ -3311,6 +3315,12 @@ $('rows').addEventListener('click',async e=>{
       paint();
       toast(on?'Marked as has booking':'Cleared booking flag');
     }catch(err){ toast(err.message,true); }
+    return;
+  }
+  const igProf=e.target.closest('[data-open-ig-profile]');
+  if(igProf){
+    e.stopPropagation();
+    openInstagramProfile(igProf.dataset.openIgProfile||'', igProf.dataset.igHandle||'');
     return;
   }
   const compose=e.target.closest('[data-compose]');

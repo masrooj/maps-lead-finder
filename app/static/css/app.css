@@ -716,7 +716,11 @@ body:not(.authed) .wrap{
 .compose-contact{margin:0 0 12px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input);font-size:13px}
 .compose-contact .label{display:block;color:var(--muted);font-size:11px;margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em;font-weight:700}
 .compose-contact .value,.compose-contact a{color:#edf3ff;word-break:break-word}
-.compose-contact a{color:#bcd0ff}
+.compose-contact a,.compose-contact button.linkish{color:#bcd0ff}
+.compose-contact button.linkish{
+  appearance:none;background:none;border:0;padding:0;margin:0;font:inherit;cursor:pointer;
+  text-decoration:underline;text-underline-offset:2px;color:#bcd0ff;
+}
 .channel-note{margin-top:8px;color:var(--muted);font-size:12px}
 .field:has(.compose-channel-controls){position:relative}
 .compose-channel-select{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}

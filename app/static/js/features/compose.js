@@ -15,6 +15,51 @@ export function channelLabel(ch) {
     : ch;
 }
 
+/** Parse @username from an Instagram profile URL (or bare handle). */
+export function instagramHandle(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (!/^https?:\/\//i.test(raw) && !raw.includes('/')) {
+    return raw.replace(/^@/, '').split('?')[0].trim();
+  }
+  try {
+    const path = decodeURIComponent(new URL(raw).pathname).replace(/^\/+|\/+$/g, '');
+    const part = (path.split('/').filter(Boolean)[0] || '').replace(/^@/, '');
+    if (!part || ['p', 'reel', 'reels', 'stories', 'direct', 'explore', 'accounts'].includes(part.toLowerCase())) {
+      return '';
+    }
+    return part;
+  } catch (e) {
+    return '';
+  }
+}
+
+/** Browser profile URL — uses the signed-in Instagram web session (not ig.me login walls). */
+export function instagramProfileWebUrl(handle, profileUrl) {
+  const h = String(handle || '').replace(/^@/, '').trim();
+  if (h) return `https://www.instagram.com/${encodeURIComponent(h)}/`;
+  const fallback = String(profileUrl || '').trim();
+  return fallback || 'https://www.instagram.com/';
+}
+
+/**
+ * Open the lead's Instagram profile: native app on mobile, logged-in web profile on desktop.
+ * Avoids ig.me/m blind DM links that force a login interstitial.
+ * @returns {{ app: string, web: string, handle: string }}
+ */
+export function instagramOpenUrls(profileUrl, handle, { mobile = false } = {}) {
+  const h = String(handle || instagramHandle(profileUrl) || '').replace(/^@/, '').trim();
+  const web = instagramProfileWebUrl(h, profileUrl);
+  if (h && mobile) {
+    return {
+      app: `instagram://user?username=${encodeURIComponent(h)}`,
+      web,
+      handle: h,
+    };
+  }
+  return { app: '', web, handle: h };
+}
+
 export function firstEmail(b) {
   return String(b?.email || '').split(',').map(e => e.trim()).filter(Boolean)[0] || '';
 }
