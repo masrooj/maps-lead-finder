@@ -15,6 +15,7 @@ import { B } from '../app/bridge.js';
 import { state } from '../core/state.js';
 
 import { availableComposeChannels as composeChannels, channelLabel, preferredColdChannel } from '../features/compose.js';
+import { isFreshDiscoverLead } from './discover.js';
 
 let contactQueueModes = [];
 let contactQueuePick = new Set();
@@ -356,9 +357,13 @@ export function renderContactQueueList(){
   list.querySelectorAll('[data-cq-unmark]').forEach(btn=>btn.addEventListener('click',async ev=>{
     ev.stopPropagation();
     try{
-      await markContactQueueIds([btn.dataset.cqUnmark], false);
+      const id=btn.dataset.cqUnmark;
+      const before=state.contactQueueLeads.find(x=>String(x.id)===String(id));
+      await markContactQueueIds([id], false);
       await loadContactQueue({keepTab:true});
-      toast('Removed from To contact');
+      const back=isFreshDiscoverLead({...(before||{}), marked_for_contact:false});
+      toast(back?'Removed from To contact — back in Discover':'Removed from To contact');
+      if(back && typeof B.reloadDiscover==='function') B.reloadDiscover().catch(()=>{});
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('[data-cq-revert]').forEach(btn=>btn.addEventListener('click',async ev=>{
@@ -380,9 +385,21 @@ export function renderContactQueueList(){
     ev.stopPropagation();
     try{
       const on=btn.dataset.bookingOn==='1';
-      await markBookingIds([btn.dataset.cqBooking], on);
+      const id=btn.dataset.cqBooking;
+      const before=state.contactQueueLeads.find(x=>String(x.id)===String(id));
+      await markBookingIds([id], on);
       await loadContactQueue({keepTab:true});
-      toast(on?'Marked as has booking':'Cleared booking flag');
+      if(on){
+        toast('Marked as has booking');
+      }else{
+        const back=isFreshDiscoverLead({
+          ...(before||{}),
+          current_booking_software:'',
+          has_booking:false,
+        });
+        toast(back?'Cleared booking — back in Discover':'Cleared booking flag');
+        if(back && typeof B.reloadDiscover==='function') B.reloadDiscover().catch(()=>{});
+      }
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('article.queue-lead').forEach(row=>row.addEventListener('click',ev=>{

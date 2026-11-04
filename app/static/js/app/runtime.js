@@ -48,6 +48,7 @@ import {
 import { bindDashKpis, loadDashboard } from '../panels/dashboard.js';
 import { loadReports, renderBars } from '../panels/reports.js';
 import { loadTasks, renderTasksList, createTaskFlow } from '../panels/tasks.js';
+import { DISCOVER_STATUS, isFreshDiscoverLead, resolveDiscoverStatus } from '../panels/discover.js';
 import { loadDemos, renderDemosTable, loadDemoAssets, addDemoAssetFlow, uploadDemoAssetFile, createDemoFlow } from '../panels/demos.js';
 import { loadProspects, renderProspectsTable, fillProspectsLocationFilters, prospectsScopeLabel, mergeProspectsLocCache } from '../panels/prospects.js';
 import { showDrawerLoading, resolveDrawerMode, clampDrawerTab } from '../features/drawer.js';
@@ -1673,7 +1674,7 @@ async function addTerritoryFlow(){
 function updateViewHint(){
   if(viewMode==='queue'){$('viewHint').textContent='Global queue: marked · not contacted across all cities.';$('statTotalLabel').textContent='Shown'}
   else if(viewMode==='due'){$('viewHint').textContent='Due / overdue follow-ups across all cities.';$('statTotalLabel').textContent='Shown'}
-  else{$('viewHint').textContent='City leads for the selected country/city. “All cities · queue” is always global.';$('statTotalLabel').textContent='City shown'}
+  else{$('viewHint').textContent='Fresh Discover: not To contact, not Contacted, not Has booking. Unmark returns them here.';$('statTotalLabel').textContent='Fresh'}
 }
 function channelLabel(ch){return composeChannelLabel(ch)}
 function firstEmail(b){return composeFirstEmail(b)}
@@ -1871,9 +1872,10 @@ function localDay(){
   return `${y}-${m}-${day}`;
 }
 function queryParams(){
+  const rawStatus=$('statusFilter').value;
   const params=new URLSearchParams({
     q:$('filterText').value.trim(),
-    status:$('statusFilter').value,
+    status:rawStatus,
     contact:$('contactFilter').value,
     category:$('categoryFilter').value,
     day:localDay(),
@@ -1883,14 +1885,31 @@ function queryParams(){
     params.set('status','queue');
   }else if(viewMode==='due'){
     params.set('scope','global');
-    if($('statusFilter').value!=='overdue')params.set('status','due');
+    if(rawStatus!=='overdue')params.set('status','due');
   }else{
     params.set('scope','city');
+    // City Discover defaults to fresh when status is empty.
+    params.set('status', resolveDiscoverStatus(rawStatus));
     const country=$('country').value.trim(),city=$('city').value.trim();
     if(country)params.set('country',country);
     if(city)params.set('city',city);
   }
   return params;
+}
+
+function discoverShowingFresh(){
+  if(viewMode!=='city') return false;
+  const st=$('statusFilter')&&$('statusFilter').value;
+  return !st || st==='fresh' || st===DISCOVER_STATUS;
+}
+
+/** Drop leads that left the fresh Discover pool (marked / contacted / has booking). */
+function pruneFreshDiscoverRows(){
+  if(!discoverShowingFresh()) return false;
+  const before=rowsData.length;
+  rowsData=rowsData.filter(isFreshDiscoverLead);
+  if(rowsData.length!==before){ paint(); return true; }
+  return false;
 }
 
 function statsParams(){
@@ -1927,7 +1946,9 @@ async function loadStats(){
   try{
     const s=await api('/api/stats?'+statsParams());
     // Queue/Due labels say "Shown" — use filtered list length, not unfiltered scope total
-    $('statTotal').textContent=(viewMode==='queue'||viewMode==='due')?rowsData.length:(s.total??0);
+    if(viewMode==='queue'||viewMode==='due') $('statTotal').textContent=rowsData.length;
+    else if(discoverShowingFresh()) $('statTotal').textContent=s.fresh??rowsData.length;
+    else $('statTotal').textContent=s.total??0;
     $('statQueue').textContent=s.queue??0;
     $('statDue').textContent=s.due??0;
     $('statUncontacted').textContent=s.uncontacted??0;
@@ -1975,6 +1996,7 @@ function paint(){
     const waiting=viewMode==='city'&&(!$('country').value.trim()||!$('city').value.trim());
     let msg='No leads match this view or filter.';
     if(waiting)msg='Select a country and city to see leads.';
+    else if(discoverShowingFresh())msg='No fresh Discover leads. Marked, contacted, and has-booking leads stay in Contact queue.';
     else if(viewMode==='queue')msg='Global queue is empty. Star (★) leads in City leads first, then come back here.';
     else if(viewMode==='due')msg='No due / overdue follow-ups yet. Set a follow-up date when you confirm sent.';
     body.innerHTML=`<div class="empty">${msg}</div>`;
@@ -2060,7 +2082,7 @@ function setView(mode,opts={}){
   else if(mode==='queue')$('statusFilter').value='queue';
   else if(mode==='due')$('statusFilter').value='due';
   else if(mode==='city'&&(prev==='queue'||prev==='due'||['queue','due','overdue'].includes($('statusFilter').value))){
-    $('statusFilter').value='all';
+    $('statusFilter').value=DISCOVER_STATUS;
   }
   updateViewHint();
   // Clear immediately so we never flash the previous view's leads under the new filter label
@@ -2108,8 +2130,19 @@ async function patchLead(id,body){
     renderDrawer();
     loadActivity(id); // renderDrawer resets Activity to Loading — refill it
   }
-  paint();
-  loadStats();
+  // Unmark / clear booking can return a lead to Discover — reload so it lands in the fresh list.
+  const keys=Object.keys(body||{});
+  const mayReturnToDiscover=keys.some(k=>['marked_for_contact','contacted','lost'].includes(k))
+    && isFreshDiscoverLead(updated)
+    && discoverShowingFresh()
+    && idx<0;
+  if(mayReturnToDiscover){
+    await load();
+  }else{
+    pruneFreshDiscoverRows();
+    paint();
+    loadStats();
+  }
   return updated;
 }
 
@@ -2117,8 +2150,10 @@ async function toggleMark(id){
   const row=rowsData.find(x=>String(x.id)===String(id));
   if(!row)return;
   try{
-    await patchLead(id,{marked_for_contact:!row.marked_for_contact});
-    toast(row.marked_for_contact?'Unmarked.':'Marked for contact.');
+    const nextMarked=!row.marked_for_contact;
+    await patchLead(id,{marked_for_contact:nextMarked});
+    if(nextMarked) toast('Marked for contact — left Discover.');
+    else toast('Unmarked — back in Discover.');
   }catch(e){toast(e.message,true)}
 }
 
@@ -2895,9 +2930,9 @@ document.querySelectorAll('#stats .stat').forEach(btn=>btn.addEventListener('cli
   if(status==='queue'){setView('queue');return}
   if(status==='due'){setView('due');return}
   document.querySelectorAll('#stats .stat').forEach(s=>s.classList.toggle('active',s===btn));
-  // One load only: pass status into setView so we don't race (reset→all then overwrite→contacted)
-  if(viewMode!=='city')setView('city',{status:status||'all'});
-  else{$('statusFilter').value=status||'all';load()}
+  // One load only: pass status into setView so we don't race (reset→fresh then overwrite→contacted)
+  if(viewMode!=='city')setView('city',{status:status||DISCOVER_STATUS});
+  else{$('statusFilter').value=status||DISCOVER_STATUS;load()}
 }));
 $('country').addEventListener('change',()=>{fillCities($('country').value);if(viewMode==='city')load()});
 $('city').addEventListener('change',()=>{if(viewMode==='city')load()});
@@ -3148,12 +3183,13 @@ $('contactQueueMessageNext')&&$('contactQueueMessageNext').addEventListener('cli
 $('contactQueueClearSelected')&&$('contactQueueClearSelected').addEventListener('click',async()=>{
   const ids=contactQueueSelectedLeads().map(b=>b.id);
   if(!ids.length) return;
-  const ok=await uiConfirm({title:'Clear To contact?', message:'Unmarks all leads on the To contact tab (they stay in All).', confirmLabel:'Clear To contact', danger:true});
+  const ok=await uiConfirm({title:'Clear To contact?', message:'Unmarks all leads on the To contact tab. Fresh ones return to Discover.', confirmLabel:'Clear To contact', danger:true});
   if(!ok) return;
   try{
     await markContactQueueIds(ids, false);
     await loadContactQueue({keepTab:true});
-    toast('To contact cleared');
+    toast('To contact cleared — fresh leads back in Discover');
+    if(typeof load==='function') load().catch(()=>{});
   }catch(e){ toast(e.message,true); }
 });
 $('dealsRefresh')&&$('dealsRefresh').addEventListener('click',()=>loadDeals().catch(e=>toast(e.message,true)));
@@ -3310,7 +3346,7 @@ $('searchForm').addEventListener('submit',async e=>{
   if(!country||!city||!category)return;
   viewMode='city';
   document.querySelectorAll('[data-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.view==='city'));
-  $('statusFilter').value='all';
+  $('statusFilter').value=DISCOVER_STATUS;
   updateViewHint();
   $('searchBtn').disabled=true;$('searchBtn').innerHTML='<span class="loading"></span>Searching';
   const maxRaw=$('maxResults').value;
@@ -3348,9 +3384,22 @@ $('rows').addEventListener('click',async e=>{
       const on=booking.dataset.bookingOn==='1';
       await markBookingIds([booking.dataset.booking], on);
       const row=rowsData.find(x=>String(x.id)===String(booking.dataset.booking));
-      if(row) row.current_booking_software=on?'Has booking':'';
-      paint();
-      toast(on?'Marked as has booking':'Cleared booking flag');
+      if(row){
+        row.current_booking_software=on?'Has booking':'';
+        row.has_booking=!!on;
+      }
+      if(on){
+        pruneFreshDiscoverRows();
+        paint();
+        toast('Marked as has booking — left Discover');
+      }else if(row && isFreshDiscoverLead(row) && discoverShowingFresh()){
+        await load();
+        toast('Cleared booking — back in Discover');
+      }else{
+        paint();
+        toast('Cleared booking flag');
+      }
+      loadStats();
     }catch(err){ toast(err.message,true); }
     return;
   }
@@ -3809,6 +3858,7 @@ B.loadMoney = typeof loadMoney === 'function' ? loadMoney : null;
 B.qrUrlFor = typeof qrUrlFor === 'function' ? qrUrlFor : null;
 B.closeTopMenus = closeTopMenus;
 B.availableComposeChannels = availableComposeChannels;
+B.reloadDiscover = typeof load === 'function' ? load : null;
 B.appPanel = appPanel;
 
 /* --- Panel registry (SOLID Open/Closed) --- */

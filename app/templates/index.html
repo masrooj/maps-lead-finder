@@ -193,7 +193,7 @@
     </section>
 
     <section class="stats" id="stats" aria-label="Lead counts">
-      <button type="button" class="stat" data-status="all"><span id="statTotalLabel">City shown</span><strong id="statTotal">0</strong></button>
+      <button type="button" class="stat" data-status="fresh"><span id="statTotalLabel">Fresh</span><strong id="statTotal">0</strong></button>
       <button type="button" class="stat" data-status="queue"><span>City to contact</span><strong id="statQueue">0</strong></button>
       <button type="button" class="stat" data-status="due"><span>Due (scope)</span><strong id="statDue">0</strong></button>
       <button type="button" class="stat" data-status="uncontacted"><span>Not contacted</span><strong id="statUncontacted">0</strong></button>
@@ -210,12 +210,12 @@
       <button type="button" data-view="queue">Global queue</button>
       <button type="button" data-view="due">Due / overdue</button>
     </section>
-    <p class="view-hint" id="viewHint">Showing leads for the selected country/city.</p>
+    <p class="view-hint" id="viewHint">Fresh Discover: not To contact, not Contacted, not Has booking. Unmark returns them here.</p>
 
     <section class="toolbar">
       <input id="filterText" placeholder="Search name, phone, email, notes…">
       <select id="statusFilter">
-        <option value="all">All statuses</option>
+        <option value="fresh" selected>Fresh discovered</option>
         <option value="queue">Marked · not contacted</option>
         <option value="marked">Marked</option>
         <option value="uncontacted">Not contacted</option>
@@ -224,6 +224,7 @@
         <option value="overdue">Overdue only</option>
         <option value="lost">Lost</option>
         <option value="archived">Archived</option>
+        <option value="all">Everything (incl. queue)</option>
       </select>
       <select id="categoryFilter"><option value="">All categories / labels</option></select>
       <select id="contactFilter">

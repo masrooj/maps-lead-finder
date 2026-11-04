@@ -13,6 +13,7 @@ export const B = {
   applyBeConnectOwnerGate: null,
   loadBeCatalog: null,
   loadMoney: null,
+  reloadDiscover: null,
   qrUrlFor: null,
   closeTopMenus: null,
   availableComposeChannels: null,

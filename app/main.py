@@ -1055,6 +1055,18 @@ def businesses_query(
         stmt = stmt.where(Business.lost.is_(True))
     elif status == "uncontacted":
         stmt = stmt.where(Business.contacted.is_(False), Business.lost.is_(False))
+    elif status in ("fresh", "discover"):
+        # Discover pool: not To contact, not Contacted, not Has booking.
+        # Unmarking from To contact returns the lead here when still fresh.
+        stmt = stmt.where(
+            or_(Business.marked_for_contact.is_(False), Business.marked_for_contact.is_(None)),
+            or_(Business.contacted.is_(False), Business.contacted.is_(None)),
+            or_(Business.lost.is_(False), Business.lost.is_(None)),
+            or_(
+                Business.current_booking_software.is_(None),
+                Business.current_booking_software == "",
+            ),
+        )
     elif status == "marked":
         stmt = stmt.where(Business.marked_for_contact.is_(True))
     elif status in ("queue", "marked_uncontacted"):
@@ -1428,6 +1440,15 @@ def stats(
         lost = sum(1 for b in rows if b.lost)
         marked = sum(1 for b in rows if b.marked_for_contact and not b.archived)
         queue = sum(1 for b in rows if b.marked_for_contact and not b.contacted and not b.lost and not b.archived)
+        fresh = sum(
+            1
+            for b in rows
+            if not b.marked_for_contact
+            and not b.contacted
+            and not b.lost
+            and not (getattr(b, "current_booking_software", None) or "").strip()
+            and not b.archived
+        )
         due = sum(
             1 for b in rows
             if b.next_follow_up_at and ensure_aware(b.next_follow_up_at) < tomorrow and not b.lost and not b.archived
@@ -1441,6 +1462,7 @@ def stats(
         global_queue = len(db.scalars(global_queue_stmt).all())
         return {
             "total": total,
+            "fresh": fresh,
             "uncontacted": uncontacted,
             "contacted": contacted,
             "lost": lost,
