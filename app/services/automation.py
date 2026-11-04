@@ -9,6 +9,7 @@ from typing import Any, Optional
 from sqlalchemy import or_, select
 
 from app.models import Activity, AppSetting, Business, DiscoveryNote, PipelineStage, Task
+from app.services.cannot_contact import cannot_contact_payload, clear_cannot_contact, is_cannot_contact
 from app.services.pipeline import get_stage, list_stages, move_stage
 
 
@@ -164,6 +165,7 @@ def revert_to_to_contact(
     b.whatsapp_sent = False
     b.instagram_sent = False
     b.marked_for_contact = True
+    clear_cannot_contact(b, rematch=True)
     b.last_contacted_at = None
     b.next_follow_up_at = None
     b.updated_at = _utcnow()
@@ -353,7 +355,9 @@ def rank_contact_queue(
             "marked_for_contact": bool(b.marked_for_contact),
             "contacted": bool(b.contacted),
         }
-        if not rm.match_filter(filt, ch=ch, b_flags=flags):
+        # Always keep can't-contact leads so the dedicated tab has data even if
+        # the active ranking mode filters to marked/uncontacted only.
+        if not rm.match_filter(filt, ch=ch, b_flags=flags) and not is_cannot_contact(b):
             continue
         base = float(b.score_override if b.score_override is not None else (b.qualification_score or 0) or 0)
         disc = _discovery_boost(db, b.id)
@@ -403,6 +407,7 @@ def rank_contact_queue(
                 "contacted": bool(b.contacted),
                 "opt_out": bool(b.opt_out),
                 "outcome": b.outcome or "",
+                **cannot_contact_payload(b),
                 "email": ch["email"],
                 "phone": ch["phone"],
                 "international_phone": ch["international_phone"],

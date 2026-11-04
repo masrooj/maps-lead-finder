@@ -19,6 +19,8 @@ import './shell/router.js';
 import './panels/index.js';
 import './features/drawer.js';
 import './features/compose.js';
+import './features/cannot-contact.js';
+import './features/instagram-discover.js';
 import './features/scoring.js';
 import './features/be-bridge.js';
 import './features/prospect-picker.js';

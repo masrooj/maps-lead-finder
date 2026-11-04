@@ -40,6 +40,13 @@ from app.services.auth_tokens import (
     rotate_refresh,
     verify_access_token,
 )
+from app.services.cannot_contact import (
+    CANNOT_VIA,
+    apply_cannot_contact,
+    cannot_contact_payload,
+    clear_cannot_contact,
+    normalize_via,
+)
 from app.services.pipeline import backfill_prospect_stages, init_new_prospect
 from app.services.seed import seed_sales_os
 from app.services.storage import uploads_root
@@ -858,6 +865,7 @@ def business_dict(b: Business) -> dict:
         "instagram_sent": bool(getattr(b, "instagram_sent", False)),
         "marked_for_contact": bool(getattr(b, "marked_for_contact", False)),
         "archived": bool(getattr(b, "archived", False)),
+        **cannot_contact_payload(b),
         "next_follow_up_at": iso_or_empty(getattr(b, "next_follow_up_at", None)),
         "last_contacted_at": iso_or_empty(getattr(b, "last_contacted_at", None)),
         "outcome": getattr(b, "outcome", "") or "",
@@ -954,7 +962,7 @@ def parse_follow_up(value: Any) -> Optional[datetime]:
 def apply_business_updates(b: Business, data: dict, db=None):
     bool_fields = (
         "contacted", "lost", "email_sent", "whatsapp_sent", "instagram_sent",
-        "marked_for_contact", "archived",
+        "marked_for_contact", "archived", "cannot_contact",
     )
     for field in bool_fields:
         if field in data and data[field] is not None:
@@ -967,10 +975,22 @@ def apply_business_updates(b: Business, data: dict, db=None):
         "international_phone": 100,
         "website": 2000,
         "address": 2000,
+        "cannot_contact_via": 40,
     }
     for field, maxlen in str_fields.items():
         if field in data and data[field] is not None:
             setattr(b, field, str(data[field])[:maxlen])
+    if "cannot_contact" in data and data["cannot_contact"] is False:
+        clear_cannot_contact(b, rematch=False)
+    elif data.get("cannot_contact") is True:
+        via = normalize_via(data.get("cannot_contact_via")) or cannot_contact_payload(b).get("cannot_contact_via") or "both"
+        apply_cannot_contact(b, via=via, notes="")
+    if data.get("marked_for_contact") is True:
+        clear_cannot_contact(b, rematch=False)
+        b.marked_for_contact = True
+    if data.get("contacted") is True or data.get("email_sent") is True or data.get("whatsapp_sent") is True or data.get("instagram_sent") is True:
+        if getattr(b, "cannot_contact", False) or cannot_contact_payload(b).get("cannot_contact"):
+            clear_cannot_contact(b, rematch=False)
     if "instagram" in data and data["instagram"] is not None:
         try:
             socials = json.loads(b.social_links_json or "{}")
@@ -1580,6 +1600,100 @@ def enrich_one(business_id: int, force: bool = False, _user: str = Depends(requi
         return {"changed": changed, "business": business_dict(b)}
 
 
+class CannotContactBody(BaseModel):
+    via: str = Field(default="both", max_length=40)
+    notes: Optional[str] = Field(default=None, max_length=5000)
+
+
+@app.post("/api/businesses/{business_id}/cannot-contact", tags=["discover"])
+def mark_business_cannot_contact(
+    business_id: int, payload: CannotContactBody, _user: str = Depends(require_login)
+):
+    """Park a lead as unreachable on WA / IG / both. Leaves Contacted untouched."""
+    raw = str(payload.via or "").strip()
+    via = normalize_via(raw) if raw else "both"
+    if via not in CANNOT_VIA:
+        raise HTTPException(422, "via must be whatsapp, instagram, or both")
+    with SessionLocal() as db:
+        b = db.get(Business, business_id)
+        if not b:
+            raise HTTPException(404, "Business not found")
+        apply_cannot_contact(b, via=via, notes=str(payload.notes or ""))
+        b.updated_at = utcnow()
+        log_activity(db, b.id, "cannot_contact", channel=via, note=str(payload.notes or "")[:500])
+        db.commit()
+        db.refresh(b)
+        return business_dict(b)
+
+
+@app.post("/api/businesses/{business_id}/clear-cannot-contact", tags=["discover"])
+def clear_business_cannot_contact(
+    business_id: int, rematch: bool = True, _user: str = Depends(require_login)
+):
+    """Clear cannot-contact; by default rematch to To contact."""
+    with SessionLocal() as db:
+        b = db.get(Business, business_id)
+        if not b:
+            raise HTTPException(404, "Business not found")
+        clear_cannot_contact(b, rematch=rematch)
+        b.updated_at = utcnow()
+        log_activity(db, b.id, "clear_cannot_contact", note="rematch" if rematch else "")
+        db.commit()
+        db.refresh(b)
+        return business_dict(b)
+
+
+@app.post("/api/businesses/{business_id}/discover-instagram", tags=["discover"])
+def discover_instagram(business_id: int, force: bool = False, _user: str = Depends(require_login)):
+    """
+    Scan the business website (and contact/about pages) for an Instagram profile link.
+    Persists into social_links when found. Used by web + mobile Contact queue IG buttons.
+    """
+    with SessionLocal() as db:
+        b = db.get(Business, business_id)
+        if not b:
+            raise HTTPException(404, "Business not found")
+        try:
+            socials = json.loads(b.social_links_json or "{}")
+        except Exception:
+            socials = {}
+        if not isinstance(socials, dict):
+            socials = {}
+        existing = str(socials.get("instagram") or "").strip()
+        if existing and not force:
+            return {
+                "found": True,
+                "instagram": existing,
+                "persisted": False,
+                "business": business_dict(b),
+            }
+        website = (b.website or "").strip()
+        if not website:
+            return {
+                "found": False,
+                "instagram": "",
+                "persisted": False,
+                "business": business_dict(b),
+            }
+        discovered, _email = discover_public_contacts(website)
+        ig = str((discovered or {}).get("instagram") or "").strip()
+        persisted = False
+        if ig:
+            socials["instagram"] = ig
+            b.social_links_json = json.dumps(socials)
+            b.updated_at = utcnow()
+            log_activity(db, b.id, "instagram_discovered", note=ig[:300])
+            persisted = True
+            db.commit()
+            db.refresh(b)
+        return {
+            "found": bool(ig),
+            "instagram": ig,
+            "persisted": persisted,
+            "business": business_dict(b),
+        }
+
+
 class UpdateBusiness(BaseModel):
     contacted: Optional[bool] = None
     lost: Optional[bool] = None
@@ -1588,6 +1702,8 @@ class UpdateBusiness(BaseModel):
     instagram_sent: Optional[bool] = None
     marked_for_contact: Optional[bool] = None
     archived: Optional[bool] = None
+    cannot_contact: Optional[bool] = None
+    cannot_contact_via: Optional[str] = Field(default=None, max_length=40)
     notes: Optional[str] = Field(default=None, max_length=5000)
     outcome: Optional[str] = Field(default=None, max_length=80)
     next_follow_up_at: Optional[str] = None
@@ -1631,6 +1747,8 @@ class BulkUpdate(BaseModel):
     lost: Optional[bool] = None
     marked_for_contact: Optional[bool] = None
     archived: Optional[bool] = None
+    cannot_contact: Optional[bool] = None
+    cannot_contact_via: Optional[str] = Field(default=None, max_length=40)
     email_sent: Optional[bool] = None
     whatsapp_sent: Optional[bool] = None
     instagram_sent: Optional[bool] = None
@@ -1681,6 +1799,8 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
         setattr(b, field, True)
         b.contacted = True
         b.last_contacted_at = utcnow()
+        if getattr(b, "cannot_contact", False) or cannot_contact_payload(b).get("cannot_contact"):
+            clear_cannot_contact(b, rematch=False)
         follow = None
         if payload.next_follow_up_at is not None:
             follow = parse_follow_up(payload.next_follow_up_at)

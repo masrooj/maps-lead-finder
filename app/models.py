@@ -73,6 +73,8 @@ class Business(Base):
     instagram_sent: Mapped[bool] = mapped_column(Boolean, default=False)
     marked_for_contact: Mapped[bool] = mapped_column(Boolean, default=False)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
+    cannot_contact: Mapped[bool] = mapped_column(Boolean, default=False)
+    cannot_contact_via: Mapped[str] = mapped_column(String(40), default="")  # whatsapp | instagram | both
     next_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_contacted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     outcome: Mapped[str] = mapped_column(String(80), default="")

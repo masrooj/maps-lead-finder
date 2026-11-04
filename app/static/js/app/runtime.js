@@ -65,6 +65,11 @@ import {
   instagramOpenUrls,
   instagramProfileWebUrl,
 } from '../features/compose.js';
+import {
+  applyDiscoveredIg,
+  ensureLeadInstagram,
+  leadNeedsIgDiscover,
+} from '../features/instagram-discover.js';
 
 const CHANNELS=['email','whatsapp','instagram','invoice'];
 let rowsData=[];
@@ -1971,6 +1976,8 @@ function reachCell(b){
     const handle=instagramHandle(ig) || '';
     const href=instagramProfileWebUrl(handle, ig, b.name||'');
     parts.push(`<button type="button" class="chip ok" data-open-ig-profile="${esc(ig)}" data-ig-handle="${esc(handle)}" data-ig-biz="${esc(b.name||'')}" title="${esc(handle?('@'+handle):href)}">Instagram</button>`);
+  }else if(leadNeedsIgDiscover(b)){
+    parts.push(`<button type="button" class="chip" data-ig-discover="${b.id}" title="Scan website for Instagram">Find IG</button>`);
   }
   return parts.length?`<div class="reach">${parts.join('')}</div>`:'<div class="sub">No contact details</div>';
 }
@@ -1981,6 +1988,7 @@ function actionButtons(b){
   if(c.email)parts.push(`<button type="button" data-compose="${b.id}" data-channel="email">Email</button>`);
   if(c.whatsapp)parts.push(`<button type="button" data-compose="${b.id}" data-channel="whatsapp">WA</button>`);
   if(c.instagram)parts.push(`<button type="button" data-compose="${b.id}" data-channel="instagram">IG</button>`);
+  else if(leadNeedsIgDiscover(b))parts.push(`<button type="button" data-ig-discover="${b.id}">Find IG</button>`);
   const hasBook=!!(b.current_booking_software||'').trim();
   parts.push(`<button type="button" data-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>`);
   parts.push(`<button type="button" data-open="${b.id}">Details</button>`);
@@ -2200,7 +2208,12 @@ function composeContactInfo(b,channel){
     return{label:'WhatsApp',html:`<a href="${esc(href)}" target="_blank" rel="noopener noreferrer">${esc(display)}</a>`};
   }
   if(channel==='instagram'){
-    if(!s.instagram) return{label:'Instagram',html:'No Instagram'};
+    if(!s.instagram){
+      if(leadNeedsIgDiscover(b)){
+        return{label:'Instagram',html:`<button type="button" class="linkish" data-compose-ig-discover="${b.id}">Find IG on website</button>`};
+      }
+      return{label:'Instagram',html:'No Instagram'};
+    }
     const handle=instagramHandle(s.instagram);
     const label=handle?('@'+handle):'Open profile';
     // Button (not blind <a href>) so mobile uses instagram:// and desktop uses www.instagram.com/{handle}/
@@ -2322,6 +2335,32 @@ function applyComposeTemplate(){
       openInstagramProfile(igBtn.dataset.openIgProfile||'', igBtn.dataset.igHandle||'', igBtn.dataset.igBiz||(composeLead&&composeLead.name)||'');
     });
   }
+  const igFind=$('composeContactValue').querySelector('[data-compose-ig-discover]');
+  if(igFind){
+    igFind.addEventListener('click',async ev=>{
+      ev.preventDefault();
+      if(!composeLead) return;
+      igFind.disabled=true;
+      igFind.textContent='Finding IG…';
+      try{
+        const res=await ensureLeadInstagram(composeLead,{force:true});
+        if(res.found && res.instagram){
+          applyDiscoveredIg(composeLead, res.instagram);
+          toast('Instagram found on website');
+          fillComposeTemplates($('composeChannel').value);
+          renderComposeChannelControls();
+        }else{
+          toast('No Instagram link on website', true);
+          igFind.disabled=false;
+          igFind.textContent='Find IG on website';
+        }
+      }catch(err){
+        toast(err.message||'IG discover failed', true);
+        igFind.disabled=false;
+        igFind.textContent='Find IG on website';
+      }
+    });
+  }
   const mobile=isMobileClient();
   $('composeNote').textContent=channel==='email'
     ?(mobile
@@ -2371,6 +2410,19 @@ async function copyComposeMessage(){
 async function openCompose(b,preferred){
   composeLead=b;openedChannel=null;
   if(b.opt_out){showMessage('Prospect is opted out — outreach blocked.',true);return}
+  // Website may link IG even when social_links is empty — discover before gating channels
+  if(preferred==='instagram' || leadNeedsIgDiscover(b)){
+    try{
+      const res=await ensureLeadInstagram(b);
+      if(res.found && res.instagram){
+        applyDiscoveredIg(b, res.instagram);
+        const row=rowsData.find(x=>String(x.id)===String(b.id));
+        if(row) applyDiscoveredIg(row, res.instagram);
+        const qRow=(sharedState.contactQueueLeads||[]).find(x=>String(x.id)===String(b.id));
+        if(qRow) applyDiscoveredIg(qRow, res.instagram);
+      }
+    }catch(_){ /* compose still opens with other channels */ }
+  }
   try{
     const gate=await api('/api/sales/templates/preview',{method:'POST',body:{business_id:b.id,channel:preferred||'email',subject:'',body:'Hi {{name}}'}});
     if(gate&&gate.blocked){showMessage('Outreach blocked.',true);return}
@@ -2378,7 +2430,7 @@ async function openCompose(b,preferred){
     showMessage(e.message||'Outreach blocked by compliance.',true);return;
   }
   const channels=availableComposeChannels(b);
-  if(!channels.length){showMessage('No email, WhatsApp, or Instagram on this lead. Edit contacts in Details or run Enrich.',true);return}
+  if(!channels.length){showMessage('No email, WhatsApp, or Instagram on this lead. Edit contacts in Details or run Enrich / Find IG.',true);return}
   if(!templatesStore){try{await loadTemplates()}catch(e){}}
   composePreferred=preferredColdChannel(b, preferred);
   $('composeLead').textContent=`${b.name} · ${b.city}, ${b.country}`;
@@ -2558,9 +2610,13 @@ async function confirmSent(opts={}){
     await load();
     if(appPanel==='contactQueue' || sharedState.appPanel==='contactQueue'){
       try{
+        // Stay on To contact (or current tab) — do not auto-jump to Contacted.
+        // Lead drops out of To contact; list scrolls to top via setContactQueueTab/render.
         await loadContactQueue({keepTab:true});
         if(!opts.next){
-          setContactQueueTab('contacted');
+          if(sharedState.contactQueueTab==='selected' || sharedState.contactQueueTab==='all'){
+            setContactQueueTab(sharedState.contactQueueTab||'selected');
+          }
           renderContactQueueList();
         }
       }catch(e){}
@@ -3143,6 +3199,7 @@ $('contactQueueTabs')&&$('contactQueueTabs').addEventListener('click',e=>{
   if(!btn) return;
   setContactQueueTab(btn.dataset.cqTab||'all');
   renderContactQueueList();
+  // scroll handled inside setContactQueueTab
 });
 $('contactQueueChannel')&&$('contactQueueChannel').addEventListener('change',()=>{
   setContactQueueChannel(($('contactQueueChannel').value||''));
@@ -3408,6 +3465,32 @@ $('rows').addEventListener('click',async e=>{
     e.stopPropagation();
     const rowBiz=(rowsData.find(x=>String(x.id)===String(igProf.closest('[data-row]')?.dataset?.row))||{}).name||'';
     openInstagramProfile(igProf.dataset.openIgProfile||'', igProf.dataset.igHandle||'', igProf.dataset.igBiz||rowBiz);
+    return;
+  }
+  const igDisc=e.target.closest('[data-ig-discover]');
+  if(igDisc){
+    e.stopPropagation();
+    const id=igDisc.dataset.igDiscover;
+    const b=rowsData.find(x=>String(x.id)===String(id));
+    if(!b){ toast('Lead not found',true); return; }
+    igDisc.disabled=true;
+    igDisc.textContent='Finding IG…';
+    try{
+      const res=await ensureLeadInstagram(b,{force:true});
+      if(res.found && res.instagram){
+        applyDiscoveredIg(b, res.instagram);
+        toast('Instagram found on website');
+        paint();
+      }else{
+        toast('No Instagram link on website', true);
+        igDisc.disabled=false;
+        igDisc.textContent='Find IG';
+      }
+    }catch(err){
+      toast(err.message||'IG discover failed', true);
+      igDisc.disabled=false;
+      igDisc.textContent='Find IG';
+    }
     return;
   }
   const compose=e.target.closest('[data-compose]');
