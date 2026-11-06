@@ -498,6 +498,13 @@
           <p class="hint">When off, Pipeline still lists SaaS stages in API but UI defaults to Standalone. Standalone history is untouched.</p>
           <button type="button" class="primary" id="saveSaasFlag">Save SaaS flag</button>
         </div>
+        <h3 class="panel-title">Instagram soft DM cap</h3>
+        <p class="hint" style="margin-top:0">Hard daily limit on IG Confirm sent (after warm follow / like / comment). Uses Settings timezone day.</p>
+        <div class="field" style="max-width:280px;margin-top:8px">
+          <label for="igSoftDmDailyCap">IG soft DMs per day</label>
+          <input type="number" id="igSoftDmDailyCap" min="0" max="100" step="1" value="8">
+          <button type="button" class="primary" id="saveIgSoftDmCap" style="margin-top:8px">Save IG daily cap</button>
+        </div>
         <h3 class="panel-title">Prospect auto-setup</h3>
         <p class="hint" style="margin-top:0">Assign product line, currency, pipeline stage, and follow-up tasks for leads missing Sales OS fields.</p>
         <button type="button" class="primary" id="autoSetupProspectsBtn">Run auto-setup now</button>
@@ -823,6 +830,14 @@
           <label for="composeChannel">Channel</label>
           <select id="composeChannel" class="compose-channel-select"></select>
           <div id="composeChannelControls" class="compose-channel-controls" aria-live="polite"></div>
+        </div>
+        <div id="igWarmChecklist" class="ig-warm-checklist hidden" aria-live="polite">
+          <div class="ig-warm-title">IG warm-up (required before soft DM)</div>
+          <label class="flag"><input type="checkbox" id="igWarmFollow"> Followed</label>
+          <label class="flag"><input type="checkbox" id="igWarmLike"> Liked posts</label>
+          <label class="flag"><input type="checkbox" id="igWarmComment"> Left a real comment</label>
+          <p class="hint" id="igWarmGateHint">Tick all three to unlock Open / Confirm for Instagram.</p>
+          <p class="hint" id="igSoftDmQuota">IG soft DMs today: —</p>
         </div>
         <div class="field"><label for="composeTemplate">Template</label><select id="composeTemplate"></select></div>
         <div class="field" id="composeSubjectField"><label for="composeSubject">Subject</label><input id="composeSubject"></div>

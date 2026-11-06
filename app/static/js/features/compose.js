@@ -2,10 +2,18 @@
  * SOLID: extend this module for compose behavior; peel from app/runtime.js on touch.
  * Cross-panel calls go through app/bridge.js (B.*), not new globals.
  */
+import { $ } from '../core/dom.js';
+import { api, toast } from '../core/api.js';
+import { B } from '../app/bridge.js';
+
 export const FEATURE = 'compose';
 
 /** Cold outreach order: WhatsApp first when available, then email, then Instagram. */
 export const COLD_CHANNELS = ['whatsapp', 'email', 'instagram'];
+
+/** Cached IG soft-DM quota from GET /api/sales/settings → ig_outreach_quota */
+let igQuotaCache = { cap: 8, used: 0, remaining: 8, timezone: '' };
+let igWarmWired = false;
 
 export function channelLabel(ch) {
   return ch === 'email' ? 'Email'
@@ -176,4 +184,171 @@ export function composeChannelControlsHtml(channels, active, opts = {}) {
     <div class="compose-ch-pills" role="group" aria-label="Message channel">${pills}</div>
     <div class="compose-ch-opens" role="group" aria-label="Open channel apps">${opens}</div>
   `;
+}
+
+export function igWarmComplete(b) {
+  return !!(b && b.ig_warm_follow && b.ig_warm_like && b.ig_warm_comment);
+}
+
+export function getIgOutreachQuota() {
+  return { ...igQuotaCache };
+}
+
+export async function refreshIgOutreachQuota() {
+  try {
+    const data = await api('/api/sales/settings');
+    const q = data && data.ig_outreach_quota;
+    if (q && typeof q === 'object') {
+      igQuotaCache = {
+        cap: Number(q.cap) || 0,
+        used: Number(q.used) || 0,
+        remaining: Math.max(0, Number(q.remaining) || 0),
+        timezone: q.timezone || '',
+      };
+    } else {
+      const raw = (data.settings && data.settings.ig_soft_dm_daily_cap);
+      const parsed = parseInt(raw, 10);
+      const cap = Number.isFinite(parsed) && parsed >= 0 ? parsed : 8;
+      igQuotaCache = { ...igQuotaCache, cap, remaining: Math.max(0, cap - (igQuotaCache.used || 0)) };
+    }
+  } catch (_) { /* keep last cache */ }
+  return getIgOutreachQuota();
+}
+
+export function setIgOutreachQuota(q) {
+  if (!q || typeof q !== 'object') return getIgOutreachQuota();
+  igQuotaCache = {
+    cap: Number(q.cap) || 0,
+    used: Number(q.used) || 0,
+    remaining: Math.max(0, Number(q.remaining) || 0),
+    timezone: q.timezone || '',
+  };
+  return getIgOutreachQuota();
+}
+
+/**
+ * Client-side IG soft-send gate (server still enforces).
+ * @returns {string|null} error message or null if allowed
+ */
+export function igSoftSendBlockReason(lead, channel) {
+  if (String(channel || '').toLowerCase() !== 'instagram') return null;
+  if (!igWarmComplete(lead)) {
+    const missing = [];
+    if (!lead?.ig_warm_follow) missing.push('follow');
+    if (!lead?.ig_warm_like) missing.push('like');
+    if (!lead?.ig_warm_comment) missing.push('comment');
+    return `IG warm incomplete: ${missing.join(', ') || 'follow/like/comment'}`;
+  }
+  const q = getIgOutreachQuota();
+  if (q.remaining <= 0) {
+    return `IG soft DM daily cap reached (${q.used}/${q.cap}${q.timezone ? ` in ${q.timezone}` : ''})`;
+  }
+  return null;
+}
+
+function paintIgQuotaLine() {
+  const el = $('igSoftDmQuota');
+  if (!el) return;
+  const q = getIgOutreachQuota();
+  const tz = q.timezone ? ` · ${q.timezone}` : '';
+  el.textContent = `IG soft DMs today: ${q.used}/${q.cap} (remaining ${q.remaining})${tz}`;
+  el.classList.toggle('cap-hit', q.remaining <= 0);
+}
+
+/**
+ * Show/hide IG warm checklist and enable/disable Open + Confirm for IG.
+ * @param {object|null} lead
+ * @param {string} channel
+ */
+export function syncIgWarmComposeUi(lead, channel) {
+  const box = $('igWarmChecklist');
+  const isIg = String(channel || '').toLowerCase() === 'instagram';
+  if (box) box.classList.toggle('hidden', !isIg || !lead);
+
+  const follow = $('igWarmFollow');
+  const like = $('igWarmLike');
+  const comment = $('igWarmComment');
+  if (follow) follow.checked = !!(lead && lead.ig_warm_follow);
+  if (like) like.checked = !!(lead && lead.ig_warm_like);
+  if (comment) comment.checked = !!(lead && lead.ig_warm_comment);
+
+  paintIgQuotaLine();
+
+  const blocked = isIg ? !!igSoftSendBlockReason(lead, 'instagram') : false;
+  const openBtn = $('openComposeBtn');
+  const confirmBtn = $('confirmSentBtn');
+  const confirmNext = $('confirmNextBtn');
+  const chOpens = document.querySelectorAll('#composeChannelControls [data-compose-open="instagram"]');
+
+  if (isIg) {
+    if (openBtn) openBtn.disabled = blocked;
+    if (confirmBtn) confirmBtn.disabled = blocked;
+    if (confirmNext) confirmNext.disabled = blocked;
+    chOpens.forEach((btn) => { btn.disabled = blocked; });
+    const hint = $('igWarmGateHint');
+    if (hint) {
+      const reason = igSoftSendBlockReason(lead, 'instagram');
+      hint.textContent = reason || 'Warm complete — soft DM unlocked.';
+      hint.classList.toggle('ok', !reason);
+    }
+  } else {
+    if (openBtn) openBtn.disabled = false;
+    if (confirmBtn) confirmBtn.disabled = false;
+    if (confirmNext) confirmNext.disabled = false;
+  }
+}
+
+async function patchIgWarmTick(field, checked) {
+  const lead = typeof B.getComposeLead === 'function' ? B.getComposeLead() : null;
+  if (!lead || !lead.id) return;
+  const body = { [field]: !!checked };
+  try {
+    const wasComplete = igWarmComplete(lead);
+    const updated = await api(`/api/businesses/${lead.id}`, { method: 'PATCH', body });
+    lead.ig_warm_follow = !!updated.ig_warm_follow;
+    lead.ig_warm_like = !!updated.ig_warm_like;
+    lead.ig_warm_comment = !!updated.ig_warm_comment;
+    lead.ig_warm_complete = !!updated.ig_warm_complete;
+    const qRow = ((typeof B.getContactQueueLeads === 'function' ? B.getContactQueueLeads() : null)
+      || []).find((x) => String(x.id) === String(lead.id));
+    if (qRow) {
+      qRow.ig_warm_follow = lead.ig_warm_follow;
+      qRow.ig_warm_like = lead.ig_warm_like;
+      qRow.ig_warm_comment = lead.ig_warm_comment;
+      qRow.ig_warm_complete = lead.ig_warm_complete;
+    }
+    if (igWarmComplete(lead) && !wasComplete) toast('IG warm complete');
+    const ch = ($('composeChannel') && $('composeChannel').value) || 'instagram';
+    syncIgWarmComposeUi(lead, ch);
+  } catch (e) {
+    toast(e.message || 'Could not save warm tick', true);
+    syncIgWarmComposeUi(lead, ($('composeChannel') && $('composeChannel').value) || 'instagram');
+  }
+}
+
+/** Wire checklist once; runtime calls syncIgWarmComposeUi after open / channel change. */
+export function wireIgWarmCompose() {
+  if (igWarmWired) return;
+  igWarmWired = true;
+  const map = [
+    ['igWarmFollow', 'ig_warm_follow'],
+    ['igWarmLike', 'ig_warm_like'],
+    ['igWarmComment', 'ig_warm_comment'],
+  ];
+  map.forEach(([id, field]) => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('change', () => {
+      patchIgWarmTick(field, el.checked).catch(() => {});
+    });
+  });
+}
+
+/** Call before Open app / Confirm when channel is IG. Returns false if blocked. */
+export function guardIgSoftSend(lead, channel) {
+  const reason = igSoftSendBlockReason(lead, channel);
+  if (!reason) return true;
+  toast(reason, true);
+  syncIgWarmComposeUi(lead, channel);
+  return false;
 }

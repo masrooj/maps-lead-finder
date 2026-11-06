@@ -64,6 +64,11 @@ import {
   instagramHandle as composeInstagramHandle,
   instagramOpenUrls,
   instagramProfileWebUrl,
+  wireIgWarmCompose,
+  syncIgWarmComposeUi,
+  refreshIgOutreachQuota,
+  setIgOutreachQuota,
+  guardIgSoftSend,
 } from '../features/compose.js';
 import {
   applyDiscoveredIg,
@@ -757,6 +762,13 @@ async function loadSettings(){
   const me=await api('/api/sales/me');
   await refreshSignatureUi().catch(()=>{});
   $('saasEnabledToggle').checked=!!me.saas_enabled;
+  try{
+    const settingsPayload=await api('/api/sales/settings');
+    if(settingsPayload.ig_outreach_quota) setIgOutreachQuota(settingsPayload.ig_outreach_quota);
+    const capRaw=(settingsPayload.settings&&settingsPayload.settings.ig_soft_dm_daily_cap);
+    const capParsed=parseInt(capRaw,10);
+    if($('igSoftDmDailyCap')) $('igSoftDmDailyCap').value=String(Number.isFinite(capParsed)&&capParsed>=0?capParsed:8);
+  }catch(_){}
   $('settingsMeta').innerHTML=`
     <div class="queue-card"><span>Signed in</span><strong style="font-size:14px">${esc((me.user&&me.user.email)||me.username||'')}</strong></div>
     <div class="queue-card"><span>Role</span><strong style="font-size:14px">${esc((me.user&&me.user.role)||'owner')}</strong></div>
@@ -2381,6 +2393,7 @@ function applyComposeTemplate(){
         :(mobile?'Open Instagram app':'Open Instagram');
   }
   renderComposeChannelControls();
+  syncIgWarmComposeUi(composeLead, channel);
 }
 async function copyComposeMessage(){
   if(!composeLead)return;
@@ -2409,6 +2422,7 @@ async function copyComposeMessage(){
 }
 async function openCompose(b,preferred){
   composeLead=b;openedChannel=null;
+  wireIgWarmCompose();
   if(b.opt_out){showMessage('Prospect is opted out — outreach blocked.',true);return}
   // Website may link IG even when social_links is empty — discover before gating channels
   if(preferred==='instagram' || leadNeedsIgDiscover(b)){
@@ -2451,6 +2465,8 @@ async function openCompose(b,preferred){
   // Do not auto-open WhatsApp / Zoho / IG — user opens the message modal first, then Open app
   syncComposeMarkBtn();
   renderComposeChannelControls();
+  await refreshIgOutreachQuota().catch(()=>{});
+  syncIgWarmComposeUi(composeLead, composePreferred);
 }
 function setComposeTab(name){
   document.querySelectorAll('#composeTabs [data-compose-tab]').forEach(btn=>{
@@ -2509,6 +2525,7 @@ async function copyTextQuiet(text){
 async function openChannelApp(){
   if(!composeLead)return;
   const channel=$('composeChannel').value;
+  if(!guardIgSoftSend(composeLead, channel)) return;
   const b=composeLead;
   const subject=$('composeSubject').value.trim();
   const body=$('composeBody').value.trim();
@@ -2573,6 +2590,7 @@ async function openChannelApp(){
 async function confirmSent(opts={}){
   if(!composeLead)return;
   const channel=openedChannel||$('composeChannel').value;
+  if(!guardIgSoftSend(composeLead, channel)) return;
   const currentId=composeLead.id;
   clearComposeConfirmReturn();
   try{
@@ -2597,6 +2615,10 @@ async function confirmSent(opts={}){
       email_sent:!!updated.email_sent,
       whatsapp_sent:!!updated.whatsapp_sent,
       instagram_sent:!!updated.instagram_sent,
+      ig_warm_follow:!!updated.ig_warm_follow,
+      ig_warm_like:!!updated.ig_warm_like,
+      ig_warm_comment:!!updated.ig_warm_comment,
+      ig_warm_complete:!!updated.ig_warm_complete,
       next_follow_up_at:updated.next_follow_up_at||'',
       outcome:updated.outcome||'',
     };
@@ -2604,6 +2626,7 @@ async function confirmSent(opts={}){
     if(row) Object.assign(row, patch);
     const qRow=(sharedState.contactQueueLeads||[]).find(x=>String(x.id)===String(currentId));
     if(qRow) Object.assign(qRow, patch, updated.stage?{stage:updated.stage}:{});
+    if(channel==='instagram') await refreshIgOutreachQuota().catch(()=>{});
     closeCompose();
     toast(`Confirmed ${channelLabel(channel)} sent — marked contacted.`);
     // Always refresh current view so Global queue / Due lists drop completed leads
@@ -2808,7 +2831,10 @@ function renderDrawer(){
       <label class="flag"><input type="checkbox" data-dfield="marked_for_contact" ${b.marked_for_contact?'checked':''}> Marked for contact</label>
       <label class="flag"><input type="checkbox" data-dfield="email_sent" ${b.email_sent?'checked':''}> Email sent</label>
       <label class="flag"><input type="checkbox" data-dfield="whatsapp_sent" ${b.whatsapp_sent?'checked':''}> WhatsApp sent</label>
-      <label class="flag"><input type="checkbox" data-dfield="instagram_sent" ${b.instagram_sent?'checked':''}> Instagram sent</label>
+      <label class="flag" title="${b.instagram_sent?'':'Use Compose → Confirm sent (warm + daily cap)'}">
+        <input type="checkbox" data-dfield="instagram_sent" ${b.instagram_sent?'checked':''} ${b.instagram_sent?'':'disabled'}>
+        Instagram sent ${b.instagram_sent?'':'(use Confirm sent)'}
+      </label>
       <label class="flag"><input type="checkbox" data-dfield="contacted" ${b.contacted?'checked':''}> Contacted</label>
       <label class="flag"><input type="checkbox" data-dfield="lost" ${b.lost?'checked':''}> Lost</label>
       <div class="field" style="margin-top:10px"><label for="drawerFollowUp">Next follow up</label><input id="drawerFollowUp" type="date" value="${esc(dateOnly(b.next_follow_up_at))}"></div>
@@ -2958,7 +2984,8 @@ async function saveDrawer(){
     const panel=$('drawerPanel');
     ['marked_for_contact','email_sent','whatsapp_sent','instagram_sent','contacted','lost'].forEach(k=>{
       const el=panel&&panel.querySelector(`[data-dfield="${k}"]`);
-      if(el) body[k]=!!el.checked;
+      // Disabled IG-sent checkbox must not be posted as false (would clear a prior confirm).
+      if(el && !el.disabled) body[k]=!!el.checked;
     });
     if(!Object.keys(body).length){ toast('Nothing to save on this tab',true); return; }
     await patchLead(drawerLead.id,body);
@@ -3929,6 +3956,9 @@ B.setAppPanel = setAppPanel;
 B.openProspectById = openProspectById;
 B.openDrawer = typeof openDrawer === 'function' ? openDrawer : null;
 B.openCompose = typeof openCompose === 'function' ? openCompose : null;
+B.getComposeLead = () => composeLead;
+B.getContactQueueLeads = () => sharedState.contactQueueLeads || [];
+B.loadSettings = typeof loadSettings === 'function' ? loadSettings : null;
 B.loadTemplates = typeof loadTemplates === 'function' ? loadTemplates : null;
 B.refreshBeConnBanners = refreshBeConnBanners;
 B.setMoneyTab = setMoneyTab;

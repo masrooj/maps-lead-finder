@@ -83,6 +83,155 @@ def advance_at_least(db, b: Business, target_slug: str, *, actor_id: Optional[in
     return True
 
 
+def ig_warm_complete(b: Business) -> bool:
+    """True when Follow + Like + Comment warm ticks are all set (IG soft-ask gate)."""
+    return bool(
+        getattr(b, "ig_warm_follow", False)
+        and getattr(b, "ig_warm_like", False)
+        and getattr(b, "ig_warm_comment", False)
+    )
+
+
+def ig_warm_payload(b: Business) -> dict:
+    follow = bool(getattr(b, "ig_warm_follow", False))
+    like = bool(getattr(b, "ig_warm_like", False))
+    comment = bool(getattr(b, "ig_warm_comment", False))
+    return {
+        "ig_warm_follow": follow,
+        "ig_warm_like": like,
+        "ig_warm_comment": comment,
+        "ig_warm_complete": follow and like and comment,
+    }
+
+
+def _setting_value(db, key: str, default: str = "") -> str:
+    row = db.scalar(select(AppSetting).where(AppSetting.key == key))
+    if not row or row.value is None:
+        return default
+    return str(row.value)
+
+
+def ig_soft_dm_daily_cap(db) -> int:
+    raw = _setting_value(db, "ig_soft_dm_daily_cap", "8").strip() or "8"
+    try:
+        return max(0, int(raw))
+    except ValueError:
+        return 8
+
+
+def _timezone_for_quota(db):
+    from zoneinfo import ZoneInfo
+
+    name = _setting_value(db, "default_timezone", "Australia/Sydney").strip() or "Australia/Sydney"
+    try:
+        return ZoneInfo(name), name
+    except Exception:
+        return ZoneInfo("Australia/Sydney"), "Australia/Sydney"
+
+
+def ig_soft_dm_day_bounds(db) -> tuple[datetime, datetime, str]:
+    """UTC-aware [start, end) for 'today' in default_timezone."""
+    tz, name = _timezone_for_quota(db)
+    now_local = datetime.now(timezone.utc).astimezone(tz)
+    start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_local = start_local + timedelta(days=1)
+    return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc), name
+
+
+def ig_soft_dm_usage_today(db) -> int:
+    """Count IG outreach_sent activities created today (default_timezone day)."""
+    start, end, _ = ig_soft_dm_day_bounds(db)
+    rows = db.scalars(
+        select(Activity).where(
+            Activity.activity_type == "outreach_sent",
+            Activity.channel == "instagram",
+            Activity.created_at >= start,
+            Activity.created_at < end,
+        )
+    ).all()
+    return len(rows)
+
+
+def _lock_ig_soft_dm_cap_setting(db) -> AppSetting:
+    """Row-lock the cap setting so concurrent confirms serialize quota checks."""
+    row = db.scalar(
+        select(AppSetting).where(AppSetting.key == "ig_soft_dm_daily_cap").with_for_update()
+    )
+    if row:
+        return row
+    db.add(AppSetting(key="ig_soft_dm_daily_cap", value="8"))
+    db.flush()
+    row = db.scalar(
+        select(AppSetting).where(AppSetting.key == "ig_soft_dm_daily_cap").with_for_update()
+    )
+    if not row:
+        raise RuntimeError("ig_soft_dm_daily_cap setting missing after insert")
+    return row
+
+
+def ig_outreach_quota(db) -> dict:
+    cap = ig_soft_dm_daily_cap(db)
+    used = ig_soft_dm_usage_today(db)
+    _, _, tz_name = ig_soft_dm_day_bounds(db)
+    remaining = max(0, cap - used)
+    return {
+        "cap": cap,
+        "used": used,
+        "remaining": remaining,
+        "timezone": tz_name,
+    }
+
+
+def assert_ig_soft_send_allowed(db, b: Business, *, skip_cap: bool = False) -> None:
+    """Raise ValueError with operator-facing message if IG soft confirm is blocked.
+
+    When skip_cap is True (already instagram_sent), only warm completeness is checked
+    if warm flags exist; historical already-sent leads without warm are allowed.
+    """
+    if not skip_cap:
+        _lock_ig_soft_dm_cap_setting(db)
+    if not ig_warm_complete(b):
+        if skip_cap:
+            # Re-confirm / note update on a lead already marked IG-sent.
+            return
+        missing = []
+        if not getattr(b, "ig_warm_follow", False):
+            missing.append("follow")
+        if not getattr(b, "ig_warm_like", False):
+            missing.append("like")
+        if not getattr(b, "ig_warm_comment", False):
+            missing.append("comment")
+        raise ValueError(f"IG warm incomplete: {', '.join(missing)}")
+    if skip_cap:
+        return
+    quota = ig_outreach_quota(db)
+    if quota["remaining"] <= 0:
+        raise ValueError(
+            f"IG soft DM daily cap reached ({quota['used']}/{quota['cap']} in {quota['timezone']})"
+        )
+
+
+def maybe_log_ig_warm_complete(db, b: Business, *, actor_id: Optional[int] = None, before: dict) -> None:
+    """When the third warm tick flips complete, log one sales Activity (not outreach_sent)."""
+    was = bool(
+        before.get("ig_warm_follow")
+        and before.get("ig_warm_like")
+        and before.get("ig_warm_comment")
+    )
+    if was or not ig_warm_complete(b):
+        return
+    db.add(
+        Activity(
+            business_id=b.id,
+            activity_type="instagram",
+            channel="instagram",
+            summary="IG warm complete",
+            outcome="follow+like+comment",
+            created_by=actor_id,
+        )
+    )
+
+
 def on_outreach_confirmed(
     db,
     b: Business,
@@ -93,25 +242,43 @@ def on_outreach_confirmed(
     outcome: str = "",
     notes: str = "",
     message: str = "",
+    record_send: bool = True,
 ) -> dict:
-    """Email/WA/IG confirm-sent: activity + follow-up task + auto stage advance."""
+    """Email/WA/IG confirm-sent: activity + follow-up task + auto stage advance.
+
+    record_send=False skips a new outreach_sent row (re-confirm / note-only) so IG
+    daily cap is not burned twice for the same lead.
+    """
     biz_name = (b.name or f"#{b.id}").strip()
     msg = (message or "").strip()
     note = (notes or "").strip()
     # Prefer full sent body for history; keep operator notes on the activity outcome line.
     stored_message = msg or note
     outcome_bits = [x for x in (outcome.strip() if outcome else "", f"note: {note}" if msg and note else "") if x]
-    db.add(
-        Activity(
-            business_id=b.id,
-            activity_type="outreach_sent",
-            channel=channel,
-            summary=f"{biz_name} · Confirmed {channel} send",
-            outcome=" · ".join(outcome_bits),
-            next_action=stored_message,
-            created_by=actor_id,
+    if record_send:
+        db.add(
+            Activity(
+                business_id=b.id,
+                activity_type="outreach_sent",
+                channel=channel,
+                summary=f"{biz_name} · Confirmed {channel} send",
+                outcome=" · ".join(outcome_bits),
+                next_action=stored_message,
+                created_by=actor_id,
+            )
         )
-    )
+    elif note or outcome or msg:
+        db.add(
+            Activity(
+                business_id=b.id,
+                activity_type="note",
+                channel=channel,
+                summary=f"{biz_name} · Updated after {channel} confirm",
+                outcome=" · ".join(outcome_bits) or note,
+                next_action=stored_message,
+                created_by=actor_id,
+            )
+        )
     due = follow_up_at or (_utcnow() + timedelta(days=3))
     title = f"{biz_name} · Follow up after {channel}"
     description = msg or note or "Auto-created when outreach was confirmed sent"
@@ -416,6 +583,7 @@ def rank_contact_queue(
                 "email_sent": bool(b.email_sent),
                 "whatsapp_sent": bool(b.whatsapp_sent),
                 "instagram_sent": bool(b.instagram_sent),
+                **ig_warm_payload(b),
                 "last_contacted_at": b.last_contacted_at.isoformat() if getattr(b, "last_contacted_at", None) else "",
                 "channels": {
                     "email": ch["has_email"],

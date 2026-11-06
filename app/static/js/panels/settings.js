@@ -15,8 +15,21 @@ import {
   paintSignatureForm,
   paintBrandLogoPreview,
 } from '../features/email-signature.js';
+import { refreshIgOutreachQuota, setIgOutreachQuota } from '../features/compose.js';
 
 let wired = false;
+
+export async function loadIgSoftDmCapSetting() {
+  try {
+    const data = await api('/api/sales/settings');
+    if (data.ig_outreach_quota) setIgOutreachQuota(data.ig_outreach_quota);
+    const raw = data.settings && data.settings.ig_soft_dm_daily_cap;
+    const parsed = parseInt(raw, 10);
+    if ($('igSoftDmDailyCap')) {
+      $('igSoftDmDailyCap').value = String(Number.isFinite(parsed) && parsed >= 0 ? parsed : 8);
+    }
+  } catch (_) { /* settings may be owner-gated elsewhere */ }
+}
 
 export async function loadSignatureSettings() {
   await refreshSignatureUi();
@@ -67,6 +80,23 @@ function wireSettingsOnce() {
     ev.target.value = '';
   });
 
+  $('saveIgSoftDmCap') && $('saveIgSoftDmCap').addEventListener('click', async () => {
+    try {
+      const raw = $('igSoftDmDailyCap') ? $('igSoftDmDailyCap').value : '8';
+      const n = Math.max(0, Math.min(100, parseInt(raw, 10)));
+      if (Number.isNaN(n)) {
+        toast('Enter a number 0–100', true);
+        return;
+      }
+      await api(`/api/sales/settings/ig_soft_dm_daily_cap?value=${encodeURIComponent(String(n))}`, { method: 'PUT' });
+      if ($('igSoftDmDailyCap')) $('igSoftDmDailyCap').value = String(n);
+      await refreshIgOutreachQuota().catch(() => {});
+      toast(`IG soft DM daily cap saved (${n})`);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
+
   $('brandLogoClear') && $('brandLogoClear').addEventListener('click', async () => {
     const ok = await uiConfirm({
       title: 'Remove brand logo?',
@@ -94,6 +124,7 @@ export async function refreshSettingsPanel() {
     await B.loadSettings();
   } else {
     await loadSignatureSettings();
+    await loadIgSoftDmCapSetting();
   }
 }
 

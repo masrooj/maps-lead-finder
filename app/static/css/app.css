@@ -550,6 +550,14 @@ label.file-btn input[type=file],label.pill input[type=file][hidden]{position:abs
 .snooze{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 .snooze button{padding:5px 9px;font-size:11px;min-height:0}
 .ig-copy{margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:10px;background:var(--input);font-size:12px;white-space:pre-wrap;max-height:none;overflow:visible}
+.ig-warm-checklist{margin:10px 0 14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--input);display:flex;flex-direction:column;gap:8px}
+.ig-warm-checklist.hidden{display:none}
+.ig-warm-title{font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--muted)}
+.ig-warm-checklist .flag{display:flex;align-items:center;gap:8px;margin:0;font-size:13px}
+#igWarmGateHint.ok{color:#9dfff0}
+#igSoftDmQuota.cap-hit{color:#ffb4b4;font-weight:600}
+.cq-warm-chip{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--line);color:var(--muted)}
+.cq-warm-chip.done{border-color:#3d8f7a;color:#9dfff0;background:#12352c}
 .sent-message{
   margin:8px 0 0;padding:10px 12px;border-radius:10px;border:1px solid var(--line-soft);
   background:#0d1527;color:var(--text);font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;

@@ -863,6 +863,14 @@ def business_dict(b: Business) -> dict:
         "email_sent": bool(getattr(b, "email_sent", False)),
         "whatsapp_sent": bool(getattr(b, "whatsapp_sent", False)),
         "instagram_sent": bool(getattr(b, "instagram_sent", False)),
+        "ig_warm_follow": bool(getattr(b, "ig_warm_follow", False)),
+        "ig_warm_like": bool(getattr(b, "ig_warm_like", False)),
+        "ig_warm_comment": bool(getattr(b, "ig_warm_comment", False)),
+        "ig_warm_complete": bool(
+            getattr(b, "ig_warm_follow", False)
+            and getattr(b, "ig_warm_like", False)
+            and getattr(b, "ig_warm_comment", False)
+        ),
         "marked_for_contact": bool(getattr(b, "marked_for_contact", False)),
         "archived": bool(getattr(b, "archived", False)),
         **cannot_contact_payload(b),
@@ -960,8 +968,16 @@ def parse_follow_up(value: Any) -> Optional[datetime]:
 
 
 def apply_business_updates(b: Business, data: dict, db=None):
+    # Instagram soft-ask must go through confirm-sent (warm + daily cap). Do not
+    # allow PATCH/bulk to flip instagram_sent on as a bypass.
+    if data.get("instagram_sent") is True and not bool(getattr(b, "instagram_sent", False)):
+        raise ValueError(
+            "Use Confirm sent for Instagram (warm checklist + daily soft-DM cap). "
+            "PATCH cannot mark Instagram sent."
+        )
     bool_fields = (
         "contacted", "lost", "email_sent", "whatsapp_sent", "instagram_sent",
+        "ig_warm_follow", "ig_warm_like", "ig_warm_comment",
         "marked_for_contact", "archived", "cannot_contact",
     )
     for field in bool_fields:
@@ -1700,6 +1716,9 @@ class UpdateBusiness(BaseModel):
     email_sent: Optional[bool] = None
     whatsapp_sent: Optional[bool] = None
     instagram_sent: Optional[bool] = None
+    ig_warm_follow: Optional[bool] = None
+    ig_warm_like: Optional[bool] = None
+    ig_warm_comment: Optional[bool] = None
     marked_for_contact: Optional[bool] = None
     archived: Optional[bool] = None
     cannot_contact: Optional[bool] = None
@@ -1718,12 +1737,23 @@ class UpdateBusiness(BaseModel):
 @app.patch("/api/businesses/{business_id}", tags=["discover"])
 def update_business(business_id: int, payload: UpdateBusiness, _user: str = Depends(require_login)):
     with SessionLocal() as db:
+        from app.services.authz import get_user_by_email
+        from app.services.automation import maybe_log_ig_warm_complete
+
         b = db.get(Business, business_id)
         if not b:
             raise HTTPException(404, "Business not found")
         data = payload.model_dump(exclude_unset=True)
         before_contacted = b.contacted
-        apply_business_updates(b, data, db)
+        before_warm = {
+            "ig_warm_follow": bool(getattr(b, "ig_warm_follow", False)),
+            "ig_warm_like": bool(getattr(b, "ig_warm_like", False)),
+            "ig_warm_comment": bool(getattr(b, "ig_warm_comment", False)),
+        }
+        try:
+            apply_business_updates(b, data, db)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
         if data.get("marked_for_contact") is True:
             log_activity(db, b.id, "marked")
         if data.get("marked_for_contact") is False:
@@ -1736,6 +1766,18 @@ def update_business(business_id: int, payload: UpdateBusiness, _user: str = Depe
             log_activity(db, b.id, "follow_up_set", note=str(data.get("next_follow_up_at") or ""))
         if data.get("outcome"):
             log_activity(db, b.id, "outcome", note=str(data.get("outcome")))
+        warm_keys = ("ig_warm_follow", "ig_warm_like", "ig_warm_comment")
+        if any(k in data for k in warm_keys):
+            actor = get_user_by_email(db, _user)
+            maybe_log_ig_warm_complete(
+                db, b, actor_id=actor.id if actor else None, before=before_warm
+            )
+            changed = [
+                f"{k.replace('ig_warm_', '')}={'1' if bool(data[k]) else '0'}"
+                for k in warm_keys
+                if k in data
+            ]
+            log_activity(db, b.id, "ig_warm", channel="instagram", note=",".join(changed))
         db.commit()
         db.refresh(b)
         return business_dict(b)
@@ -1769,7 +1811,10 @@ def bulk_update(payload: BulkUpdate, _user: str = Depends(require_login)):
     with SessionLocal() as db:
         rows = db.scalars(select(Business).where(Business.id.in_(ids))).all()
         for b in rows:
-            apply_business_updates(b, data, db)
+            try:
+                apply_business_updates(b, data, db)
+            except ValueError as e:
+                raise HTTPException(422, str(e)) from e
             log_activity(db, b.id, "bulk_update", note=json.dumps({k: data[k] for k in data}))
         db.commit()
         return {"updated": len(rows), "results": [business_dict(b) for b in rows]}
@@ -1791,11 +1836,17 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
     field = f"{channel}_sent"
     with SessionLocal() as db:
         from app.services.authz import get_user_by_email
-        from app.services.automation import on_outreach_confirmed
+        from app.services.automation import assert_ig_soft_send_allowed, on_outreach_confirmed
 
         b = db.get(Business, business_id)
         if not b:
             raise HTTPException(404, "Business not found")
+        already_sent = bool(getattr(b, field, False))
+        if channel == "instagram":
+            try:
+                assert_ig_soft_send_allowed(db, b, skip_cap=already_sent)
+            except ValueError as e:
+                raise HTTPException(422, str(e)) from e
         setattr(b, field, True)
         b.contacted = True
         b.last_contacted_at = utcnow()
@@ -1823,6 +1874,7 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
             outcome=str(payload.outcome or ""),
             notes=str(payload.notes or ""),
             message=str(payload.message or ""),
+            record_send=not already_sent,
         )
         db.commit()
         db.refresh(b)

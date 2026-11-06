@@ -440,12 +440,18 @@ export function renderContactQueueList(){
     }
     const contactedBadge=isContacted?` ${sentChannelsHtml(b)}`:'';
     const cannotBadge=isCannot?` <span class="badge">${esc(cannotViaLabel(cannotContactVia(b)))}</span>`:(isCannotContact(b)&&!isSelected?` <span class="badge">Can't contact</span>`:'');
+    const hasIg=!!((b.channels&&b.channels.instagram)||(b.social_links&&b.social_links.instagram));
+    const warmChip=(isSelected||isBooking)&&hasIg
+      ?(b.ig_warm_complete
+        ?' <span class="cq-warm-chip done" title="IG warm complete">Warm ✓</span>'
+        :' <span class="cq-warm-chip" title="IG warm incomplete">Warm –</span>')
+      :'';
     return `
     <article class="queue-lead ${noCheck?'no-check':''}" data-row="${b.id}" data-maps="${esc(mapsUrl)}" title="${mapsUrl?'Open Google Maps':''}">
       ${checkCell}
       <div class="queue-rank meta" style="min-width:48px;align-items:flex-start"><strong style="font-size:18px">#${rankNo}</strong><span class="sub">${esc(String(b.rank_score))}</span></div>
       <div class="queue-body">
-        <div class="biz">${esc(b.name||'—')}${already&&!isSelected&&!isContacted&&!isCannot?' <span class="badge queue">To contact</span>':''}${hasBook?' <span class="badge">Booking</span>':''}${contactedBadge}${cannotBadge}</div>
+        <div class="biz">${esc(b.name||'—')}${already&&!isSelected&&!isContacted&&!isCannot?' <span class="badge queue">To contact</span>':''}${hasBook?' <span class="badge">Booking</span>':''}${warmChip}${contactedBadge}${cannotBadge}</div>
         <div class="sub"><span>${esc(b.country||'—')}</span> · <span>${esc(b.city||'—')}</span> · ${esc((b.stage&&b.stage.name)||'—')}</div>
         <div class="reach" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${channelTagsHtml(b)}</div>
         <div class="reach" style="margin-top:6px">${chips||`<span class="chip">${esc(b.why||'ranked')}</span>`}</div>

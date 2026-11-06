@@ -1006,8 +1006,14 @@ def sales_add_suppression(kind: str, value: str, reason: str = "", _user: str = 
 
 @router.get("/settings", tags=["settings"])
 def sales_settings(_user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.automation import ig_outreach_quota
+
     rows = db.scalars(select(AppSetting)).all()
-    return {"settings": {r.key: r.value for r in rows}, "providers": provider_status()}
+    return {
+        "settings": {r.key: r.value for r in rows},
+        "providers": provider_status(),
+        "ig_outreach_quota": ig_outreach_quota(db),
+    }
 
 
 # Owner-writable keys via generic PUT (secrets + signature use dedicated endpoints).
@@ -1022,6 +1028,7 @@ _SETTINGS_PUT_ALLOW = frozenset(
         "currency_by_country",
         "tax_rate_AU",
         "tax_label_AU",
+        "ig_soft_dm_daily_cap",
     }
 )
 
@@ -1037,14 +1044,23 @@ def sales_put_setting(key: str, value: str, _user: str = Depends(require_user), 
         raise HTTPException(422, "Use /api/sales/email-signature or /api/sales/brand-logo")
     if key not in _SETTINGS_PUT_ALLOW:
         raise HTTPException(422, f"Unknown or non-writable setting key: {key}")
+    store_value = value
+    if key == "ig_soft_dm_daily_cap":
+        try:
+            n = int(str(value).strip())
+        except (TypeError, ValueError) as e:
+            raise HTTPException(422, "ig_soft_dm_daily_cap must be an integer 0–100") from e
+        if n < 0 or n > 100:
+            raise HTTPException(422, "ig_soft_dm_daily_cap must be an integer 0–100")
+        store_value = str(n)
     row = db.scalar(select(AppSetting).where(AppSetting.key == key))
     if not row:
-        row = AppSetting(key=key, value=value)
+        row = AppSetting(key=key, value=store_value)
         db.add(row)
     else:
-        row.value = value
+        row.value = store_value
     db.commit()
-    return {"key": key, "value": value}
+    return {"key": key, "value": store_value}
 
 
 @router.get("/search", tags=["pipeline"])
