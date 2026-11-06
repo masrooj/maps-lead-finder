@@ -185,3 +185,52 @@ def test_patch_ready_true_requires_channel(auth_client):
     r2 = auth_client.patch(f"/api/businesses/{bid}", json={"ready_for_contact": True})
     assert r2.status_code == 200, r2.text
     assert r2.json().get("ready_for_contact") is True
+
+
+def test_booking_clears_to_contact_flags(auth_client):
+    bid = _lead(outreach_channel="email", ready_for_contact=True, marked_for_contact=True)
+    r = auth_client.patch(
+        f"/api/sales/prospects/{bid}",
+        json={"current_booking_software": "Has booking"},
+    )
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        b = db.get(Business, bid)
+        assert (b.current_booking_software or "").strip() == "Has booking"
+        assert b.marked_for_contact is False
+        assert b.ready_for_contact is False
+    # Still listed on contact-queue so Has booking tab can show it (even under marked-only modes)
+    q = auth_client.get("/api/sales/contact-queue?product_line=STANDALONE&limit=0&mode=starred_uncontacted")
+    assert q.status_code == 200, q.text
+    lead = next((x for x in (q.json().get("leads") or []) if x["id"] == bid), None)
+    assert lead is not None
+    assert lead.get("has_booking") is True
+    assert lead.get("marked_for_contact") is False
+
+
+def test_promote_short_phone_rejected(auth_client):
+    bid = _lead(
+        outreach_channel="whatsapp",
+        phone="123",
+        international_phone="123",
+        email="",
+        social_links_json="{}",
+    )
+    r = auth_client.post(f"/api/sales/prospects/{bid}/promote-ready")
+    assert r.status_code == 422, r.text
+
+
+def test_ig_like_comment_without_follow_not_ready():
+    from app.services.automation import can_ready_for_contact, ig_warm_complete
+
+    b = Business(
+        outreach_channel="instagram",
+        social_links_json='{"instagram":"https://instagram.com/x"}',
+        ig_warm_follow=False,
+        ig_warm_like=True,
+        ig_warm_comment=True,
+    )
+    assert ig_warm_complete(b) is False
+    ok, reason = can_ready_for_contact(b)
+    assert ok is False
+    assert "warm" in reason.lower() or "follow" in reason.lower()

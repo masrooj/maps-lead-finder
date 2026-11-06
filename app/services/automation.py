@@ -750,9 +750,15 @@ def rank_contact_queue(
             "ready_for_contact": bool(getattr(b, "ready_for_contact", False)),
             "contacted": bool(b.contacted),
         }
-        # Always keep can't-contact leads so the dedicated tab has data even if
-        # the active ranking mode filters to marked/uncontacted only.
-        if not rm.match_filter(filt, ch=ch, b_flags=flags) and not is_cannot_contact(b):
+        # Always keep can't-contact / Has booking / Ready leads so their tabs stay
+        # populated even when the active ranking mode filters to marked-only, etc.
+        has_booking = bool((getattr(b, "current_booking_software", None) or "").strip())
+        keep_for_tab = (
+            is_cannot_contact(b)
+            or has_booking
+            or bool(flags.get("ready_for_contact"))
+        )
+        if not rm.match_filter(filt, ch=ch, b_flags=flags) and not keep_for_tab:
             continue
         base = float(b.score_override if b.score_override is not None else (b.qualification_score or 0) or 0)
         disc = _discovery_boost(db, b.id)

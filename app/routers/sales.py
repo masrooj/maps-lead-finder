@@ -516,6 +516,13 @@ def sales_patch_prospect(business_id: int, body: ProspectPatch, _user: str = Dep
     for dt_key in ("trial_starts_at", "trial_ends_at"):
         if dt_key in data:
             data[dt_key] = _parse_dt(data[dt_key])
+    # Has booking leaves To contact / Ready prep queues.
+    if "current_booking_software" in data:
+        soft = str(data.get("current_booking_software") or "").strip()
+        data["current_booking_software"] = soft
+        if soft:
+            b.marked_for_contact = False
+            b.ready_for_contact = False
     for k, v in data.items():
         setattr(b, k, v)
     b.updated_at = datetime.now(timezone.utc)

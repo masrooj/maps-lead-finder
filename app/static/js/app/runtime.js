@@ -3521,11 +3521,16 @@ $('rows').addEventListener('click',async e=>{
       if(row){
         row.current_booking_software=on?'Has booking':'';
         row.has_booking=!!on;
+        if(on){ row.marked_for_contact=false; row.ready_for_contact=false; }
       }
       if(on){
         pruneFreshDiscoverRows();
         paint();
-        toast('Marked as has booking — left Discover');
+        setAppPanel('contactQueue');
+        setContactQueueTab('booking');
+        await loadContactQueue({keepTab:true});
+        renderContactQueueList();
+        toast('Moved to Has booking');
       }else if(row && isFreshDiscoverLead(row) && discoverShowingFresh()){
         await load();
         toast('Cleared booking — back in Discover');
