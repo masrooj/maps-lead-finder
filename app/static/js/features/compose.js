@@ -186,8 +186,15 @@ export function composeChannelControlsHtml(channels, active, opts = {}) {
   `;
 }
 
+/** Already contacted / IG-sent → only Follow is required. */
+export function igWarmFollowOnly(b) {
+  return !!(b && (b.contacted || b.instagram_sent || b.ig_warm_follow_only));
+}
+
 export function igWarmComplete(b) {
-  return !!(b && b.ig_warm_follow && b.ig_warm_like && b.ig_warm_comment);
+  if (!b) return false;
+  if (igWarmFollowOnly(b)) return !!b.ig_warm_follow;
+  return !!(b.ig_warm_follow && b.ig_warm_like && b.ig_warm_comment);
 }
 
 export function getIgOutreachQuota() {
@@ -235,10 +242,14 @@ export function igSoftSendBlockReason(lead, channel) {
   if (!igWarmComplete(lead)) {
     const missing = [];
     if (!lead?.ig_warm_follow) missing.push('follow');
-    if (!lead?.ig_warm_like) missing.push('like');
-    if (!lead?.ig_warm_comment) missing.push('comment');
-    return `IG warm incomplete: ${missing.join(', ') || 'follow/like/comment'}`;
+    if (!igWarmFollowOnly(lead)) {
+      if (!lead?.ig_warm_like) missing.push('like');
+      if (!lead?.ig_warm_comment) missing.push('comment');
+    }
+    return `IG warm incomplete: ${missing.join(', ') || 'follow'}`;
   }
+  // Already IG-sent re-confirm: do not block on daily cap (server skip_cap).
+  if (lead?.instagram_sent) return null;
   const q = getIgOutreachQuota();
   if (q.remaining <= 0) {
     return `IG soft DM daily cap reached (${q.used}/${q.cap}${q.timezone ? ` in ${q.timezone}` : ''})`;
@@ -265,14 +276,32 @@ export function syncIgWarmComposeUi(lead, channel) {
   const isIg = String(channel || '').toLowerCase() === 'instagram';
   if (box) box.classList.toggle('hidden', !isIg || !lead);
 
+  const followOnly = igWarmFollowOnly(lead);
   const follow = $('igWarmFollow');
   const like = $('igWarmLike');
   const comment = $('igWarmComment');
+  const likeLab = like && like.closest('label');
+  const commentLab = comment && comment.closest('label');
   if (follow) follow.checked = !!(lead && lead.ig_warm_follow);
-  if (like) like.checked = !!(lead && lead.ig_warm_like);
-  if (comment) comment.checked = !!(lead && lead.ig_warm_comment);
+  if (like) {
+    like.checked = !!(lead && lead.ig_warm_like);
+    like.disabled = followOnly;
+  }
+  if (comment) {
+    comment.checked = !!(lead && lead.ig_warm_comment);
+    comment.disabled = followOnly;
+  }
+  if (likeLab) likeLab.classList.toggle('hidden', followOnly);
+  if (commentLab) commentLab.classList.toggle('hidden', followOnly);
+  const title = box && box.querySelector('.ig-warm-title');
+  if (title) {
+    title.textContent = followOnly
+      ? 'IG warm-up (Follow only — already contacted)'
+      : 'IG warm-up (required before soft DM)';
+  }
 
   paintIgQuotaLine();
+  syncOptionalCallNow(lead);
 
   const blocked = isIg ? !!igSoftSendBlockReason(lead, 'instagram') : false;
   const openBtn = $('openComposeBtn');
@@ -288,7 +317,8 @@ export function syncIgWarmComposeUi(lead, channel) {
     const hint = $('igWarmGateHint');
     if (hint) {
       const reason = igSoftSendBlockReason(lead, 'instagram');
-      hint.textContent = reason || 'Warm complete — soft DM unlocked.';
+      hint.textContent = reason
+        || (followOnly ? 'Follow ticked — soft DM unlocked. Call now is optional.' : 'Warm complete — soft DM unlocked.');
       hint.classList.toggle('ok', !reason);
     }
   } else {
@@ -296,6 +326,30 @@ export function syncIgWarmComposeUi(lead, channel) {
     if (confirmBtn) confirmBtn.disabled = false;
     if (confirmNext) confirmNext.disabled = false;
   }
+}
+
+/** Optional tel: affordance — never required for Confirm sent. */
+export function syncOptionalCallNow(lead) {
+  const btn = $('composeCallNowBtn');
+  const hint = $('composeCallNowHint');
+  if (!btn) return;
+  const digits = phoneDigits(lead || {});
+  const hasPhone = digits.length >= 8;
+  btn.disabled = !hasPhone;
+  btn.classList.toggle('hidden', false);
+  btn.dataset.tel = hasPhone ? `tel:+${digits}` : '';
+  if (hint) {
+    hint.textContent = hasPhone
+      ? 'Optional same-day call — does not block Confirm sent.'
+      : 'No phone on this lead — Call now unavailable.';
+  }
+}
+
+/** Soft opener templates (purpose=soft_opener) for IG/WA cold ask. */
+export function preferredSoftTemplate(templates, channel) {
+  const list = Array.isArray(templates) ? templates : [];
+  if (channel !== 'instagram' && channel !== 'whatsapp') return null;
+  return list.find((t) => (t.purpose || '') === 'soft_opener') || null;
 }
 
 async function patchIgWarmTick(field, checked) {
@@ -308,6 +362,7 @@ async function patchIgWarmTick(field, checked) {
     lead.ig_warm_follow = !!updated.ig_warm_follow;
     lead.ig_warm_like = !!updated.ig_warm_like;
     lead.ig_warm_comment = !!updated.ig_warm_comment;
+    lead.ig_warm_follow_only = !!updated.ig_warm_follow_only;
     lead.ig_warm_complete = !!updated.ig_warm_complete;
     const qRow = ((typeof B.getContactQueueLeads === 'function' ? B.getContactQueueLeads() : null)
       || []).find((x) => String(x.id) === String(lead.id));
@@ -315,6 +370,7 @@ async function patchIgWarmTick(field, checked) {
       qRow.ig_warm_follow = lead.ig_warm_follow;
       qRow.ig_warm_like = lead.ig_warm_like;
       qRow.ig_warm_comment = lead.ig_warm_comment;
+      qRow.ig_warm_follow_only = lead.ig_warm_follow_only;
       qRow.ig_warm_complete = lead.ig_warm_complete;
     }
     if (igWarmComplete(lead) && !wasComplete) toast('IG warm complete');
@@ -339,9 +395,27 @@ export function wireIgWarmCompose() {
     const el = $(id);
     if (!el) return;
     el.addEventListener('change', () => {
+      const lead = typeof B.getComposeLead === 'function' ? B.getComposeLead() : null;
+      if (igWarmFollowOnly(lead) && (field === 'ig_warm_like' || field === 'ig_warm_comment')) {
+        el.checked = !!(lead && lead[field]);
+        toast('Already contacted — only Follow is updated', true);
+        return;
+      }
       patchIgWarmTick(field, el.checked).catch(() => {});
     });
   });
+  const callBtn = $('composeCallNowBtn');
+  if (callBtn) {
+    callBtn.addEventListener('click', () => {
+      const href = callBtn.dataset.tel || '';
+      if (!href) {
+        toast('No phone on this lead', true);
+        return;
+      }
+      // Optional — never part of the warm/confirm gate.
+      window.location.href = href;
+    });
+  }
 }
 
 /** Call before Open app / Confirm when channel is IG. Returns false if blocked. */

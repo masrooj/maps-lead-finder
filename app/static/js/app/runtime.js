@@ -2235,8 +2235,22 @@ function composeContactInfo(b,channel){
 }
 
 function templatesFor(channel){return (templatesStore&&templatesStore[channel])||[]}
-function defaultTemplate(channel){const list=templatesFor(channel);return list.find(t=>t.isDefault)||list[0]||null}
+/** Prefer soft_opener for IG/WA cold ask; else channel default. */
+function defaultTemplate(channel){
+  const list=templatesFor(channel);
+  if(channel==='instagram'||channel==='whatsapp'){
+    const soft=list.find(t=>(t.purpose||'')==='soft_opener');
+    if(soft) return soft;
+  }
+  return list.find(t=>t.isDefault)||list[0]||null;
+}
 function getTemplate(channel,id){return templatesFor(channel).find(t=>String(t.id)===String(id))||defaultTemplate(channel)}
+function templateOptionLabel(t){
+  const bits=[];
+  if(t&&t.isDefault) bits.push('default');
+  if(t&&(t.purpose||'')==='soft_opener') bits.push('soft');
+  return bits.length?` (${bits.join(' · ')})`:'';
+}
 
 async function migrateLocalTemplates(){
   try{
@@ -2319,7 +2333,15 @@ function fillComposeTemplates(channel){
     $('composeSubject').value='';
     $('composeBody').value='';
   }else{
-    $('composeTemplate').innerHTML=list.map(t=>`<option value="${esc(t.id)}" ${String(t.id)===String(def&&def.id)?'selected':''}>${esc(t.name)}${t.isDefault?' (default)':''}</option>`).join('');
+    // Soft openers first for IG/WA so the short ask is easy to pick.
+    const ordered=(channel==='instagram'||channel==='whatsapp')
+      ?[...list].sort((a,b)=>{
+        const as=(a.purpose||'')==='soft_opener'?0:1;
+        const bs=(b.purpose||'')==='soft_opener'?0:1;
+        return as-bs || String(a.name||'').localeCompare(String(b.name||''));
+      })
+      :list;
+    $('composeTemplate').innerHTML=ordered.map(t=>`<option value="${esc(t.id)}" ${String(t.id)===String(def&&def.id)?'selected':''}>${esc(t.name)}${esc(templateOptionLabel(t))}</option>`).join('');
   }
   applyComposeTemplate();
 }
@@ -2618,6 +2640,7 @@ async function confirmSent(opts={}){
       ig_warm_follow:!!updated.ig_warm_follow,
       ig_warm_like:!!updated.ig_warm_like,
       ig_warm_comment:!!updated.ig_warm_comment,
+      ig_warm_follow_only:!!updated.ig_warm_follow_only,
       ig_warm_complete:!!updated.ig_warm_complete,
       next_follow_up_at:updated.next_follow_up_at||'',
       outcome:updated.outcome||'',
@@ -2627,8 +2650,14 @@ async function confirmSent(opts={}){
     const qRow=(sharedState.contactQueueLeads||[]).find(x=>String(x.id)===String(currentId));
     if(qRow) Object.assign(qRow, patch, updated.stage?{stage:updated.stage}:{});
     if(channel==='instagram') await refreshIgOutreachQuota().catch(()=>{});
+    const phoneOk=composePhoneDigits(composeLead||{}).length>=8;
+    const callNudge=phoneOk && (channel==='instagram'||channel==='whatsapp');
     closeCompose();
-    toast(`Confirmed ${channelLabel(channel)} sent — marked contacted.`);
+    toast(
+      callNudge
+        ?`Confirmed ${channelLabel(channel)} sent — marked contacted. Call today if you can (optional).`
+        :`Confirmed ${channelLabel(channel)} sent — marked contacted.`
+    );
     // Always refresh current view so Global queue / Due lists drop completed leads
     await load();
     if(appPanel==='contactQueue' || sharedState.appPanel==='contactQueue'){

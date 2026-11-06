@@ -83,10 +83,18 @@ def advance_at_least(db, b: Business, target_slug: str, *, actor_id: Optional[in
     return True
 
 
+def ig_warm_follow_only(b: Business) -> bool:
+    """Already-contacted leads only need Follow (not like/comment) for IG soft-ask."""
+    return bool(getattr(b, "contacted", False) or getattr(b, "instagram_sent", False))
+
+
 def ig_warm_complete(b: Business) -> bool:
-    """True when Follow + Like + Comment warm ticks are all set (IG soft-ask gate)."""
+    """True when required IG warm ticks are set for this lead's contact state."""
+    follow = bool(getattr(b, "ig_warm_follow", False))
+    if ig_warm_follow_only(b):
+        return follow
     return bool(
-        getattr(b, "ig_warm_follow", False)
+        follow
         and getattr(b, "ig_warm_like", False)
         and getattr(b, "ig_warm_comment", False)
     )
@@ -96,11 +104,13 @@ def ig_warm_payload(b: Business) -> dict:
     follow = bool(getattr(b, "ig_warm_follow", False))
     like = bool(getattr(b, "ig_warm_like", False))
     comment = bool(getattr(b, "ig_warm_comment", False))
+    follow_only = ig_warm_follow_only(b)
     return {
         "ig_warm_follow": follow,
         "ig_warm_like": like,
         "ig_warm_comment": comment,
-        "ig_warm_complete": follow and like and comment,
+        "ig_warm_follow_only": follow_only,
+        "ig_warm_complete": follow if follow_only else (follow and like and comment),
     }
 
 
@@ -185,8 +195,8 @@ def ig_outreach_quota(db) -> dict:
 def assert_ig_soft_send_allowed(db, b: Business, *, skip_cap: bool = False) -> None:
     """Raise ValueError with operator-facing message if IG soft confirm is blocked.
 
-    When skip_cap is True (already instagram_sent), only warm completeness is checked
-    if warm flags exist; historical already-sent leads without warm are allowed.
+    When skip_cap is True (already instagram_sent), warm is not re-required for note-only
+    re-confirms. Fresh IG sends on already-contacted leads only need Follow ticked.
     """
     if not skip_cap:
         _lock_ig_soft_dm_cap_setting(db)
@@ -197,10 +207,11 @@ def assert_ig_soft_send_allowed(db, b: Business, *, skip_cap: bool = False) -> N
         missing = []
         if not getattr(b, "ig_warm_follow", False):
             missing.append("follow")
-        if not getattr(b, "ig_warm_like", False):
-            missing.append("like")
-        if not getattr(b, "ig_warm_comment", False):
-            missing.append("comment")
+        if not ig_warm_follow_only(b):
+            if not getattr(b, "ig_warm_like", False):
+                missing.append("like")
+            if not getattr(b, "ig_warm_comment", False):
+                missing.append("comment")
         raise ValueError(f"IG warm incomplete: {', '.join(missing)}")
     if skip_cap:
         return
@@ -212,12 +223,12 @@ def assert_ig_soft_send_allowed(db, b: Business, *, skip_cap: bool = False) -> N
 
 
 def maybe_log_ig_warm_complete(db, b: Business, *, actor_id: Optional[int] = None, before: dict) -> None:
-    """When the third warm tick flips complete, log one sales Activity (not outreach_sent)."""
-    was = bool(
-        before.get("ig_warm_follow")
-        and before.get("ig_warm_like")
-        and before.get("ig_warm_comment")
-    )
+    """When required warm ticks flip complete, log one sales Activity (not outreach_sent)."""
+    follow_only = ig_warm_follow_only(b)
+    before_follow = bool(before.get("ig_warm_follow"))
+    before_like = bool(before.get("ig_warm_like"))
+    before_comment = bool(before.get("ig_warm_comment"))
+    was = before_follow if follow_only else (before_follow and before_like and before_comment)
     if was or not ig_warm_complete(b):
         return
     db.add(
@@ -226,7 +237,7 @@ def maybe_log_ig_warm_complete(db, b: Business, *, actor_id: Optional[int] = Non
             activity_type="instagram",
             channel="instagram",
             summary="IG warm complete",
-            outcome="follow+like+comment",
+            outcome="follow" if follow_only else "follow+like+comment",
             created_by=actor_id,
         )
     )
@@ -279,9 +290,29 @@ def on_outreach_confirmed(
                 created_by=actor_id,
             )
         )
-    due = follow_up_at or (_utcnow() + timedelta(days=3))
-    title = f"{biz_name} · Follow up after {channel}"
-    description = msg or note or "Auto-created when outreach was confirmed sent"
+    # Same-day call nudge when lead has a phone and operator did not set a follow-up.
+    # Optional for the human (Call now UI); task is a reminder, not a hard gate.
+    same_day_call = False
+    if follow_up_at is None:
+        facts = _channel_facts(b)
+        if facts.get("has_phone") and channel in ("instagram", "whatsapp"):
+            follow_up_at = _utcnow()
+            same_day_call = True
+            if not getattr(b, "next_follow_up_at", None):
+                b.next_follow_up_at = follow_up_at
+        else:
+            follow_up_at = _utcnow() + timedelta(days=3)
+    due = follow_up_at
+    title = (
+        f"{biz_name} · Call today after {channel}"
+        if same_day_call
+        else f"{biz_name} · Follow up after {channel}"
+    )
+    description = msg or note or (
+        "Optional same-day call — confirm-sent created this reminder"
+        if same_day_call
+        else "Auto-created when outreach was confirmed sent"
+    )
     existing = db.scalar(
         select(Task).where(
             Task.business_id == b.id,
@@ -289,6 +320,14 @@ def on_outreach_confirmed(
             Task.title.ilike("%follow%"),
         )
     )
+    if not existing and same_day_call:
+        existing = db.scalar(
+            select(Task).where(
+                Task.business_id == b.id,
+                Task.status == "open",
+                Task.title.ilike("%call today%"),
+            )
+        )
     if existing:
         existing.title = title
         existing.description = description
@@ -308,9 +347,9 @@ def on_outreach_confirmed(
             )
         )
     advance_at_least(db, b, "contacted", actor_id=actor_id, note=f"Auto after {channel} confirm-sent")
-    if follow_up_at or due:
+    if due:
         advance_at_least(db, b, "follow_up", actor_id=actor_id, note="Auto follow-up scheduled")
-    return {"ok": True, "channel": channel}
+    return {"ok": True, "channel": channel, "same_day_call": same_day_call}
 
 
 def _is_contacted_queue_state(b: Business) -> bool:
@@ -542,9 +581,16 @@ def rank_contact_queue(
             }.get(stage.slug, 0.0)
         mode_pts, mode_tags = rm.mode_boost_points(boost_cfg)
         if active == "default":
-            if ch["has_instagram"]:
-                mode_pts += 0.4
-                mode_tags.append("has IG")
+            # Max-yield To contact order: phone+IG → IG only → phone only → rest
+            if ch["has_phone"] and ch["has_instagram"]:
+                mode_pts += 2.0
+                mode_tags.append("phone + IG")
+            elif ch["has_instagram"]:
+                mode_pts += 1.2
+                mode_tags.append("IG only")
+            elif ch["has_phone"]:
+                mode_pts += 0.8
+                mode_tags.append("phone only")
             if ch["has_website"] and not ch["has_email"]:
                 mode_pts += 0.3
                 mode_tags.append("site w/o email")

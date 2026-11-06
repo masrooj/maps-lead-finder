@@ -249,6 +249,45 @@ def test_ig_soft_dm_cap_rejects_invalid(auth_client):
     auth_client.put("/api/sales/settings/ig_soft_dm_daily_cap?value=8")
 
 
+def test_already_contacted_only_needs_follow_warm(auth_client):
+    """WA-contacted lead: IG soft send unlocks with Follow only (not like/comment)."""
+    bid = _make_ig_lead(
+        contacted=True,
+        whatsapp_sent=True,
+        ig_warm_follow=False,
+        ig_warm_like=False,
+        ig_warm_comment=False,
+    )
+    blocked = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "instagram"},
+    )
+    assert blocked.status_code == 422, blocked.text
+    assert "follow" in blocked.text.lower()
+
+    # Like/comment PATCH ignored once contacted; Follow is accepted.
+    ignore = auth_client.patch(
+        f"/api/businesses/{bid}",
+        json={"ig_warm_like": True, "ig_warm_comment": True},
+    )
+    assert ignore.status_code == 200, ignore.text
+    assert ignore.json()["ig_warm_like"] is False
+    assert ignore.json()["ig_warm_comment"] is False
+    assert ignore.json()["ig_warm_follow_only"] is True
+    assert ignore.json()["ig_warm_complete"] is False
+
+    follow = auth_client.patch(f"/api/businesses/{bid}", json={"ig_warm_follow": True})
+    assert follow.status_code == 200, follow.text
+    assert follow.json()["ig_warm_complete"] is True
+
+    ok = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "instagram", "message": "soft ask"},
+    )
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["instagram_sent"] is True
+
+
 def test_revert_preserves_ig_warm(auth_client):
     bid = _make_ig_lead(
         ig_warm_follow=True, ig_warm_like=True, ig_warm_comment=True

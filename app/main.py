@@ -83,6 +83,54 @@ DEFAULT_TEMPLATES = {
     },
 }
 
+# Short 2-line openers (preferred for IG/WA cold soft-ask). Seeded by (channel, purpose, name).
+SOFT_OPENER_TEMPLATES = [
+    {
+        "channel": "instagram",
+        "name": "Soft IG opener",
+        "purpose": "soft_opener",
+        "subject": "",
+        "body": (
+            "Hi — noticed {{name}}. Do WhatsApp bookings ever clash when you’re mid-cut?\n"
+            "Asking because that’s what we fix for {{category}} shops. OK if I send a 60-sec idea?"
+        ),
+    },
+    {
+        "channel": "instagram",
+        "name": "Soft IG reply ask",
+        "purpose": "soft_opener",
+        "subject": "",
+        "body": (
+            "Perfect — I can show a booking link clients use so you don’t miss calls mid-service.\n"
+            "Free 10-min setup call today or tomorrow?"
+        ),
+    },
+    {
+        "channel": "instagram",
+        "name": "Soft IG bump",
+        "purpose": "soft_opener",
+        "subject": "",
+        "body": "Just bumping — still on WhatsApp + walk-ins, or already sorted?",
+    },
+    {
+        "channel": "whatsapp",
+        "name": "Soft WA opener",
+        "purpose": "soft_opener",
+        "subject": "",
+        "body": (
+            "Hi {{name}} — quick one. Do WhatsApp bookings ever clash when you’re mid-service?\n"
+            "That’s what we fix for {{category}} in {{city}}. OK if I send a 60-sec idea?"
+        ),
+    },
+    {
+        "channel": "whatsapp",
+        "name": "Soft WA bump",
+        "purpose": "soft_opener",
+        "subject": "",
+        "body": "Just bumping — still juggling WhatsApp + walk-ins, or already sorted?",
+    },
+]
+
 Base.metadata.create_all(engine)
 apply_migrations()
 
@@ -866,10 +914,17 @@ def business_dict(b: Business) -> dict:
         "ig_warm_follow": bool(getattr(b, "ig_warm_follow", False)),
         "ig_warm_like": bool(getattr(b, "ig_warm_like", False)),
         "ig_warm_comment": bool(getattr(b, "ig_warm_comment", False)),
+        "ig_warm_follow_only": bool(
+            getattr(b, "contacted", False) or getattr(b, "instagram_sent", False)
+        ),
         "ig_warm_complete": bool(
             getattr(b, "ig_warm_follow", False)
-            and getattr(b, "ig_warm_like", False)
-            and getattr(b, "ig_warm_comment", False)
+            if (getattr(b, "contacted", False) or getattr(b, "instagram_sent", False))
+            else (
+                getattr(b, "ig_warm_follow", False)
+                and getattr(b, "ig_warm_like", False)
+                and getattr(b, "ig_warm_comment", False)
+            )
         ),
         "marked_for_contact": bool(getattr(b, "marked_for_contact", False)),
         "archived": bool(getattr(b, "archived", False)),
@@ -933,10 +988,11 @@ def log_activity(db, business_id: int, kind: str, channel: str = "", note: str =
 
 def seed_default_templates(db):
     existing = db.scalars(select(MessageTemplate)).all()
-    have = {t.channel for t in existing}
+    have_channels = {t.channel for t in existing}
+    have_keys = {(t.channel, (t.purpose or ""), (t.name or "")) for t in existing}
     created = False
     for channel, data in DEFAULT_TEMPLATES.items():
-        if channel in have:
+        if channel in have_channels:
             continue
         db.add(MessageTemplate(
             channel=channel,
@@ -944,8 +1000,30 @@ def seed_default_templates(db):
             subject=data["subject"],
             body=data["body"],
             is_default=True,
+            purpose="",
+            governance_ok=True,
         ))
         created = True
+        have_channels.add(channel)
+        have_keys.add((channel, "", data["name"]))
+    for data in SOFT_OPENER_TEMPLATES:
+        channel = data["channel"]
+        purpose = data.get("purpose") or "soft_opener"
+        name = data["name"]
+        key = (channel, purpose, name)
+        if key in have_keys:
+            continue
+        db.add(MessageTemplate(
+            channel=channel,
+            name=name,
+            subject=data.get("subject") or "",
+            body=data.get("body") or "",
+            is_default=False,
+            purpose=purpose,
+            governance_ok=True,
+        ))
+        created = True
+        have_keys.add(key)
     if created or not existing:
         db.commit()
 
@@ -975,6 +1053,8 @@ def apply_business_updates(b: Business, data: dict, db=None):
             "Use Confirm sent for Instagram (warm checklist + daily soft-DM cap). "
             "PATCH cannot mark Instagram sent."
         )
+    # Already-contacted: only Follow warm tick is maintained (ignore like/comment updates).
+    warm_follow_only = bool(getattr(b, "contacted", False) or getattr(b, "instagram_sent", False))
     bool_fields = (
         "contacted", "lost", "email_sent", "whatsapp_sent", "instagram_sent",
         "ig_warm_follow", "ig_warm_like", "ig_warm_comment",
@@ -982,6 +1062,8 @@ def apply_business_updates(b: Business, data: dict, db=None):
     )
     for field in bool_fields:
         if field in data and data[field] is not None:
+            if warm_follow_only and field in ("ig_warm_like", "ig_warm_comment"):
+                continue
             setattr(b, field, bool(data[field]))
     str_fields = {
         "notes": 5000,
@@ -1772,12 +1854,24 @@ def update_business(business_id: int, payload: UpdateBusiness, _user: str = Depe
             maybe_log_ig_warm_complete(
                 db, b, actor_id=actor.id if actor else None, before=before_warm
             )
-            changed = [
-                f"{k.replace('ig_warm_', '')}={'1' if bool(data[k]) else '0'}"
-                for k in warm_keys
-                if k in data
-            ]
-            log_activity(db, b.id, "ig_warm", channel="instagram", note=",".join(changed))
+            changed = []
+            for k in warm_keys:
+                if k not in data:
+                    continue
+                new_val = bool(data[k])
+                # Already-contacted ignores like/comment writes — skip no-op noise.
+                if before_warm.get(k) == new_val:
+                    continue
+                if bool(getattr(b, "contacted", False) or getattr(b, "instagram_sent", False)) and k in (
+                    "ig_warm_like",
+                    "ig_warm_comment",
+                ):
+                    continue
+                # After apply: if ignored, value unchanged on model
+                if bool(getattr(b, k, False)) != before_warm.get(k):
+                    changed.append(f"{k.replace('ig_warm_', '')}={'1' if new_val else '0'}")
+            if changed:
+                log_activity(db, b.id, "ig_warm", channel="instagram", note=",".join(changed))
         db.commit()
         db.refresh(b)
         return business_dict(b)
