@@ -9,6 +9,8 @@ from sqlalchemy import select
 
 from app.models import Activity, Business, PipelineStage, StageHistory, Task
 
+# timezone used by infer_slug_from_flags for due comparisons
+
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
@@ -57,35 +59,67 @@ def infer_slug_from_flags(b: Business) -> str:
     if b.lost:
         return "lost"
     if b.contacted:
-        if b.next_follow_up_at:
-            return "follow_up"
+        kind = (getattr(b, "follow_up_kind", None) or "").strip()
+        due = getattr(b, "next_follow_up_at", None)
+        if due and kind != "call_today":
+            due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
+            if due_aware <= _utcnow():
+                return "follow_up"
         return "contacted"
-    if b.marked_for_contact:
+    if getattr(b, "ready_for_contact", False) and b.marked_for_contact:
         return "ready_to_contact"
+    if b.marked_for_contact:
+        return "to_contact"
     return "identified"
 
 
 def backfill_prospect_stages(db) -> dict:
-    """Assign pipeline_stage_id and product_line to existing businesses lacking them."""
-    stages = {
-        ("STANDALONE", s.slug): s
-        for s in db.scalars(select(PipelineStage).where(PipelineStage.product_line == "STANDALONE")).all()
-    }
+    """Assign pipeline_stage_id and product_line to existing businesses lacking them.
+
+    Also remaps marked-but-not-ready leads that still sit on ready_to_contact → to_contact.
+    """
+    all_stages = list(db.scalars(select(PipelineStage)).all())
+    stages = {(s.product_line, s.slug): s for s in all_stages}
     updated = 0
     businesses = db.scalars(select(Business)).all()
     for b in businesses:
         changed = False
+        pl = (getattr(b, "product_line", None) or "STANDALONE").upper()
         if not getattr(b, "product_line", None):
             b.product_line = "STANDALONE"
+            pl = "STANDALONE"
             changed = True
         if not getattr(b, "currency", None):
             from app.config import DEFAULT_CURRENCY
 
             b.currency = DEFAULT_CURRENCY
             changed = True
+        # Split legacy ready_to_contact (was "To contact" UI) into prep vs ready
+        cur = stage_by_id(db, b.pipeline_stage_id) if b.pipeline_stage_id else None
+        if (
+            cur
+            and cur.slug == "ready_to_contact"
+            and b.marked_for_contact
+            and not getattr(b, "ready_for_contact", False)
+            and not b.contacted
+            and not b.lost
+        ):
+            to_stage = stages.get((pl, "to_contact")) or stages.get(("STANDALONE", "to_contact"))
+            if to_stage:
+                b.pipeline_stage_id = to_stage.id
+                db.add(
+                    StageHistory(
+                        business_id=b.id,
+                        from_stage_id=cur.id,
+                        to_stage_id=to_stage.id,
+                        changed_by=None,
+                        note="Backfill: marked prep → to_contact",
+                    )
+                )
+                changed = True
         if not b.pipeline_stage_id:
             slug = infer_slug_from_flags(b)
-            stage = stages.get(("STANDALONE", slug)) or stages.get(("STANDALONE", "identified"))
+            stage = stages.get((pl, slug)) or stages.get(("STANDALONE", slug)) or stages.get(("STANDALONE", "identified"))
             if stage:
                 b.pipeline_stage_id = stage.id
                 db.add(
@@ -169,12 +203,27 @@ def move_stage(
         business.contacted = True
         business.lost = False
     elif to_stage.slug == "ready_to_contact":
+        from app.services.automation import assert_ready_for_contact
+
+        try:
+            assert_ready_for_contact(business)
+        except ValueError as e:
+            if not force:
+                raise HTTPException(422, str(e)) from e
         business.marked_for_contact = True
+        business.ready_for_contact = True
+        business.contacted = False
+        business.lost = False
+    elif to_stage.slug == "to_contact":
+        business.marked_for_contact = True
+        business.ready_for_contact = False
         business.contacted = False
         business.lost = False
     elif to_stage.slug == "identified":
         business.contacted = False
         business.lost = False
+        business.marked_for_contact = False
+        business.ready_for_contact = False
 
     business.updated_at = _utcnow()
     db.add(

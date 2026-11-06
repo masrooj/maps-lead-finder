@@ -75,6 +75,9 @@ class Business(Base):
     ig_warm_like: Mapped[bool] = mapped_column(Boolean, default=False)
     ig_warm_comment: Mapped[bool] = mapped_column(Boolean, default=False)
     marked_for_contact: Mapped[bool] = mapped_column(Boolean, default=False)
+    ready_for_contact: Mapped[bool] = mapped_column(Boolean, default=False)
+    outreach_channel: Mapped[str] = mapped_column(String(40), default="")  # whatsapp | instagram | email
+    follow_up_kind: Mapped[str] = mapped_column(String(40), default="")  # call_today | scheduled | ""
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     cannot_contact: Mapped[bool] = mapped_column(Boolean, default=False)
     cannot_contact_via: Mapped[str] = mapped_column(String(40), default="")  # whatsapp | instagram | both

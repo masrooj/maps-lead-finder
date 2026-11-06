@@ -191,10 +191,16 @@ export function igWarmFollowOnly(b) {
   return !!(b && (b.contacted || b.instagram_sent || b.ig_warm_follow_only));
 }
 
+export function igWarmTickCount(b) {
+  if (!b) return 0;
+  return [b.ig_warm_follow, b.ig_warm_like, b.ig_warm_comment].filter(Boolean).length;
+}
+
+/** Cold: Follow + (like or comment). Already contacted / IG-sent: Follow only. */
 export function igWarmComplete(b) {
   if (!b) return false;
   if (igWarmFollowOnly(b)) return !!b.ig_warm_follow;
-  return !!(b.ig_warm_follow && b.ig_warm_like && b.ig_warm_comment);
+  return !!(b.ig_warm_follow && (b.ig_warm_like || b.ig_warm_comment));
 }
 
 export function getIgOutreachQuota() {
@@ -240,13 +246,11 @@ export function setIgOutreachQuota(q) {
 export function igSoftSendBlockReason(lead, channel) {
   if (String(channel || '').toLowerCase() !== 'instagram') return null;
   if (!igWarmComplete(lead)) {
+    if (igWarmFollowOnly(lead)) return 'IG warm incomplete: follow';
     const missing = [];
     if (!lead?.ig_warm_follow) missing.push('follow');
-    if (!igWarmFollowOnly(lead)) {
-      if (!lead?.ig_warm_like) missing.push('like');
-      if (!lead?.ig_warm_comment) missing.push('comment');
-    }
-    return `IG warm incomplete: ${missing.join(', ') || 'follow'}`;
+    if (!(lead?.ig_warm_like || lead?.ig_warm_comment)) missing.push('like or comment');
+    return `IG warm incomplete: ${missing.join(' + ') || 'follow + like/comment'}`;
   }
   // Already IG-sent re-confirm: do not block on daily cap (server skip_cap).
   if (lead?.instagram_sent) return null;
@@ -297,7 +301,7 @@ export function syncIgWarmComposeUi(lead, channel) {
   if (title) {
     title.textContent = followOnly
       ? 'IG warm-up (Follow only — already contacted)'
-      : 'IG warm-up (required before soft DM)';
+      : 'IG warm-up (Follow + like or comment)';
   }
 
   paintIgQuotaLine();
@@ -318,7 +322,7 @@ export function syncIgWarmComposeUi(lead, channel) {
     if (hint) {
       const reason = igSoftSendBlockReason(lead, 'instagram');
       hint.textContent = reason
-        || (followOnly ? 'Follow ticked — soft DM unlocked. Call now is optional.' : 'Warm complete — soft DM unlocked.');
+        || (followOnly ? 'Follow ticked — soft DM unlocked. Call now is optional.' : 'Warm ready — soft DM unlocked.');
       hint.classList.toggle('ok', !reason);
     }
   } else {

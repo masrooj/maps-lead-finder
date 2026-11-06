@@ -558,6 +558,15 @@ label.file-btn input[type=file],label.pill input[type=file][hidden]{position:abs
 #igSoftDmQuota.cap-hit{color:#ffb4b4;font-weight:600}
 .cq-warm-chip{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--line);color:var(--muted)}
 .cq-warm-chip.done{border-color:#3d8f7a;color:#9dfff0;background:#12352c}
+.cq-prep{display:flex;flex-wrap:wrap;gap:6px;align-items:center;width:100%;max-width:100%}
+.cq-prep-hint{font-size:12px;color:var(--muted);margin-right:4px}
+.cq-warm-inline{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+.cq-warm-tick{display:inline-flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.cq-warm-tick input{margin:0}
+@media (max-width:720px){
+  .cq-prep{flex-direction:column;align-items:flex-start}
+  .queue-lead .actions{display:flex;flex-wrap:wrap;gap:6px}
+}
 .sent-message{
   margin:8px 0 0;padding:10px 12px;border-radius:10px;border:1px solid var(--line-soft);
   background:#0d1527;color:var(--text);font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;

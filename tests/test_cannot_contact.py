@@ -80,7 +80,12 @@ def test_legacy_outcome_payload():
 
 
 def test_confirm_sent_clears_cannot_contact(auth_client):
-    bid = _seed("confirm-clear", email="c@example.com")
+    bid = _seed(
+        "confirm-clear",
+        email="c@example.com",
+        ready_for_contact=True,
+        outreach_channel="email",
+    )
     auth_client.post(
         f"/api/businesses/{bid}/cannot-contact",
         json={"via": "both"},

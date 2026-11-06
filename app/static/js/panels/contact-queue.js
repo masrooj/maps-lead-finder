@@ -53,12 +53,11 @@ export function scrollContactQueueTop() {
 }
 
 export function setContactQueueTab(tab) {
-  if (tab === 'selected' || tab === 'booking' || tab === 'contacted' || tab === 'cannot') {
+  if (tab === 'selected' || tab === 'ready' || tab === 'booking' || tab === 'contacted' || tab === 'cannot') {
     state.contactQueueTab = tab;
   } else {
     state.contactQueueTab = 'all';
   }
-  // After Confirm sent → Contacted, returning to To contact must land at top
   requestAnimationFrame(() => {
     scrollContactQueueTop();
     setTimeout(scrollContactQueueTop, 40);
@@ -74,9 +73,19 @@ function availableComposeChannels(b) {
 }
 
 
+/** Prep queue: marked, not ready, not contacted. */
 export function contactQueueSelectedLeads(){
   return (state.contactQueueLeads||[]).filter(b=>
-    b.marked_for_contact && !b.contacted && !b.opt_out && !isCannotContact(b)
+    b.marked_for_contact && !b.ready_for_contact && !b.contacted && !b.opt_out && !isCannotContact(b)
+    && !(b.contacted || b.email_sent || b.whatsapp_sent || b.instagram_sent)
+  );
+}
+
+/** Messaging queue: ready_for_contact and not yet contacted. */
+export function contactQueueReadyLeads(){
+  return (state.contactQueueLeads||[]).filter(b=>
+    b.ready_for_contact && !b.contacted && !b.opt_out && !isCannotContact(b)
+    && !(b.email_sent || b.whatsapp_sent || b.instagram_sent)
   );
 }
 
@@ -86,6 +95,27 @@ export function contactQueueContactedLeads(){
     if (b.opt_out || isCannotContact(b)) return false;
     return !!(b.contacted || b.email_sent || b.whatsapp_sent || b.instagram_sent);
   });
+}
+
+export function availableOutreachChannels(b){
+  const ch=b.channels||{};
+  const out=[];
+  if(ch.whatsapp||b.phone||b.international_phone) out.push('whatsapp');
+  if(ch.instagram||(b.social_links&&b.social_links.instagram)) out.push('instagram');
+  if(ch.email||b.email) out.push('email');
+  return out;
+}
+
+export function canPromoteReady(b){
+  const ch=(b.outreach_channel||'').trim().toLowerCase();
+  if(!ch) return {ok:false, reason:'Pick WhatsApp, Instagram, or Email'};
+  const avail=availableOutreachChannels(b);
+  if(!avail.includes(ch)) return {ok:false, reason:`No ${ch} on this lead`};
+  if(ch==='instagram'){
+    if(!b.ig_warm_follow) return {ok:false, reason:'Tick Follow first'};
+    if(!(b.ig_warm_like || b.ig_warm_comment)) return {ok:false, reason:'Tick Like or Comment'};
+  }
+  return {ok:true, reason:''};
 }
 
 /** Unreachable on WA / IG / both — dedicated Can't contact tab. */
@@ -144,18 +174,19 @@ export function contactQueueChannelMatch(b, ch){
 }
 
 export function contactQueueIsParked(b){
-  // Marked / booking / can't-contact → sink to bottom of All tab
-  return !!(b&&(b.marked_for_contact || b.has_booking || (b.current_booking_software||'').trim() || isCannotContact(b)));
+  // Marked / ready / booking / can't-contact → sink to bottom of All tab
+  return !!(b&&(b.marked_for_contact || b.ready_for_contact || b.has_booking || (b.current_booking_software||'').trim() || isCannotContact(b)));
 }
 
 export function contactQueueVisibleLeads(){
   let base;
   if(state.contactQueueTab==='selected') base=contactQueueSelectedLeads();
+  else if(state.contactQueueTab==='ready') base=contactQueueReadyLeads();
   else if(state.contactQueueTab==='booking') base=contactQueueBookingLeads();
   else if(state.contactQueueTab==='contacted') base=contactQueueContactedLeads();
   else if(state.contactQueueTab==='cannot') base=contactQueueCannotLeads();
   else base=(state.contactQueueLeads||[]).slice();
-  // All: ranked open leads first; to-contact + has-booking parked at bottom
+  // All: ranked open leads first; prep/ready/booking parked at bottom
   if(state.contactQueueTab==='all'){
     base.sort((a,b)=>{
       const aPark=contactQueueIsParked(a);
@@ -163,7 +194,7 @@ export function contactQueueVisibleLeads(){
       if(aPark!==bPark) return aPark?1:-1;
       return (Number(b.rank_score)||0)-(Number(a.rank_score)||0);
     });
-  } else if(state.contactQueueTab==='contacted' || state.contactQueueTab==='cannot'){
+  } else if(state.contactQueueTab==='contacted' || state.contactQueueTab==='cannot' || state.contactQueueTab==='ready'){
     base.sort((a,b)=>{
       const aAt=a.updated_at||a.last_contacted_at||'';
       const bAt=b.updated_at||b.last_contacted_at||'';
@@ -210,7 +241,7 @@ export function renderContactQueueExplain(data){
         <div><div class="sub" style="margin:0">In scope</div><strong style="font-size:22px;letter-spacing:-.03em">${total}</strong></div>
       </div>
     </div>
-    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → pick → Mark to contact → Message (WA / Email / IG) → Confirm sent (stay on To contact). Use Can't contact when unreachable.</p>
+    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → Mark to contact → pick channel (+ IG warm 2/3) → Ready to contact → Message → Confirm sent. Can't contact parks unreachable.</p>
     ${parts.length?`<p class="hint" style="margin:8px 0 0"><strong style="color:var(--text)">Top why:</strong> ${esc(parts.join(' · '))}</p>`:''}
   `;
 }
@@ -232,11 +263,13 @@ export function syncContactQueueTabs(){
   });
   const allBase=state.contactQueueLeads||[];
   const selBase=contactQueueSelectedLeads();
+  const readyBase=contactQueueReadyLeads();
   const bookBase=contactQueueBookingLeads();
   const contactedBase=contactQueueContactedLeads();
   const cannotBase=contactQueueCannotLeads();
   if($('contactQueueAllCount')) $('contactQueueAllCount').textContent=String(pass(allBase).length);
   if($('contactQueueSelectedCount')) $('contactQueueSelectedCount').textContent=String(pass(selBase).length);
+  if($('contactQueueReadyCount')) $('contactQueueReadyCount').textContent=String(pass(readyBase).length);
   if($('contactQueueBookingCount')) $('contactQueueBookingCount').textContent=String(pass(bookBase).length);
   if($('contactQueueContactedCount')) $('contactQueueContactedCount').textContent=String(pass(contactedBase).length);
   if($('contactQueueCannotCount')) $('contactQueueCannotCount').textContent=String(pass(cannotBase).length);
@@ -247,11 +280,14 @@ export function syncContactQueueTabs(){
   });
   const allBar=$('contactQueueBulkBar');
   const selBar=$('contactQueueSelectedBar');
+  const readyBar=$('contactQueueReadyBar');
   if(allBar) allBar.classList.toggle('show', state.contactQueueTab==='all' && contactQueuePick.size>0);
   if(selBar) selBar.classList.toggle('show', state.contactQueueTab==='selected' && selBase.length>0);
+  if(readyBar) readyBar.classList.toggle('show', state.contactQueueTab==='ready' && readyBase.length>0);
   if($('contactQueuePickCount')) $('contactQueuePickCount').textContent=contactQueuePick.size+' picked';
-  if($('contactQueueSelectedHint')) $('contactQueueSelectedHint').textContent=selBase.length?`${selBase.length} to contact · send WA / Email / IG from here`:'No leads marked to contact yet';
-  if($('contactQueueMessageNext')) $('contactQueueMessageNext').disabled=!selBase.length;
+  if($('contactQueueSelectedHint')) $('contactQueueSelectedHint').textContent=selBase.length?`${selBase.length} in prep · pick channel, warm IG, then Ready`:'No leads in To contact yet';
+  if($('contactQueueReadyHint')) $('contactQueueReadyHint').textContent=readyBase.length?`${readyBase.length} ready · message from here`:'No leads ready to contact yet';
+  if($('contactQueueMessageNext')) $('contactQueueMessageNext').disabled=!readyBase.length;
 }
 
 export function mapsUrlFor(b){
@@ -274,25 +310,49 @@ export function channelTagsHtml(b){
   return tags.map(t=>`<span class="ch-tag ${t.cls}${t.on?'':' off'}">${t.label}</span>`).join(' ');
 }
 
-function composeChannelButtonsHtml(b){
-  const channels=availableComposeChannels(b);
+function composeChosenChannelButtonHtml(b){
+  const ch=(b.outreach_channel||'').trim().toLowerCase();
+  if(!ch) return '';
   const short={whatsapp:'WA',email:'Email',instagram:'IG'};
-  const parts=channels.map((ch,i)=>{
-    const cls=i===0?'primary':'';
-    const label=short[ch]||channelLabel(ch);
-    return `<button type="button" class="${cls}" data-compose-queue="${b.id}" data-compose-channel="${ch}" title="Open ${channelLabel(ch)} compose">${label}</button>`;
-  });
-  // Website may link IG even when social_links.instagram is empty — scan / retry
-  if(!channels.includes('instagram') && (b.website||'').trim()){
-    const scanning=igDiscoverStarted.has(String(b.id));
-    parts.push(
-      `<button type="button" data-cq-ig-discover="${b.id}" ${scanning?'disabled':''} title="Find Instagram on website">${scanning?'Finding IG…':'Find IG'}</button>`
-    );
+  const label=short[ch]||channelLabel(ch);
+  return `<button type="button" class="primary" data-compose-queue="${b.id}" data-compose-channel="${ch}" title="Open ${channelLabel(ch)} compose">${label}</button>`;
+}
+
+function prepChannelPickerHtml(b){
+  const avail=availableOutreachChannels(b);
+  const cur=(b.outreach_channel||'').trim().toLowerCase();
+  const labels={whatsapp:'WA',instagram:'IG',email:'Email'};
+  if(!avail.length){
+    const findIg=(b.website||'').trim()
+      ? `<button type="button" data-cq-ig-discover="${b.id}" title="Find Instagram on website">Find IG</button>`
+      : '';
+    return `<span class="cq-prep-hint" title="Open → Contacts to add phone/email, or Find IG">No WA / IG / Email — use Open → Contacts</span>${findIg}`;
   }
-  if(!parts.length){
-    return `<button type="button" class="primary" data-compose-queue="${b.id}">Message</button>`;
-  }
-  return parts.join('');
+  const pills=avail.map(ch=>{
+    const on=cur===ch?'primary':'';
+    return `<button type="button" class="${on}" data-cq-channel="${b.id}" data-channel="${ch}" title="Outreach via ${channelLabel(ch)}">${labels[ch]||ch}</button>`;
+  }).join('');
+  const findIg=!avail.includes('instagram') && (b.website||'').trim()
+    ? `<button type="button" data-cq-ig-discover="${b.id}" title="Find Instagram on website">${igDiscoverStarted.has(String(b.id))?'Finding IG…':'Find IG'}</button>`
+    : '';
+  return pills+findIg;
+}
+
+function prepWarmChecklistHtml(b){
+  if((b.outreach_channel||'').trim().toLowerCase()!=='instagram') return '';
+  const ticks=[
+    {f:'ig_warm_follow', lab:'Follow'},
+    {f:'ig_warm_like', lab:'Like'},
+    {f:'ig_warm_comment', lab:'Comment'},
+  ];
+  return `<span class="cq-warm-inline" title="Follow + like or comment">${ticks.map(t=>
+    `<label class="cq-warm-tick"><input type="checkbox" data-cq-warm="${b.id}" data-warm-field="${t.f}" ${b[t.f]?'checked':''}> ${t.lab}</label>`
+  ).join('')}</span>`;
+}
+
+function prepReadyButtonHtml(b){
+  const gate=canPromoteReady(b);
+  return `<button type="button" class="primary" data-cq-promote="${b.id}" ${gate.ok?'':'disabled'} title="${esc(gate.reason||'Move to Ready to contact')}">Ready to contact</button>`;
 }
 
 async function promptCannotContact(id){
@@ -341,21 +401,20 @@ async function promptCannotContact(id){
 function queueDiscoverInstagramForVisible(leads){
   const need=(leads||[]).filter((b)=>leadNeedsIgDiscover(b) && !igDiscoverStarted.has(String(b.id))).slice(0, 8);
   if(!need.length) return;
-  const onQueueTab=state.contactQueueTab==='selected' || state.contactQueueTab==='booking';
+  const onQueueTab=state.contactQueueTab==='selected' || state.contactQueueTab==='ready';
   need.forEach((b)=>{
     const id=String(b.id);
     igDiscoverStarted.add(id);
     discoverInstagram(b.id).then((res)=>{
       const row=state.contactQueueLeads.find((x)=>String(x.id)===id);
       if(res.found && res.instagram && row) applyDiscoveredIg(row, res.instagram);
-      else igDiscoverStarted.delete(id); // allow Find IG retry
+      else igDiscoverStarted.delete(id);
       if(onQueueTab) renderContactQueueList();
     }).catch(()=>{
       igDiscoverStarted.delete(id);
       if(onQueueTab) renderContactQueueList();
     });
   });
-  // One refresh so buttons flip to Finding IG…
   if(onQueueTab) renderContactQueueList();
 }
 
@@ -373,25 +432,28 @@ export function renderContactQueueList(){
   if(!list) return;
   syncContactQueueTabs();
   const isSelected=state.contactQueueTab==='selected';
+  const isReady=state.contactQueueTab==='ready';
   const isBooking=state.contactQueueTab==='booking';
   const isContacted=state.contactQueueTab==='contacted';
   const isCannot=state.contactQueueTab==='cannot';
   const leads=contactQueueVisibleLeads();
   const q=(contactQueueQuery||'').trim();
   const pagerHost=ensurePagerHost(list,'contactQueuePager');
-  const tabLabel=isSelected?'To contact':(isBooking?'Has booking':(isContacted?'Contacted':(isCannot?"Can't contact":'All')));
+  const tabLabel=isSelected?'To contact':(isReady?'Ready to contact':(isBooking?'Has booking':(isContacted?'Contacted':(isCannot?"Can't contact":'All'))));
   if(!leads.length){
     if(q || contactQueueChannel){
       list.innerHTML=`<div class="empty-card">No matches on <strong>${tabLabel}</strong> for this search/filter.</div>`;
     }else{
       list.innerHTML=isSelected
-        ? '<div class="empty-card">Nothing marked to contact yet. On <strong>All</strong>, pick leads and use <strong>Mark to contact</strong> at the bottom.</div>'
+        ? '<div class="empty-card">Nothing in prep yet. On <strong>All</strong>, pick leads and use <strong>Mark to contact</strong>.</div>'
+        : isReady
+          ? '<div class="empty-card">Nothing ready. On <strong>To contact</strong>, pick a channel (and IG warm 2/3), then <strong>Ready to contact</strong>.</div>'
         : isBooking
-          ? '<div class="empty-card">No leads marked as already having booking. Use <strong>Has booking</strong> on a row.</div>'
+          ? '<div class="empty-card">No leads marked as already having booking. Use <strong>Has booking</strong> on Discover or All.</div>'
           : isContacted
-            ? '<div class="empty-card">No confirmed cold sends yet. From <strong>To contact</strong>, open WA / Email / IG, then <strong>Confirm sent</strong>.</div>'
+            ? '<div class="empty-card">No confirmed sends yet. From <strong>Ready to contact</strong>, message then <strong>Confirm sent</strong>.</div>'
           : isCannot
-            ? '<div class="empty-card">No parked leads. On <strong>To contact</strong>, use <strong>Can\'t contact</strong> when WA / IG is unreachable.</div>'
+            ? '<div class="empty-card">No parked leads. On <strong>To contact</strong> or <strong>Ready</strong>, use <strong>Can\'t contact</strong> when unreachable.</div>'
           : '<div class="empty-card">No leads match this ranking mode. Try Balanced, or Discover + star prospects first.</div>';
     }
     if(pagerHost) pagerHost.innerHTML='';
@@ -403,56 +465,67 @@ export function renderContactQueueList(){
     const chips=whyParts.map(w=>`<span class="chip ok">${esc(w)}</span>`).join('');
     const picked=contactQueuePick.has(String(b.id));
     const already=!!b.marked_for_contact;
+    const isReadyLead=!!b.ready_for_contact;
     const hasBook=!!(b.has_booking||(b.current_booking_software||'').trim());
     const rankNo=slice.start+i+1;
     const mapsUrl=mapsUrlFor(b);
-    const noCheck=isSelected||isBooking||isContacted||isCannot;
+    const noCheck=isSelected||isReady||isBooking||isContacted||isCannot;
     const checkCell=noCheck?'':`<div class="checkcol"><input type="checkbox" data-cq-pick="${b.id}" ${picked?'checked':''} aria-label="Pick ${esc(b.name||'lead')}"></div>`;
     let actions='';
     if(isSelected){
       actions=`
-        ${composeChannelButtonsHtml(b)}
+        <div class="cq-prep">${prepChannelPickerHtml(b)} ${prepWarmChecklistHtml(b)}</div>
+        ${prepReadyButtonHtml(b)}
         <button type="button" data-cq-cannot="${b.id}">Can't contact</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>
-        <button type="button" data-cq-unmark="${b.id}">Remove</button>
-        <button type="button" data-cq-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>`;
+        <button type="button" data-cq-unmark="${b.id}">Remove</button>`;
+    }else if(isReady){
+      actions=`
+        ${composeChosenChannelButtonHtml(b)}
+        <button type="button" data-cq-demote="${b.id}">Demote</button>
+        <button type="button" data-cq-cannot="${b.id}">Can't contact</button>
+        <button type="button" data-open-prospect="${b.id}">Open</button>`;
     }else if(isBooking){
       actions=`
-        ${composeChannelButtonsHtml(b)}
         <button type="button" data-open-prospect="${b.id}">Open</button>
         <button type="button" data-cq-booking="${b.id}" data-booking-on="0">Clear booking</button>`;
     }else if(isContacted){
+      const badge=b.follow_up_badge&&b.follow_up_badge.label
+        ?`<span class="ch-tag" title="Follow-up">${esc(b.follow_up_badge.label)}</span>`
+        :'';
       actions=`
-        ${composeChannelButtonsHtml(b)}
-        <button type="button" data-cq-revert="${b.id}">Back to To contact</button>
+        ${badge}
+        <button type="button" data-cq-revert="${b.id}">Back to Ready</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>`;
     }else if(isCannot){
       const via=cannotViaLabel(cannotContactVia(b));
       actions=`
-        <button type="button" class="primary" data-cq-clear-cannot="${b.id}">Back to To contact</button>
+        <button type="button" class="primary" data-cq-clear-cannot="${b.id}">Back to queue</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>
         <span class="ch-tag" title="Unreachable">${esc(via)}</span>`;
     }else{
+      const markLabel=isReadyLead?'On Ready':(already?'On To contact':'Mark to contact');
       actions=`
-        <button type="button" class="primary" data-cq-mark="${b.id}" ${already?'disabled':''}>${already?'On To contact':'Mark to contact'}</button>
+        <button type="button" class="primary" data-cq-mark="${b.id}" ${already||isReadyLead?'disabled':''}>${markLabel}</button>
         <button type="button" data-cq-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>`;
     }
     const contactedBadge=isContacted?` ${sentChannelsHtml(b)}`:'';
-    const cannotBadge=isCannot?` <span class="badge">${esc(cannotViaLabel(cannotContactVia(b)))}</span>`:(isCannotContact(b)&&!isSelected?` <span class="badge">Can't contact</span>`:'');
-    const hasIg=!!((b.channels&&b.channels.instagram)||(b.social_links&&b.social_links.instagram));
-    const warmChip=(isSelected||isBooking)&&hasIg
-      ?(b.ig_warm_complete
-        ?' <span class="cq-warm-chip done" title="IG warm complete">Warm ✓</span>'
-        :' <span class="cq-warm-chip" title="IG warm incomplete">Warm –</span>')
+    const cannotBadge=isCannot?` <span class="badge">${esc(cannotViaLabel(cannotContactVia(b)))}</span>`:(isCannotContact(b)&&!isSelected&&!isReady?` <span class="badge">Can't contact</span>`:'');
+    const stageBadge=isReadyLead&&!isReady&&!isContacted&&!isCannot?' <span class="badge queue">Ready</span>'
+      :(already&&!isSelected&&!isReady&&!isContacted&&!isCannot?' <span class="badge queue">To contact</span>':'');
+    const warmChip=isSelected&&(b.outreach_channel||'')==='instagram'
+      ?(canPromoteReady(b).ok
+        ?' <span class="cq-warm-chip done" title="Warm ready (2/3)">Warm ✓</span>'
+        :' <span class="cq-warm-chip" title="Need 2 of 3 warm">Warm –</span>')
       :'';
     return `
     <article class="queue-lead ${noCheck?'no-check':''}" data-row="${b.id}" data-maps="${esc(mapsUrl)}" title="${mapsUrl?'Open Google Maps':''}">
       ${checkCell}
       <div class="queue-rank meta" style="min-width:48px;align-items:flex-start"><strong style="font-size:18px">#${rankNo}</strong><span class="sub">${esc(String(b.rank_score))}</span></div>
       <div class="queue-body">
-        <div class="biz">${esc(b.name||'—')}${already&&!isSelected&&!isContacted&&!isCannot?' <span class="badge queue">To contact</span>':''}${hasBook?' <span class="badge">Booking</span>':''}${warmChip}${contactedBadge}${cannotBadge}</div>
-        <div class="sub"><span>${esc(b.country||'—')}</span> · <span>${esc(b.city||'—')}</span> · ${esc((b.stage&&b.stage.name)||'—')}</div>
+        <div class="biz">${esc(b.name||'—')}${stageBadge}${hasBook?' <span class="badge">Booking</span>':''}${warmChip}${contactedBadge}${cannotBadge}</div>
+        <div class="sub"><span>${esc(b.country||'—')}</span> · <span>${esc(b.city||'—')}</span> · ${esc((b.stage&&b.stage.name)||'—')}${(b.outreach_channel)?` · ${esc(b.outreach_channel)}`:''}</div>
         <div class="reach" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${channelTagsHtml(b)}</div>
         <div class="reach" style="margin-top:6px">${chips||`<span class="chip">${esc(b.why||'ranked')}</span>`}</div>
       </div>
@@ -505,8 +578,8 @@ export function renderContactQueueList(){
   list.querySelectorAll('[data-cq-revert]').forEach(btn=>btn.addEventListener('click',async ev=>{
     ev.stopPropagation();
     const ok=await uiConfirm({
-      title:'Back to To contact?',
-      message:'Clears Contacted / channel-sent flags and returns this lead to To contact.',
+      title:'Back to Ready?',
+      message:'Clears Contacted / channel-sent flags and returns this lead to Ready to contact (keeps channel + warm).',
       confirmLabel:'Move back',
       danger:false
     });
@@ -514,7 +587,55 @@ export function renderContactQueueList(){
     try{
       await api('/api/sales/prospects/'+btn.dataset.cqRevert+'/revert-to-contact',{method:'POST',body:{}});
       await loadContactQueue({keepTab:true});
-      toast('Moved back to To contact');
+      toast('Moved back to Ready to contact');
+    }catch(e){ toast(e.message,true); }
+  }));
+  list.querySelectorAll('[data-cq-channel]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    const id=btn.dataset.cqChannel;
+    const ch=btn.dataset.channel;
+    try{
+      const updated=await api('/api/businesses/'+id,{method:'PATCH',body:{outreach_channel:ch}});
+      const row=state.contactQueueLeads.find(x=>String(x.id)===String(id));
+      if(row&&updated) Object.assign(row, updated);
+      else if(row){ row.outreach_channel=ch; if(ch==='instagram'&&!canPromoteReady({...row,outreach_channel:ch}).ok) row.ready_for_contact=false; }
+      renderContactQueueList();
+      toast('Channel: '+channelLabel(ch));
+    }catch(e){ toast(e.message,true); }
+  }));
+  list.querySelectorAll('[data-cq-warm]').forEach(inp=>inp.addEventListener('change',async ev=>{
+    ev.stopPropagation();
+    const id=inp.dataset.cqWarm;
+    const field=inp.dataset.warmField;
+    try{
+      const body={[field]:!!inp.checked};
+      const updated=await api('/api/businesses/'+id,{method:'PATCH',body});
+      const row=state.contactQueueLeads.find(x=>String(x.id)===String(id));
+      if(row&&updated) Object.assign(row, updated);
+      else if(row) row[field]=!!inp.checked;
+      renderContactQueueList();
+    }catch(e){
+      inp.checked=!inp.checked;
+      toast(e.message,true);
+    }
+  }));
+  list.querySelectorAll('[data-cq-promote]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    if(btn.disabled) return;
+    try{
+      await api('/api/sales/prospects/'+btn.dataset.cqPromote+'/promote-ready',{method:'POST',body:{}});
+      await loadContactQueue({keepTab:true});
+      setContactQueueTab('ready');
+      renderContactQueueList();
+      toast('Moved to Ready to contact');
+    }catch(e){ toast(e.message,true); }
+  }));
+  list.querySelectorAll('[data-cq-demote]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    try{
+      await api('/api/sales/prospects/'+btn.dataset.cqDemote+'/demote-to-contact',{method:'POST',body:{}});
+      await loadContactQueue({keepTab:true});
+      toast('Demoted to To contact');
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('[data-cq-booking]').forEach(btn=>btn.addEventListener('click',async ev=>{
@@ -635,7 +756,7 @@ export async function loadContactQueue(opts={}){
   if($('contactQueueDef')){
     $('contactQueueDef').textContent=(data.definition||'')
       +(scope?` · Scoped to ${scope}.`:' · All countries/cities combined — pick a country then city to separate.')
-      +` · Pick on All → Mark to contact → WA/Email/IG from To contact → Confirm sent (stay on To contact). Can't contact parks unreachable.`;
+      +` · All → Mark to contact → channel (+ IG warm) → Ready → Message → Confirm sent.`;
   }
   renderContactQueueExplain(data);
   state.contactQueueLeads=data.leads||[];

@@ -245,10 +245,19 @@ def sales_backfill(_user: str = Depends(require_user), db=Depends(get_db)):
 @router.get("/pipeline", tags=["pipeline"])
 def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.authz import can_view_business, get_user_by_email
+    from app.services.automation import follow_up_badge, promote_due_follow_ups
 
     stages = list_stages(db, product_line.upper())
-    stage_map = {s.id: s for s in stages}
     actor = get_user_by_email(db, _user)
+    try:
+        promote_due_follow_ups(
+            db,
+            product_line=product_line.upper(),
+            actor_id=actor.id if actor else None,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
     prospects = [
         p
         for p in db.scalars(
@@ -271,7 +280,17 @@ def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(requir
                 "stage": stage_dict(s),
                 "count": len(items),
                 "value_by_currency": value,
-                "prospects": [prospect_sales_dict(p, s) for p in items],
+                "prospects": [
+                    {
+                        **prospect_sales_dict(p, s),
+                        "follow_up_kind": (getattr(p, "follow_up_kind", None) or "").strip(),
+                        "follow_up_badge": follow_up_badge(p),
+                        "next_follow_up_at": _iso(getattr(p, "next_follow_up_at", None)),
+                        "ready_for_contact": bool(getattr(p, "ready_for_contact", False)),
+                        "outreach_channel": (getattr(p, "outreach_channel", None) or "").strip(),
+                    }
+                    for p in items
+                ],
             }
         )
     unstaged = [p for p in prospects if not p.pipeline_stage_id]
@@ -330,20 +349,65 @@ def sales_undo_stage(business_id: int, _user: str = Depends(require_user), db=De
 
 @router.post("/prospects/{business_id}/revert-to-contact", tags=["pipeline"])
 def sales_revert_to_contact(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
-    """Move a Contacted prospect back onto To contact (clears sent flags + contacted)."""
+    """Move a Contacted prospect back onto Ready to contact (keeps channel + warm)."""
     from app.models import PipelineStage
+    from app.services.authz import get_user_by_email, require_role
     from app.services.automation import revert_to_to_contact
 
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
     b = db.get(Business, business_id)
     if not b:
         raise HTTPException(404, "Prospect not found")
-    actor = db.scalar(select(User).where(User.email == _user.lower()))
     result = revert_to_to_contact(
         db,
         b,
         actor_id=actor.id if actor else None,
-        note="Manual revert to To contact",
+        note="Manual revert to Ready to contact",
     )
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    return {"ok": True, **result, "prospect": prospect_sales_dict(b, stage)}
+
+
+@router.post("/prospects/{business_id}/promote-ready", tags=["pipeline"])
+def sales_promote_ready(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    """To contact → Ready to contact when channel (+ IG warm) gates pass."""
+    from app.models import PipelineStage
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.automation import promote_to_ready
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    try:
+        result = promote_to_ready(db, b, actor_id=actor.id if actor else None)
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    return {
+        "ok": True,
+        **result,
+        "prospect": prospect_sales_dict(b, stage),
+        "ready_for_contact": True,
+        "outreach_channel": (b.outreach_channel or "").strip(),
+    }
+
+
+@router.post("/prospects/{business_id}/demote-to-contact", tags=["pipeline"])
+def sales_demote_to_contact(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Ready → To contact prep (keeps channel + warm ticks)."""
+    from app.models import PipelineStage
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.automation import demote_to_to_contact
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    result = demote_to_to_contact(db, b, actor_id=actor.id if actor else None)
     stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
     return {"ok": True, **result, "prospect": prospect_sales_dict(b, stage)}
 
@@ -1434,7 +1498,19 @@ def sales_contact_queue(
     _user: str = Depends(require_user),
     db=Depends(get_db),
 ):
-    from app.services.automation import rank_contact_queue
+    from app.services.authz import get_user_by_email
+    from app.services.automation import promote_due_follow_ups, rank_contact_queue
+
+    actor = get_user_by_email(db, _user)
+    try:
+        promote_due_follow_ups(
+            db,
+            product_line=product_line.upper(),
+            actor_id=actor.id if actor else None,
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
 
     return rank_contact_queue(
         db,

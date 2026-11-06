@@ -19,6 +19,8 @@ def _make_ig_lead(**overrides):
         phone="+61400000999",
         international_phone="+61400000999",
         marked_for_contact=True,
+        ready_for_contact=True,
+        outreach_channel="instagram",
         contacted=False,
         email_sent=False,
         whatsapp_sent=False,
@@ -51,18 +53,22 @@ def test_patch_ig_warm_ticks_round_trip(auth_client):
     bid = _make_ig_lead()
     r = auth_client.patch(
         f"/api/businesses/{bid}",
-        json={"ig_warm_follow": True, "ig_warm_like": True},
+        json={"ig_warm_follow": True},
     )
     assert r.status_code == 200, r.text
     data = r.json()
     assert data["ig_warm_follow"] is True
-    assert data["ig_warm_like"] is True
+    assert data["ig_warm_like"] is False
     assert data["ig_warm_comment"] is False
     assert data["ig_warm_complete"] is False
     assert data["instagram_sent"] is False
     assert data["contacted"] is False
 
-    r2 = auth_client.patch(f"/api/businesses/{bid}", json={"ig_warm_comment": True})
+    # Follow + like unlocks warm complete
+    r2 = auth_client.patch(
+        f"/api/businesses/{bid}",
+        json={"ig_warm_like": True},
+    )
     assert r2.status_code == 200, r2.text
     data2 = r2.json()
     assert data2["ig_warm_complete"] is True
@@ -76,7 +82,7 @@ def test_ig_confirm_without_warm_rejected(auth_client):
         json={"channel": "instagram", "message": "Hi — soft ask"},
     )
     assert r.status_code == 422, r.text
-    assert "warm incomplete" in r.text.lower() or "like" in r.text.lower()
+    assert "warm incomplete" in r.text.lower() or "like" in r.text.lower() or "comment" in r.text.lower()
     with SessionLocal() as db:
         b = db.get(Business, bid)
         assert b.instagram_sent is False
@@ -84,7 +90,8 @@ def test_ig_confirm_without_warm_rejected(auth_client):
 
 
 def test_ig_confirm_with_warm_ok(auth_client):
-    bid = _make_ig_lead(ig_warm_follow=True, ig_warm_like=True, ig_warm_comment=True)
+    # Follow + like is enough for soft DM
+    bid = _make_ig_lead(ig_warm_follow=True, ig_warm_like=True, ig_warm_comment=False)
     r = auth_client.post(
         f"/api/businesses/{bid}/confirm-sent",
         json={"channel": "instagram", "message": "Hi — soft ask"},
@@ -101,6 +108,8 @@ def test_wa_confirm_without_warm_ok(auth_client):
         ig_warm_follow=False,
         ig_warm_like=False,
         ig_warm_comment=False,
+        outreach_channel="whatsapp",
+        ready_for_contact=True,
     )
     r = auth_client.post(
         f"/api/businesses/{bid}/confirm-sent",

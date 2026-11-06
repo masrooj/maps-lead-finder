@@ -134,11 +134,15 @@ SOFT_OPENER_TEMPLATES = [
 Base.metadata.create_all(engine)
 apply_migrations()
 
-# Seed Sales OS catalog/stages/owner (idempotent)
+# Seed Sales OS catalog/stages/owner (idempotent) + remap marked→to_contact
 with SessionLocal() as _seed_db:
     try:
         seed_sales_os(_seed_db)
         backfill_prospect_stages(_seed_db)
+        from app.services.automation import promote_due_follow_ups
+
+        promote_due_follow_ups(_seed_db)
+        _seed_db.commit()
     except Exception:
         # Do not block app boot if seed races; APIs can re-run backfill
         pass
@@ -917,16 +921,23 @@ def business_dict(b: Business) -> dict:
         "ig_warm_follow_only": bool(
             getattr(b, "contacted", False) or getattr(b, "instagram_sent", False)
         ),
-        "ig_warm_complete": bool(
-            getattr(b, "ig_warm_follow", False)
+        "ig_warm_complete": (
+            bool(getattr(b, "ig_warm_follow", False))
             if (getattr(b, "contacted", False) or getattr(b, "instagram_sent", False))
             else (
-                getattr(b, "ig_warm_follow", False)
-                and getattr(b, "ig_warm_like", False)
-                and getattr(b, "ig_warm_comment", False)
+                bool(getattr(b, "ig_warm_follow", False))
+                and bool(getattr(b, "ig_warm_like", False) or getattr(b, "ig_warm_comment", False))
             )
         ),
+        "ig_warm_tick_count": sum(
+            1
+            for f in ("ig_warm_follow", "ig_warm_like", "ig_warm_comment")
+            if getattr(b, f, False)
+        ),
         "marked_for_contact": bool(getattr(b, "marked_for_contact", False)),
+        "ready_for_contact": bool(getattr(b, "ready_for_contact", False)),
+        "outreach_channel": (getattr(b, "outreach_channel", None) or "").strip(),
+        "follow_up_kind": (getattr(b, "follow_up_kind", None) or "").strip(),
         "archived": bool(getattr(b, "archived", False)),
         **cannot_contact_payload(b),
         "next_follow_up_at": iso_or_empty(getattr(b, "next_follow_up_at", None)),
@@ -1055,6 +1066,7 @@ def apply_business_updates(b: Business, data: dict, db=None):
         )
     # Already-contacted: only Follow warm tick is maintained (ignore like/comment updates).
     warm_follow_only = bool(getattr(b, "contacted", False) or getattr(b, "instagram_sent", False))
+    # ready_for_contact=True must pass channel/IG gates (same as promote-ready) — not a blind flip.
     bool_fields = (
         "contacted", "lost", "email_sent", "whatsapp_sent", "instagram_sent",
         "ig_warm_follow", "ig_warm_like", "ig_warm_comment",
@@ -1065,6 +1077,18 @@ def apply_business_updates(b: Business, data: dict, db=None):
             if warm_follow_only and field in ("ig_warm_like", "ig_warm_comment"):
                 continue
             setattr(b, field, bool(data[field]))
+    if "ready_for_contact" in data and data["ready_for_contact"] is not None:
+        from app.services.automation import advance_at_least, assert_ready_for_contact
+
+        want_ready = bool(data["ready_for_contact"])
+        if want_ready:
+            assert_ready_for_contact(b)
+            b.marked_for_contact = True
+            b.ready_for_contact = True
+            if db is not None:
+                advance_at_least(db, b, "ready_to_contact", note="Promoted to Ready via PATCH")
+        else:
+            b.ready_for_contact = False
     str_fields = {
         "notes": 5000,
         "outcome": 80,
@@ -1074,10 +1098,20 @@ def apply_business_updates(b: Business, data: dict, db=None):
         "website": 2000,
         "address": 2000,
         "cannot_contact_via": 40,
+        "follow_up_kind": 40,
     }
     for field, maxlen in str_fields.items():
         if field in data and data[field] is not None:
             setattr(b, field, str(data[field])[:maxlen])
+    if "outreach_channel" in data and data["outreach_channel"] is not None:
+        from app.services.automation import apply_outreach_channel
+
+        raw = str(data["outreach_channel"] or "").strip()
+        if raw:
+            apply_outreach_channel(b, raw)
+        else:
+            b.outreach_channel = ""
+            b.ready_for_contact = False
     if "cannot_contact" in data and data["cannot_contact"] is False:
         clear_cannot_contact(b, rematch=False)
     elif data.get("cannot_contact") is True:
@@ -1086,6 +1120,11 @@ def apply_business_updates(b: Business, data: dict, db=None):
     if data.get("marked_for_contact") is True:
         clear_cannot_contact(b, rematch=False)
         b.marked_for_contact = True
+        if "ready_for_contact" not in data:
+            b.ready_for_contact = False
+    if data.get("marked_for_contact") is False:
+        b.ready_for_contact = False
+        b.outreach_channel = ""
     if data.get("contacted") is True or data.get("email_sent") is True or data.get("whatsapp_sent") is True or data.get("instagram_sent") is True:
         if getattr(b, "cannot_contact", False) or cannot_contact_payload(b).get("cannot_contact"):
             clear_cannot_contact(b, rematch=False)
@@ -1802,6 +1841,9 @@ class UpdateBusiness(BaseModel):
     ig_warm_like: Optional[bool] = None
     ig_warm_comment: Optional[bool] = None
     marked_for_contact: Optional[bool] = None
+    ready_for_contact: Optional[bool] = None
+    outreach_channel: Optional[str] = Field(default=None, max_length=40)
+    follow_up_kind: Optional[str] = Field(default=None, max_length=40)
     archived: Optional[bool] = None
     cannot_contact: Optional[bool] = None
     cannot_contact_via: Optional[str] = Field(default=None, max_length=40)
@@ -1820,13 +1862,14 @@ class UpdateBusiness(BaseModel):
 def update_business(business_id: int, payload: UpdateBusiness, _user: str = Depends(require_login)):
     with SessionLocal() as db:
         from app.services.authz import get_user_by_email
-        from app.services.automation import maybe_log_ig_warm_complete
+        from app.services.automation import maybe_log_ig_warm_complete, on_marked_for_contact
 
         b = db.get(Business, business_id)
         if not b:
             raise HTTPException(404, "Business not found")
         data = payload.model_dump(exclude_unset=True)
         before_contacted = b.contacted
+        before_marked = bool(getattr(b, "marked_for_contact", False))
         before_warm = {
             "ig_warm_follow": bool(getattr(b, "ig_warm_follow", False)),
             "ig_warm_like": bool(getattr(b, "ig_warm_like", False)),
@@ -1838,6 +1881,9 @@ def update_business(business_id: int, payload: UpdateBusiness, _user: str = Depe
             raise HTTPException(422, str(e)) from e
         if data.get("marked_for_contact") is True:
             log_activity(db, b.id, "marked")
+            if not before_marked:
+                actor = get_user_by_email(db, _user)
+                on_marked_for_contact(db, b, actor_id=actor.id if actor else None)
         if data.get("marked_for_contact") is False:
             log_activity(db, b.id, "unmarked")
         if data.get("archived") is True:
@@ -1903,12 +1949,19 @@ def bulk_update(payload: BulkUpdate, _user: str = Depends(require_login)):
     if not data:
         raise HTTPException(422, "No updates provided.")
     with SessionLocal() as db:
+        from app.services.authz import get_user_by_email
+        from app.services.automation import on_marked_for_contact
+
+        actor = get_user_by_email(db, _user)
         rows = db.scalars(select(Business).where(Business.id.in_(ids))).all()
         for b in rows:
+            before_marked = bool(getattr(b, "marked_for_contact", False))
             try:
                 apply_business_updates(b, data, db)
             except ValueError as e:
                 raise HTTPException(422, str(e)) from e
+            if data.get("marked_for_contact") is True and not before_marked:
+                on_marked_for_contact(db, b, actor_id=actor.id if actor else None)
             log_activity(db, b.id, "bulk_update", note=json.dumps({k: data[k] for k in data}))
         db.commit()
         return {"updated": len(rows), "results": [business_dict(b) for b in rows]}
@@ -1920,6 +1973,8 @@ class ConfirmSent(BaseModel):
     notes: Optional[str] = Field(default=None, max_length=5000)
     outcome: Optional[str] = Field(default=None, max_length=80)
     message: Optional[str] = Field(default=None, max_length=20000)
+    # Invoice / pay-link compose may confirm without Ready (mirrors UI allowUnready).
+    allow_unready: bool = False
 
 
 @app.post("/api/businesses/{business_id}/confirm-sent", tags=["discover"])
@@ -1930,12 +1985,20 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
     field = f"{channel}_sent"
     with SessionLocal() as db:
         from app.services.authz import get_user_by_email
-        from app.services.automation import assert_ig_soft_send_allowed, on_outreach_confirmed
+        from app.services.automation import (
+            assert_confirm_sent_ready,
+            assert_ig_soft_send_allowed,
+            on_outreach_confirmed,
+        )
 
         b = db.get(Business, business_id)
         if not b:
             raise HTTPException(404, "Business not found")
         already_sent = bool(getattr(b, field, False))
+        try:
+            assert_confirm_sent_ready(b, allow_unready=bool(payload.allow_unready))
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
         if channel == "instagram":
             try:
                 assert_ig_soft_send_allowed(db, b, skip_cap=already_sent)
@@ -1970,6 +2033,9 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
             message=str(payload.message or ""),
             record_send=not already_sent,
         )
+        from app.services.automation import maybe_promote_follow_up
+
+        maybe_promote_follow_up(db, b, actor_id=actor.id if actor else None)
         db.commit()
         db.refresh(b)
         return business_dict(b)

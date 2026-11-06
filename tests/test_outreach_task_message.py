@@ -18,6 +18,8 @@ def test_confirm_sent_task_includes_business_and_message(auth_client):
             phone="+61400001111",
             international_phone="+61400001111",
             marked_for_contact=True,
+            ready_for_contact=True,
+            outreach_channel="whatsapp",
             contacted=False,
             social_links_json='{"instagram":"https://www.instagram.com/accounts/login/"}',
         )

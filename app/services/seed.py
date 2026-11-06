@@ -62,13 +62,25 @@ def seed_owner(db) -> User:
 
 
 def seed_stages(db) -> None:
+    """Idempotent: insert missing stages and refresh sort_order/names from config."""
     for product_line, stages in (("STANDALONE", STANDALONE_STAGES), ("SAAS", SAAS_STAGES)):
-        existing = db.scalars(
-            select(PipelineStage).where(PipelineStage.product_line == product_line)
-        ).all()
-        if existing:
-            continue
+        existing = {
+            s.slug: s
+            for s in db.scalars(
+                select(PipelineStage).where(PipelineStage.product_line == product_line)
+            ).all()
+        }
         for i, (slug, name, prob, terminal) in enumerate(stages):
+            row = existing.get(slug)
+            if row:
+                row.name = name
+                row.sort_order = i
+                row.probability = prob
+                row.is_terminal = terminal
+                row.is_won = slug in ("won", "subscribed")
+                row.is_lost = slug in ("lost", "churned")
+                row.active = True
+                continue
             db.add(
                 PipelineStage(
                     product_line=product_line,

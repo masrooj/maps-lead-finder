@@ -16,6 +16,8 @@ def test_confirm_sent_marks_contacted(auth_client):
             phone="+61400000001",
             international_phone="+61400000001",
             marked_for_contact=True,
+            ready_for_contact=True,
+            outreach_channel="whatsapp",
             contacted=False,
             email_sent=False,
             whatsapp_sent=False,

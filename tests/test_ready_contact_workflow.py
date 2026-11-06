@@ -1,0 +1,187 @@
+"""To contact prep → Ready to contact → confirm stays Contacted (not Follow-up)."""
+from __future__ import annotations
+
+import time
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import select
+
+from app.db import SessionLocal
+from app.models import Business, PipelineStage
+from app.services.automation import can_ready_for_contact, ig_warm_complete, maybe_promote_follow_up
+from app.services.pipeline import infer_slug_from_flags
+
+
+def _lead(**overrides):
+    data = dict(
+        place_id=f"qa/ready-{time.time_ns()}",
+        name="Ready Workflow Barber",
+        city="Sydney",
+        country="Australia",
+        email="ready@example.com",
+        phone="+61400000111",
+        international_phone="+61400000111",
+        marked_for_contact=True,
+        ready_for_contact=False,
+        outreach_channel="",
+        social_links_json='{"instagram":"https://instagram.com/readywf"}',
+        product_line="STANDALONE",
+    )
+    data.update(overrides)
+    with SessionLocal() as db:
+        b = Business(**data)
+        db.add(b)
+        db.commit()
+        db.refresh(b)
+        return b.id
+
+
+def test_ig_warm_complete_follow_plus_one():
+    b = Business(ig_warm_follow=True, ig_warm_like=True, ig_warm_comment=False)
+    assert ig_warm_complete(b) is True
+    b2 = Business(ig_warm_follow=True, ig_warm_like=False, ig_warm_comment=False)
+    assert ig_warm_complete(b2) is False
+    # like+comment without follow is not enough
+    b3 = Business(ig_warm_follow=False, ig_warm_like=True, ig_warm_comment=True)
+    assert ig_warm_complete(b3) is False
+
+
+def test_infer_slug_marked_is_to_contact():
+    b = Business(marked_for_contact=True, ready_for_contact=False, contacted=False, lost=False)
+    assert infer_slug_from_flags(b) == "to_contact"
+    b.ready_for_contact = True
+    assert infer_slug_from_flags(b) == "ready_to_contact"
+
+
+def test_email_channel_can_ready():
+    b = Business(
+        email="a@b.com",
+        outreach_channel="email",
+        phone="",
+        international_phone="",
+        social_links_json="{}",
+    )
+    ok, reason = can_ready_for_contact(b)
+    assert ok is True, reason
+
+
+def test_promote_ready_email(auth_client):
+    bid = _lead(outreach_channel="email", social_links_json="{}")
+    r = auth_client.post(f"/api/sales/prospects/{bid}/promote-ready")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body.get("ready_for_contact") is True
+    with SessionLocal() as db:
+        b = db.get(Business, bid)
+        assert b.ready_for_contact is True
+        stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+        assert stage is None or stage.slug == "ready_to_contact"
+
+
+def test_promote_ig_needs_warm(auth_client):
+    bid = _lead(outreach_channel="instagram")
+    r = auth_client.post(f"/api/sales/prospects/{bid}/promote-ready")
+    assert r.status_code == 422, r.text
+    auth_client.patch(
+        f"/api/businesses/{bid}",
+        json={"ig_warm_follow": True, "ig_warm_like": True},
+    )
+    r2 = auth_client.post(f"/api/sales/prospects/{bid}/promote-ready")
+    assert r2.status_code == 200, r2.text
+
+
+def test_confirm_stays_contacted_not_follow_up(auth_client):
+    bid = _lead(
+        outreach_channel="whatsapp",
+        ready_for_contact=True,
+        ig_warm_follow=True,
+        ig_warm_like=True,
+    )
+    r = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "whatsapp", "message": "hi"},
+    )
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        b = db.get(Business, bid)
+        assert b.contacted is True
+        assert b.follow_up_kind == "call_today"
+        stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+        assert stage is None or stage.slug == "contacted"
+
+
+def test_scheduled_due_promotes_follow_up(auth_client):
+    bid = _lead(ready_for_contact=True, outreach_channel="email")
+    r = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "email", "next_follow_up_at": "2020-01-01", "message": "hi"},
+    )
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        b = db.get(Business, bid)
+        assert b.follow_up_kind == "scheduled"
+        # confirm-sent promotes immediately when due is already past
+        stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+        assert stage is not None and stage.slug == "follow_up"
+        # idempotent — already on follow_up
+        assert maybe_promote_follow_up(db, b) is False
+
+
+def test_revert_goes_to_ready(auth_client):
+    bid = _lead(ready_for_contact=True, outreach_channel="email")
+    auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "email", "message": "hi"},
+    )
+    r = auth_client.post(f"/api/sales/prospects/{bid}/revert-to-contact")
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        b = db.get(Business, bid)
+        assert b.contacted is False
+        assert b.ready_for_contact is True
+        assert (b.outreach_channel or "") == "email"
+        stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+        assert stage is None or stage.slug == "ready_to_contact"
+
+
+def test_channel_switch_to_ig_demotes_ready(auth_client):
+    bid = _lead(outreach_channel="email", ready_for_contact=True)
+    r = auth_client.patch(f"/api/businesses/{bid}", json={"outreach_channel": "instagram"})
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert data["outreach_channel"] == "instagram"
+    assert data["ready_for_contact"] is False
+
+
+def test_confirm_unready_rejected(auth_client):
+    bid = _lead(ready_for_contact=False, outreach_channel="email")
+    r = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "email", "message": "skip ready"},
+    )
+    assert r.status_code == 422, r.text
+    assert "ready" in r.text.lower()
+    with SessionLocal() as db:
+        b = db.get(Business, bid)
+        assert b.contacted is False
+        assert b.email_sent is False
+
+
+def test_confirm_allow_unready_ok(auth_client):
+    bid = _lead(ready_for_contact=False, outreach_channel="email")
+    r = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "email", "message": "invoice", "allow_unready": True},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json().get("contacted") is True
+
+
+def test_patch_ready_true_requires_channel(auth_client):
+    bid = _lead(outreach_channel="", ready_for_contact=False)
+    r = auth_client.patch(f"/api/businesses/{bid}", json={"ready_for_contact": True})
+    assert r.status_code == 422, r.text
+    auth_client.patch(f"/api/businesses/{bid}", json={"outreach_channel": "email"})
+    r2 = auth_client.patch(f"/api/businesses/{bid}", json={"ready_for_contact": True})
+    assert r2.status_code == 200, r2.text
+    assert r2.json().get("ready_for_contact") is True

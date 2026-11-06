@@ -63,6 +63,7 @@ USER_ROLES = ("owner", "sales", "viewer")
 
 STANDALONE_STAGES = [
     ("identified", "Identified", 0.05, False),
+    ("to_contact", "To Contact", 0.08, False),
     ("ready_to_contact", "Ready to Contact", 0.10, False),
     ("contacted", "Contacted", 0.15, False),
     ("follow_up", "Follow-up", 0.20, False),
@@ -79,6 +80,7 @@ STANDALONE_STAGES = [
 
 SAAS_STAGES = [
     ("identified", "Identified", 0.05, False),
+    ("to_contact", "To Contact", 0.08, False),
     ("ready_to_contact", "Ready to Contact", 0.10, False),
     ("contacted", "Contacted", 0.15, False),
     ("follow_up", "Follow-up", 0.20, False),

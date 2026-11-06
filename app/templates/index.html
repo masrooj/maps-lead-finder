@@ -330,8 +330,9 @@
       <div class="queue-tabs queue-tabs-sticky" id="contactQueueTabs" role="tablist" aria-label="Contact queue views">
         <button type="button" role="tab" class="active" data-cq-tab="all" aria-selected="true">All <span class="tab-count" id="contactQueueAllCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="selected" aria-selected="false">To contact <span class="tab-count" id="contactQueueSelectedCount">0</span></button>
-        <button type="button" role="tab" data-cq-tab="booking" aria-selected="false">Has booking <span class="tab-count" id="contactQueueBookingCount">0</span></button>
+        <button type="button" role="tab" data-cq-tab="ready" aria-selected="false">Ready to contact <span class="tab-count" id="contactQueueReadyCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="contacted" aria-selected="false">Contacted <span class="tab-count" id="contactQueueContactedCount">0</span></button>
+        <button type="button" role="tab" data-cq-tab="booking" aria-selected="false">Has booking <span class="tab-count" id="contactQueueBookingCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="cannot" aria-selected="false">Can't contact <span class="tab-count" id="contactQueueCannotCount">0</span></button>
       </div>
       <div class="fields filter-bar" style="margin-bottom:10px">
@@ -370,9 +371,12 @@
         <button type="button" class="queue-search-clear" id="contactQueueSearchClear" title="Clear search" aria-label="Clear search">✕</button>
       </div>
       <div class="bulkbar" id="contactQueueSelectedBar">
-        <span id="contactQueueSelectedHint">Send messages from this list</span>
+        <span id="contactQueueSelectedHint">Prep channel + warm here — messaging is on Ready</span>
+      </div>
+      <div class="bulkbar" id="contactQueueReadyBar">
+        <span id="contactQueueReadyHint">Send messages from Ready only</span>
         <button type="button" class="primary" id="contactQueueMessageNext" disabled>Message next</button>
-        <button type="button" id="contactQueueClearSelected" title="Unmark all on this list">Clear to contact</button>
+        <button type="button" id="contactQueueClearReady" title="Demote all on this list back to To contact">Demote to To contact</button>
       </div>
       <div id="contactQueueList" class="leads list-shell" style="min-height:160px"></div>
       <div class="bulkbar queue-footbar" id="contactQueueBulkBar">

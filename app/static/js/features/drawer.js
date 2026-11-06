@@ -7,19 +7,29 @@ import { drawerSkeletonHtml } from '../core/skeleton.js';
 
 export const FEATURE = 'drawer';
 
-/** Discover + Contact queue: outreach only (no Sales / Proposal / Delivery). */
+/** CRM-only tabs (Sales / Proposal / Delivery). */
 export const DRAWER_CRM_TABS = ['sales', 'proposal', 'appointhive'];
+
+/** Discover: triage only. */
+export const DRAWER_DISCOVER_TABS = ['overview', 'contacts'];
+
+/** Contact queue: overview + contacts + activity (no pipeline edits). */
+export const DRAWER_QUEUE_TABS = ['overview', 'contacts', 'activity'];
 
 export function isOutreachDrawerPanel(panel) {
   return panel === 'leads' || panel === 'contactQueue';
 }
 
 export function resolveDrawerMode(panel) {
-  return isOutreachDrawerPanel(panel) ? 'outreach' : 'crm';
+  if (panel === 'leads') return 'discover';
+  if (panel === 'contactQueue') return 'queue';
+  return 'crm';
 }
 
 export function clampDrawerTab(tab, mode) {
   const t = tab || 'overview';
+  if (mode === 'discover' && !DRAWER_DISCOVER_TABS.includes(t)) return 'overview';
+  if (mode === 'queue' && !DRAWER_QUEUE_TABS.includes(t)) return 'overview';
   if (mode === 'outreach' && DRAWER_CRM_TABS.includes(t)) return 'overview';
   return t;
 }

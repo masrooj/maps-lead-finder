@@ -27,7 +27,7 @@ import {
 import { wireProspectPicker, pickProspectField } from '../features/prospect-picker.js';
 import { scoreOpts, readScoreCriteria, refreshScorePreview } from '../features/scoring.js';
 import {
-  contactQueueSelectedLeads, fillContactQueueLocationFilters, contactQueueMatchQuery,
+  contactQueueSelectedLeads, contactQueueReadyLeads, fillContactQueueLocationFilters, contactQueueMatchQuery,
   contactQueueBookingLeads, contactQueueChannelMatch, contactQueueIsParked,
   contactQueueVisibleLeads, fillContactQueueModes, renderContactQueueExplain,
   syncContactQueueSearchUi, syncContactQueueTabs, mapsUrlFor, channelTagsHtml,
@@ -82,6 +82,8 @@ let locations={};
 let selectedIds=new Set();
 let composeLead=null;
 let composePreferred='email';
+/** True when compose opened via invoice/pay (API confirm may skip Ready gate). */
+let composeAllowUnready=false;
 let drawerLead=null;
 let drawerTab='overview';
 let drawerMode='crm'; // outreach (Discover/CQ) | crm (Prospects + money flows)
@@ -880,11 +882,13 @@ async function loadSettings(){
 
 async function moveProspectStage(id, stageId, note='', lostReason=''){
   try{
-    await api('/api/sales/prospects/'+id+'/stage',{method:'POST',body:{stage_id:Number(stageId),note,lost_reason:lostReason||'',force:!lostReason}});
+    // force=false so Ready gates (channel + IG warm) are enforced on drag/move
+    await api('/api/sales/prospects/'+id+'/stage',{method:'POST',body:{stage_id:Number(stageId),note,lost_reason:lostReason||'',force:false}});
     toast('Stage updated'); await loadPipeline();
     return true;
   }catch(e){
-    if(String(e.message||e).includes('lost_reason')){
+    const msg=String(e.message||e);
+    if(msg.includes('lost_reason')){
       const form=await uiForm({
         title:'Lost reason required',
         message:'Moving to Lost needs a short reason for reporting.',
@@ -897,7 +901,8 @@ async function moveProspectStage(id, stageId, note='', lostReason=''){
       toast('Stage updated'); await loadPipeline();
       return true;
     }
-    throw e;
+    toast(msg, true);
+    return false;
   }
 }
 
@@ -948,12 +953,19 @@ async function loadPipeline(){
     const s=col.stage||{};
     const val=col.value_by_currency||{};
     const valStr=Object.keys(val).length?Object.entries(val).map(([c,v])=>`${c} ${Number(v).toFixed(0)}`).join(' · '):'—';
-    const cards=(col.prospects||[]).map(p=>`
+    const cards=(col.prospects||[]).map(p=>{
+      const badge=p.follow_up_badge&&p.follow_up_badge.label
+        ?`<span class="ch-tag" title="Follow-up timing">${esc(p.follow_up_badge.label)}</span>`
+        :(p.follow_up_kind==='call_today'?`<span class="ch-tag">Call today</span>`:'');
+      const ch=p.outreach_channel?`<span class="sub">${esc(p.outreach_channel)}</span>`:'';
+      return `
       <div class="kanban-card" draggable="true" data-id="${p.id}" data-stage-id="${s.id}">
         <strong>${esc(p.name||'Unnamed')}</strong>
         <span>${esc(p.city||'')} · ${p.deal_value!=null?esc(String(p.currency||''))+' '+esc(String(p.deal_value)):'no value'}</span>
+        ${badge||ch?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${badge}${ch}</div>`:''}
         <div class="actions" style="margin-top:6px"><button type="button" class="stage-move" data-id="${p.id}" data-stage-id="${s.id}">Move</button></div>
-      </div>`).join('')||'<div class="hint">Empty — drag a card here</div>';
+      </div>`;
+    }).join('')||'<div class="hint">Empty — drag a card here</div>';
     return `<div class="kanban-col" data-stage-id="${s.id}"><h3>${esc(s.name||'')}</h3><div class="kanban-meta">${col.count||0} · ${esc(valStr)} · ${Math.round((s.probability||0)*100)}%</div>${cards}</div>`;
   }).join('');
   $('kanban').querySelectorAll('.stage-move').forEach(btn=>btn.addEventListener('click',async ev=>{
@@ -1273,7 +1285,7 @@ async function sendPayLinkFlow(){
         :(instr
           ?`Hi {{name}},\n\nPlease pay invoice ${number} using these instructions:\n\n${instr}\n\nThanks.`
           :`Hi {{name}}, your AppointHive invoice ${number} is ready. Reply and we will send payment instructions.`);
-      openCompose(drawerLead, channelForm.channel||'email');
+      openCompose(drawerLead, channelForm.channel||'email', {allowUnready:true});
       requestAnimationFrame(()=>{
         if($('composeBody')) $('composeBody').value=payMsg.replace(/\{\{name\}\}/g, drawerLead.name||'there');
         copyComposeMessage().catch(()=>{});
@@ -1988,23 +2000,16 @@ function reachCell(b){
     const handle=instagramHandle(ig) || '';
     const href=instagramProfileWebUrl(handle, ig, b.name||'');
     parts.push(`<button type="button" class="chip ok" data-open-ig-profile="${esc(ig)}" data-ig-handle="${esc(handle)}" data-ig-biz="${esc(b.name||'')}" title="${esc(handle?('@'+handle):href)}">Instagram</button>`);
-  }else if(leadNeedsIgDiscover(b)){
-    parts.push(`<button type="button" class="chip" data-ig-discover="${b.id}" title="Scan website for Instagram">Find IG</button>`);
   }
   return parts.length?`<div class="reach">${parts.join('')}</div>`:'<div class="sub">No contact details</div>';
 }
 
 function actionButtons(b){
-  const c=contactChannels(b);
+  // Discover triage only — messaging lives on Contact queue → Ready
   const parts=[];
-  if(c.email)parts.push(`<button type="button" data-compose="${b.id}" data-channel="email">Email</button>`);
-  if(c.whatsapp)parts.push(`<button type="button" data-compose="${b.id}" data-channel="whatsapp">WA</button>`);
-  if(c.instagram)parts.push(`<button type="button" data-compose="${b.id}" data-channel="instagram">IG</button>`);
-  else if(leadNeedsIgDiscover(b))parts.push(`<button type="button" data-ig-discover="${b.id}">Find IG</button>`);
   const hasBook=!!(b.current_booking_software||'').trim();
   parts.push(`<button type="button" data-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>`);
   parts.push(`<button type="button" data-open="${b.id}">Details</button>`);
-  // Do not stopPropagation here — Email/WA/IG/Details are handled by the #rows click listener
   return `<div class="lead-actions actions">${parts.join('')}</div>`;
 }
 
@@ -2442,10 +2447,16 @@ async function copyComposeMessage(){
     toast('Select the message and copy (⌘/Ctrl+C)',true);
   }
 }
-async function openCompose(b,preferred){
-  composeLead=b;openedChannel=null;
+async function openCompose(b,preferred,opts={}){
+  composeLead=b;openedChannel=null;composeAllowUnready=!!opts.allowUnready;
   wireIgWarmCompose();
   if(b.opt_out){showMessage('Prospect is opted out — outreach blocked.',true);return}
+  // Cold outreach only from Ready (invoice/pay flows pass allowUnready)
+  const alreadyTouched=!!(b.contacted || b.email_sent || b.whatsapp_sent || b.instagram_sent);
+  if(!opts.allowUnready && !alreadyTouched && !b.ready_for_contact){
+    showMessage('Move this lead to Ready to contact first (pick channel + IG warm on To contact).',true);
+    return;
+  }
   // Website may link IG even when social_links is empty — discover before gating channels
   if(preferred==='instagram' || leadNeedsIgDiscover(b)){
     try{
@@ -2510,7 +2521,7 @@ function syncComposeMarkBtn(){
 function closeCompose(){
   clearComposeConfirmReturn();
   $('composeModal').classList.add('hidden');
-  composeLead=null;openedChannel=null;
+  composeLead=null;openedChannel=null;composeAllowUnready=false;
   $('igCopyBox').classList.add('hidden');
   if($('drawer').classList.contains('hidden'))document.body.style.overflow='';
 }
@@ -2629,6 +2640,7 @@ async function confirmSent(opts={}){
     if(outcome)body.outcome=outcome;
     if(notes)body.notes=notes;
     if(message)body.message=message;
+    if(composeAllowUnready) body.allow_unready=true;
     const updated=await api('/api/businesses/'+composeLead.id+'/confirm-sent',{method:'POST',body});
     // Patch Discover + Contact queue caches so Contacted tab / badges update immediately
     const patch={
@@ -2662,12 +2674,11 @@ async function confirmSent(opts={}){
     await load();
     if(appPanel==='contactQueue' || sharedState.appPanel==='contactQueue'){
       try{
-        // Stay on To contact (or current tab) — do not auto-jump to Contacted.
-        // Lead drops out of To contact; list scrolls to top via setContactQueueTab/render.
+        // Stay on Ready/current tab — lead drops out of Ready into Contacted.
         await loadContactQueue({keepTab:true});
         if(!opts.next){
-          if(sharedState.contactQueueTab==='selected' || sharedState.contactQueueTab==='all'){
-            setContactQueueTab(sharedState.contactQueueTab||'selected');
+          if(sharedState.contactQueueTab==='ready' || sharedState.contactQueueTab==='selected' || sharedState.contactQueueTab==='all'){
+            setContactQueueTab(sharedState.contactQueueTab||'ready');
           }
           renderContactQueueList();
         }
@@ -2739,13 +2750,17 @@ function renderDrawer(){
   $('drawerTitle').textContent=b.name;
   $('drawerSub').textContent=`${b.category||'—'} · ${b.city}, ${b.country}`;
   const s=b.social_links||{};
-  const outreach=drawerMode==='outreach';
+  const outreach=drawerMode==='discover'||drawerMode==='queue'||drawerMode==='outreach';
+  const discoverOnly=drawerMode==='discover';
+  const queueOnly=drawerMode==='queue';
   const tab=clampDrawerTab(drawerTab||'overview', drawerMode);
   drawerTab=tab;
   const crmTabs=outreach?'':`
       <button type="button" data-dtab="sales" class="${tab==='sales'?'active':''}">Sales</button>
       <button type="button" data-dtab="proposal" class="${tab==='proposal'?'active':''}">Proposal / pay</button>
       <button type="button" data-dtab="appointhive" class="${tab==='appointhive'?'active':''}">Delivery / pay</button>`;
+  const pipelineTab=discoverOnly||queueOnly?'':`<button type="button" data-dtab="pipeline" class="${tab==='pipeline'?'active':''}">Pipeline</button>`;
+  const activityTab=discoverOnly?'':`<button type="button" data-dtab="activity" class="${tab==='activity'?'active':''}">Activity</button>`;
   const crmPanes=outreach?'':`
     <div class="drawer-pane ${tab==='sales'?'active':''}" data-dpane="sales">
       <div class="field"><label for="drawerDealValue">Deal value</label><input id="drawerDealValue" type="number" step="0.01" value="${esc(b.deal_value??'')}" placeholder="e.g. 2500"></div>
@@ -2825,8 +2840,8 @@ function renderDrawer(){
       <button type="button" data-dtab="overview" class="${tab==='overview'?'active':''}">Overview</button>
       <button type="button" data-dtab="contacts" class="${tab==='contacts'?'active':''}">Contacts</button>
       ${crmTabs}
-      <button type="button" data-dtab="pipeline" class="${tab==='pipeline'?'active':''}">Pipeline</button>
-      <button type="button" data-dtab="activity" class="${tab==='activity'?'active':''}">Activity</button>
+      ${pipelineTab}
+      ${activityTab}
     </div>
     <div class="drawer-pane ${tab==='overview'?'active':''}" data-dpane="overview">
       <div class="field"><label>Status</label><div>${statusBadge(b)}</div></div>
@@ -2852,10 +2867,14 @@ function renderDrawer(){
       <div class="field"><label for="drawerWebsite">Website</label><input id="drawerWebsite" value="${esc(b.website||'')}" placeholder="https://"></div>
       <div class="field"><label for="drawerInstagram">Instagram URL</label><input id="drawerInstagram" value="${esc(s.instagram||'')}" placeholder="https://instagram.com/…"></div>
       <div class="field"><label for="drawerAddress">Address</label><input id="drawerAddress" value="${esc(b.address||'')}"></div>
-      <div class="drawer-actions"><button type="button" class="primary" id="saveDrawerBtn">Save contacts & flags</button><button type="button" id="enrichDrawerBtn">Enrich</button></div>
+      <div class="drawer-actions">
+        <button type="button" class="primary" id="saveDrawerBtn">Save contacts & flags</button>
+        <button type="button" id="enrichDrawerBtn">Enrich</button>
+        ${!s.instagram && (b.website||'').trim() ? `<button type="button" data-ig-discover="${b.id}">Find IG</button>` : ''}
+      </div>
     </div>
     ${crmPanes}
-    <div class="drawer-pane ${tab==='pipeline'?'active':''}" data-dpane="pipeline">
+    ${discoverOnly||queueOnly?'':`<div class="drawer-pane ${tab==='pipeline'?'active':''}" data-dpane="pipeline">
       <p class="hint" style="margin-top:0">Flags sync with auto-pipeline. Confirm-sent on first email/WA/IG starts tasks + activities and moves stage.</p>
       <label class="flag"><input type="checkbox" data-dfield="marked_for_contact" ${b.marked_for_contact?'checked':''}> Marked for contact</label>
       <label class="flag"><input type="checkbox" data-dfield="email_sent" ${b.email_sent?'checked':''}> Email sent</label>
@@ -2888,10 +2907,10 @@ function renderDrawer(){
           :'<button type="button" id="archiveDrawerBtn">Archive</button>'}
         <button type="button" class="danger" id="deleteDrawerBtn">Delete</button>
       </div>
-    </div>
-    <div class="drawer-pane ${tab==='activity'?'active':''}" data-dpane="activity">
+    </div>`}
+    ${discoverOnly?'':`<div class="drawer-pane ${tab==='activity'?'active':''}" data-dpane="activity">
       <ul class="activity" id="activityList"><li class="sub">Loading…</li></ul>
-    </div>`;
+    </div>`}`;
   $('drawerBody').querySelectorAll('[data-dtab]').forEach(btn=>btn.addEventListener('click',()=>{
     drawerTab=clampDrawerTab(btn.dataset.dtab, drawerMode); renderDrawer(); refreshScorePreview(); if(drawerTab==='activity'&&drawerLead) loadActivity(drawerLead.id);
   }));
@@ -3287,22 +3306,24 @@ $('contactQueueClearPick')&&$('contactQueueClearPick').addEventListener('click',
   renderContactQueueList();
 });
 $('contactQueueMessageNext')&&$('contactQueueMessageNext').addEventListener('click',async()=>{
-  const next=contactQueueSelectedLeads()[0];
-  if(!next){ toast('No leads on To contact',true); return; }
+  const next=contactQueueReadyLeads()[0];
+  if(!next){ toast('No leads on Ready to contact',true); return; }
   try{
-    await openCompose(next, preferredColdChannel(next));
+    const preferred=(next.outreach_channel||'').trim()||preferredColdChannel(next);
+    await openCompose(next, preferred);
   }catch(e){ toast(e.message,true); }
 });
-$('contactQueueClearSelected')&&$('contactQueueClearSelected').addEventListener('click',async()=>{
-  const ids=contactQueueSelectedLeads().map(b=>b.id);
+$('contactQueueClearReady')&&$('contactQueueClearReady').addEventListener('click',async()=>{
+  const ids=contactQueueReadyLeads().map(b=>b.id);
   if(!ids.length) return;
-  const ok=await uiConfirm({title:'Clear To contact?', message:'Unmarks all leads on the To contact tab. Fresh ones return to Discover.', confirmLabel:'Clear To contact', danger:true});
+  const ok=await uiConfirm({title:'Demote Ready list?', message:'Moves all Ready leads back to To contact prep (keeps channel + warm).', confirmLabel:'Demote all', danger:false});
   if(!ok) return;
   try{
-    await markContactQueueIds(ids, false);
+    for(const id of ids){
+      await api('/api/sales/prospects/'+id+'/demote-to-contact',{method:'POST',body:{}});
+    }
     await loadContactQueue({keepTab:true});
-    toast('To contact cleared — fresh leads back in Discover');
-    if(typeof load==='function') load().catch(()=>{});
+    toast('Demoted to To contact');
   }catch(e){ toast(e.message,true); }
 });
 $('dealsRefresh')&&$('dealsRefresh').addEventListener('click',()=>loadDeals().catch(e=>toast(e.message,true)));

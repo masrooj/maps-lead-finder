@@ -19,6 +19,7 @@ def _utcnow() -> datetime:
 
 STANDALONE_ORDER = [
     "identified",
+    "to_contact",
     "ready_to_contact",
     "contacted",
     "follow_up",
@@ -33,6 +34,7 @@ STANDALONE_ORDER = [
 
 SAAS_ORDER = [
     "identified",
+    "to_contact",
     "ready_to_contact",
     "contacted",
     "follow_up",
@@ -44,6 +46,8 @@ SAAS_ORDER = [
     "trial_active",
     "subscribed",
 ]
+
+OUTREACH_CHANNELS = ("whatsapp", "instagram", "email")
 
 # Map STANDALONE-oriented targets onto SaaS equivalents when needed
 _SAAS_ALIAS = {
@@ -88,16 +92,22 @@ def ig_warm_follow_only(b: Business) -> bool:
     return bool(getattr(b, "contacted", False) or getattr(b, "instagram_sent", False))
 
 
+def ig_warm_tick_count(b: Business) -> int:
+    return sum(
+        1
+        for field in ("ig_warm_follow", "ig_warm_like", "ig_warm_comment")
+        if getattr(b, field, False)
+    )
+
+
 def ig_warm_complete(b: Business) -> bool:
-    """True when required IG warm ticks are set for this lead's contact state."""
+    """Cold: Follow required + ≥1 of like/comment (2 of 3). Contacted: Follow only."""
     follow = bool(getattr(b, "ig_warm_follow", False))
     if ig_warm_follow_only(b):
         return follow
-    return bool(
-        follow
-        and getattr(b, "ig_warm_like", False)
-        and getattr(b, "ig_warm_comment", False)
-    )
+    if not follow:
+        return False
+    return bool(getattr(b, "ig_warm_like", False) or getattr(b, "ig_warm_comment", False))
 
 
 def ig_warm_payload(b: Business) -> dict:
@@ -105,13 +115,161 @@ def ig_warm_payload(b: Business) -> dict:
     like = bool(getattr(b, "ig_warm_like", False))
     comment = bool(getattr(b, "ig_warm_comment", False))
     follow_only = ig_warm_follow_only(b)
+    complete = ig_warm_complete(b)
     return {
         "ig_warm_follow": follow,
         "ig_warm_like": like,
         "ig_warm_comment": comment,
         "ig_warm_follow_only": follow_only,
-        "ig_warm_complete": follow if follow_only else (follow and like and comment),
+        "ig_warm_complete": complete,
+        "ig_warm_tick_count": ig_warm_tick_count(b),
     }
+
+
+def normalize_outreach_channel(value: Any) -> str:
+    ch = str(value or "").strip().lower()
+    return ch if ch in OUTREACH_CHANNELS else ""
+
+
+def can_ready_for_contact(b: Business, channel: Optional[str] = None) -> tuple[bool, str]:
+    """Whether promote-to-Ready is allowed. Returns (ok, reason)."""
+    ch = normalize_outreach_channel(channel if channel is not None else getattr(b, "outreach_channel", ""))
+    if not ch:
+        return False, "Pick WhatsApp, Instagram, or Email first"
+    facts = _channel_facts(b)
+    if ch == "whatsapp":
+        if not facts.get("has_phone"):
+            return False, "No phone for WhatsApp"
+        return True, ""
+    if ch == "email":
+        if not facts.get("has_email"):
+            return False, "No email address"
+        return True, ""
+    if ch == "instagram":
+        if not facts.get("has_instagram"):
+            return False, "No Instagram handle"
+        if not ig_warm_complete(b):
+            return False, "IG warm needs Follow + like or comment"
+        return True, ""
+    return False, "Unknown channel"
+
+
+def assert_ready_for_contact(b: Business, channel: Optional[str] = None) -> None:
+    ok, reason = can_ready_for_contact(b, channel)
+    if not ok:
+        raise ValueError(reason or "Not ready for contact")
+
+
+def assert_confirm_sent_ready(b: Business, *, allow_unready: bool = False) -> None:
+    """First cold confirm-sent requires Ready (UI + API). Invoice/pay may pass allow_unready."""
+    if allow_unready or _is_contacted_queue_state(b):
+        return
+    if not bool(getattr(b, "ready_for_contact", False)):
+        raise ValueError(
+            "Move to Ready to contact first (pick channel + IG warm on To contact)"
+        )
+
+
+def apply_outreach_channel(b: Business, channel: str) -> None:
+    """Set outreach channel; demote from Ready if switching to IG without warm."""
+    ch = normalize_outreach_channel(channel)
+    if not ch:
+        raise ValueError("outreach_channel must be whatsapp, instagram, or email")
+    facts = _channel_facts(b)
+    if ch == "whatsapp" and not facts.get("has_phone"):
+        raise ValueError("No phone for WhatsApp")
+    if ch == "email" and not facts.get("has_email"):
+        raise ValueError("No email address")
+    if ch == "instagram" and not facts.get("has_instagram"):
+        raise ValueError("No Instagram handle")
+    b.outreach_channel = ch
+    if ch == "instagram" and not ig_warm_complete(b):
+        b.ready_for_contact = False
+    b.updated_at = _utcnow()
+
+
+def promote_to_ready(db, b: Business, *, actor_id: Optional[int] = None) -> dict:
+    assert_ready_for_contact(b)
+    b.marked_for_contact = True
+    b.ready_for_contact = True
+    clear_cannot_contact(b, rematch=False)
+    b.updated_at = _utcnow()
+    advance_at_least(db, b, "ready_to_contact", actor_id=actor_id, note="Promoted to Ready to contact")
+    db.commit()
+    db.refresh(b)
+    return {"ok": True, "ready_for_contact": True, "outreach_channel": b.outreach_channel or ""}
+
+
+def demote_to_to_contact(db, b: Business, *, actor_id: Optional[int] = None, note: str = "") -> dict:
+    """Ready → To contact prep; keep channel + warm ticks."""
+    b.marked_for_contact = True
+    b.ready_for_contact = False
+    b.contacted = False
+    b.updated_at = _utcnow()
+    db.add(
+        Activity(
+            business_id=b.id,
+            activity_type="demoted_to_contact",
+            summary="Demoted from Ready to To contact",
+            outcome=(note or "")[:500],
+            created_by=actor_id,
+        )
+    )
+    pl = (b.product_line or "STANDALONE").upper()
+    target = get_stage(db, pl, "to_contact")
+    moved = False
+    if target:
+        move_stage(db, b, target.id, actor_id=actor_id, note=note or "Demoted to To contact", force=True)
+        moved = True
+        return {"ok": True, "ready_for_contact": False, "stage_moved": moved}
+    db.commit()
+    db.refresh(b)
+    return {"ok": True, "ready_for_contact": False, "stage_moved": moved}
+
+
+def maybe_promote_follow_up(db, b: Business, *, actor_id: Optional[int] = None) -> bool:
+    """Move contacted → follow_up when a scheduled due date is due/past (not call_today)."""
+    if not b.contacted or b.lost:
+        return False
+    kind = (getattr(b, "follow_up_kind", None) or "").strip()
+    if kind == "call_today":
+        return False
+    due = getattr(b, "next_follow_up_at", None)
+    if not due:
+        return False
+    due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
+    if due_aware > _utcnow():
+        return False
+    current = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    if current and current.slug not in ("contacted", "ready_to_contact", "to_contact", "identified"):
+        if current.slug == "follow_up":
+            return False
+        # Already past follow_up in the funnel
+        if _stage_index(current.slug, b.product_line or "STANDALONE") > _stage_index("follow_up", b.product_line or "STANDALONE"):
+            return False
+    return advance_at_least(db, b, "follow_up", actor_id=actor_id, note="Auto: scheduled follow-up due")
+
+
+def follow_up_badge(b: Business) -> dict:
+    """UI badge helpers for Contacted / Follow-up columns."""
+    due = getattr(b, "next_follow_up_at", None)
+    kind = (getattr(b, "follow_up_kind", None) or "").strip()
+    if kind == "call_today":
+        return {"kind": "call_today", "label": "Call today", "days": 0}
+    if not due:
+        return {"kind": "", "label": "", "days": None}
+    due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
+    now = _utcnow()
+    delta_days = (due_aware.date() - now.date()).days
+    if delta_days < 0:
+        return {"kind": "overdue", "label": f"Overdue {-delta_days}d", "days": delta_days}
+    if delta_days == 0:
+        return {"kind": "due_today", "label": "Due today", "days": 0}
+    if delta_days <= 3:
+        return {"kind": "plus3", "label": f"+{delta_days} day follow-up", "days": delta_days}
+    if delta_days <= 7:
+        return {"kind": "plus7", "label": f"+{delta_days} day follow-up", "days": delta_days}
+    return {"kind": "scheduled", "label": f"+{delta_days} day follow-up", "days": delta_days}
 
 
 def _setting_value(db, key: str, default: str = "") -> str:
@@ -204,15 +362,14 @@ def assert_ig_soft_send_allowed(db, b: Business, *, skip_cap: bool = False) -> N
         if skip_cap:
             # Re-confirm / note update on a lead already marked IG-sent.
             return
+        if ig_warm_follow_only(b):
+            raise ValueError("IG warm incomplete: follow")
         missing = []
         if not getattr(b, "ig_warm_follow", False):
             missing.append("follow")
-        if not ig_warm_follow_only(b):
-            if not getattr(b, "ig_warm_like", False):
-                missing.append("like")
-            if not getattr(b, "ig_warm_comment", False):
-                missing.append("comment")
-        raise ValueError(f"IG warm incomplete: {', '.join(missing)}")
+        if not (getattr(b, "ig_warm_like", False) or getattr(b, "ig_warm_comment", False)):
+            missing.append("like or comment")
+        raise ValueError(f"IG warm incomplete: {', '.join(missing) or 'follow + like/comment'}")
     if skip_cap:
         return
     quota = ig_outreach_quota(db)
@@ -225,10 +382,14 @@ def assert_ig_soft_send_allowed(db, b: Business, *, skip_cap: bool = False) -> N
 def maybe_log_ig_warm_complete(db, b: Business, *, actor_id: Optional[int] = None, before: dict) -> None:
     """When required warm ticks flip complete, log one sales Activity (not outreach_sent)."""
     follow_only = ig_warm_follow_only(b)
-    before_follow = bool(before.get("ig_warm_follow"))
-    before_like = bool(before.get("ig_warm_like"))
-    before_comment = bool(before.get("ig_warm_comment"))
-    was = before_follow if follow_only else (before_follow and before_like and before_comment)
+    if follow_only:
+        was = bool(before.get("ig_warm_follow"))
+        outcome = "follow"
+    else:
+        was_follow = bool(before.get("ig_warm_follow"))
+        was_extra = bool(before.get("ig_warm_like") or before.get("ig_warm_comment"))
+        was = was_follow and was_extra
+        outcome = "follow+" + ("like" if getattr(b, "ig_warm_like", False) else "comment")
     if was or not ig_warm_complete(b):
         return
     db.add(
@@ -237,10 +398,27 @@ def maybe_log_ig_warm_complete(db, b: Business, *, actor_id: Optional[int] = Non
             activity_type="instagram",
             channel="instagram",
             summary="IG warm complete",
-            outcome="follow" if follow_only else "follow+like+comment",
+            outcome=outcome,
             created_by=actor_id,
         )
     )
+
+
+def promote_due_follow_ups(db, *, product_line: Optional[str] = None, actor_id: Optional[int] = None, limit: int = 500) -> int:
+    """Batch promote contacted → follow_up when scheduled due is due/past."""
+    q = select(Business).where(
+        Business.contacted.is_(True),
+        or_(Business.lost.is_(False), Business.lost.is_(None)),
+        Business.next_follow_up_at.is_not(None),
+    )
+    if product_line:
+        q = q.where(Business.product_line == product_line.upper())
+    rows = db.scalars(q.limit(max(1, min(int(limit), 2000)))).all()
+    moved = 0
+    for b in rows:
+        if maybe_promote_follow_up(db, b, actor_id=actor_id):
+            moved += 1
+    return moved
 
 
 def on_outreach_confirmed(
@@ -291,7 +469,7 @@ def on_outreach_confirmed(
             )
         )
     # Same-day call nudge when lead has a phone and operator did not set a follow-up.
-    # Optional for the human (Call now UI); task is a reminder, not a hard gate.
+    # Stays in Contacted with Call-today badge — does NOT auto-jump to Follow-up.
     same_day_call = False
     if follow_up_at is None:
         facts = _channel_facts(b)
@@ -300,8 +478,15 @@ def on_outreach_confirmed(
             same_day_call = True
             if not getattr(b, "next_follow_up_at", None):
                 b.next_follow_up_at = follow_up_at
+            b.follow_up_kind = "call_today"
         else:
             follow_up_at = _utcnow() + timedelta(days=3)
+            b.follow_up_kind = "scheduled"
+            if not getattr(b, "next_follow_up_at", None):
+                b.next_follow_up_at = follow_up_at
+    else:
+        b.follow_up_kind = "scheduled"
+        b.next_follow_up_at = follow_up_at
     due = follow_up_at
     title = (
         f"{biz_name} · Call today after {channel}"
@@ -346,9 +531,9 @@ def on_outreach_confirmed(
                 owner_id=actor_id,
             )
         )
+    # Confirm-sent lands in Contacted only. Follow-up waits for scheduled due.
+    b.ready_for_contact = False
     advance_at_least(db, b, "contacted", actor_id=actor_id, note=f"Auto after {channel} confirm-sent")
-    if due:
-        advance_at_least(db, b, "follow_up", actor_id=actor_id, note="Auto follow-up scheduled")
     return {"ok": True, "channel": channel, "same_day_call": same_day_call}
 
 
@@ -364,22 +549,24 @@ def revert_to_to_contact(
     note: str = "",
     move_pipeline: bool = True,
 ) -> dict:
-    """Undo confirm-sent: back on To contact (marked, not contacted, channel flags cleared)."""
+    """Undo confirm-sent: back to Ready (keep outreach_channel + warm ticks)."""
     was_contacted = _is_contacted_queue_state(b)
     b.contacted = False
     b.email_sent = False
     b.whatsapp_sent = False
     b.instagram_sent = False
     b.marked_for_contact = True
+    b.ready_for_contact = True
     clear_cannot_contact(b, rematch=True)
     b.last_contacted_at = None
     b.next_follow_up_at = None
+    b.follow_up_kind = ""
     b.updated_at = _utcnow()
     db.add(
         Activity(
             business_id=b.id,
             activity_type="reverted_to_contact",
-            summary="Reverted from Contacted to To contact",
+            summary="Reverted from Contacted to Ready to contact",
             outcome=(note or "")[:500],
             created_by=actor_id,
         )
@@ -390,7 +577,7 @@ def revert_to_to_contact(
         target = get_stage(db, pl, "ready_to_contact")
         current = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
         terminal = ("won", "lost", "nurture", "subscribed", "churned")
-        early = ("identified", "ready_to_contact", "contacted", "follow_up")
+        early = ("identified", "to_contact", "ready_to_contact", "contacted", "follow_up")
         if target and (not current or current.slug in early) and not (current and current.slug in terminal):
             if not current or current.slug != "ready_to_contact":
                 move_stage(
@@ -398,7 +585,7 @@ def revert_to_to_contact(
                     b,
                     target.id,
                     actor_id=actor_id,
-                    note=note or "Reverted to To contact",
+                    note=note or "Reverted to Ready to contact",
                     force=True,
                 )
                 moved = True
@@ -409,7 +596,8 @@ def revert_to_to_contact(
 
 
 def on_marked_for_contact(db, b: Business, *, actor_id: Optional[int] = None) -> None:
-    advance_at_least(db, b, "ready_to_contact", actor_id=actor_id, note="Auto: marked for contact")
+    b.ready_for_contact = False
+    advance_at_least(db, b, "to_contact", actor_id=actor_id, note="Auto: marked for contact")
 
 
 def on_discovery_saved(db, b: Business, *, actor_id: Optional[int] = None, painful_issue: str = "") -> None:
@@ -559,6 +747,7 @@ def rank_contact_queue(
             "whatsapp_sent": bool(b.whatsapp_sent),
             "instagram_sent": bool(b.instagram_sent),
             "marked_for_contact": bool(b.marked_for_contact),
+            "ready_for_contact": bool(getattr(b, "ready_for_contact", False)),
             "contacted": bool(b.contacted),
         }
         # Always keep can't-contact leads so the dedicated tab has data even if
@@ -572,7 +761,8 @@ def rank_contact_queue(
         stage_bonus = 0.0
         if stage:
             stage_bonus = {
-                "ready_to_contact": 3.0,
+                "ready_to_contact": 3.5,
+                "to_contact": 3.0,
                 "identified": 1.0,
                 "contacted": 0.5,
                 "follow_up": 2.5,
@@ -617,6 +807,10 @@ def rank_contact_queue(
                 "qualification_score": b.qualification_score,
                 "score_override": b.score_override,
                 "marked_for_contact": bool(b.marked_for_contact),
+                "ready_for_contact": bool(getattr(b, "ready_for_contact", False)),
+                "outreach_channel": (getattr(b, "outreach_channel", None) or "").strip(),
+                "follow_up_kind": (getattr(b, "follow_up_kind", None) or "").strip(),
+                "follow_up_badge": follow_up_badge(b),
                 "contacted": bool(b.contacted),
                 "opt_out": bool(b.opt_out),
                 "outcome": b.outcome or "",
