@@ -1620,6 +1620,8 @@ def test_pipeline_includes_financial_delivery_fields(auth_client):
             name="Pipe Fin Co",
             email="pipe@mapsleads.test",
             product_line="STANDALONE",
+            # Identified column is hidden on the board — park on To contact so BE fields are visible.
+            marked_for_contact=True,
         )
         db.add(biz)
         db.flush()
@@ -1648,6 +1650,8 @@ def test_pipeline_includes_financial_delivery_fields(auth_client):
             if p.get("id") == bid:
                 found = p
                 break
+        if found:
+            break
     assert found is not None
     assert found.get("financial_status") == "partially_paid"
     assert found.get("delivery_status") == "started"
