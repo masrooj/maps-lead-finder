@@ -22,7 +22,8 @@ STANDALONE_ORDER = [
     "to_contact",
     "ready_to_contact",
     "contacted",
-    "follow_up",
+    "follow_up_3",
+    "follow_up_7",
     "engaged",
     "qualified",
     "demo_scheduled",
@@ -37,7 +38,8 @@ SAAS_ORDER = [
     "to_contact",
     "ready_to_contact",
     "contacted",
-    "follow_up",
+    "follow_up_3",
+    "follow_up_7",
     "engaged",
     "qualified",
     "demo_scheduled",
@@ -46,6 +48,9 @@ SAAS_ORDER = [
     "trial_active",
     "subscribed",
 ]
+
+# Legacy single follow_up maps into the +3 column for ordering comparisons.
+_FOLLOW_UP_SLUGS = frozenset({"follow_up", "follow_up_3", "follow_up_7"})
 
 OUTREACH_CHANNELS = ("whatsapp", "instagram", "email")
 
@@ -63,10 +68,41 @@ def _order_for(product_line: str) -> list[str]:
 
 def _stage_index(slug: str, product_line: str = "STANDALONE") -> int:
     order = _order_for(product_line)
+    if slug == "follow_up":
+        slug = "follow_up_3"
     try:
         return order.index(slug)
     except ValueError:
         return -1
+
+
+def follow_up_target_slug(b: Business) -> str:
+    """Pick Follow-up +3 vs +7 from kind or scheduled horizon."""
+    kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
+    if kind in ("plus7", "plus_7", "+7"):
+        return "follow_up_7"
+    if kind in ("plus3", "plus_3", "+3", "call_today"):
+        return "follow_up_3"
+    due = getattr(b, "next_follow_up_at", None)
+    if due:
+        due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
+        # Horizon when due was still ahead; overdue defaults to +3.
+        delta_days = (due_aware.date() - _utcnow().date()).days
+        if delta_days > 3:
+            return "follow_up_7"
+    return "follow_up_3"
+
+
+def classify_follow_up_kind(follow_up_at: Optional[datetime], *, same_day_call: bool = False) -> str:
+    if same_day_call:
+        return "call_today"
+    if not follow_up_at:
+        return "plus3"
+    due_aware = follow_up_at if follow_up_at.tzinfo else follow_up_at.replace(tzinfo=timezone.utc)
+    delta_days = (due_aware.date() - _utcnow().date()).days
+    if delta_days > 3:
+        return "plus7"
+    return "plus3"
 
 
 def advance_at_least(db, b: Business, target_slug: str, *, actor_id: Optional[int] = None, note: str = "") -> bool:
@@ -228,7 +264,7 @@ def demote_to_to_contact(db, b: Business, *, actor_id: Optional[int] = None, not
 
 
 def maybe_promote_follow_up(db, b: Business, *, actor_id: Optional[int] = None) -> bool:
-    """Move contacted → follow_up when a scheduled due date is due/past (not call_today)."""
+    """Move contacted → follow_up_3 / follow_up_7 when scheduled due is due/past (not call_today)."""
     if not b.contacted or b.lost:
         return False
     kind = (getattr(b, "follow_up_kind", None) or "").strip()
@@ -240,14 +276,22 @@ def maybe_promote_follow_up(db, b: Business, *, actor_id: Optional[int] = None) 
     due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
     if due_aware > _utcnow():
         return False
+    target = follow_up_target_slug(b)
     current = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
-    if current and current.slug not in ("contacted", "ready_to_contact", "to_contact", "identified"):
-        if current.slug == "follow_up":
+    if current and current.slug not in ("contacted", "ready_to_contact", "to_contact", "identified", "follow_up"):
+        if current.slug in _FOLLOW_UP_SLUGS:
+            # Allow +3 → +7 if kind/horizon says so; never regress.
+            if _stage_index(current.slug, b.product_line or "STANDALONE") >= _stage_index(
+                target, b.product_line or "STANDALONE"
+            ):
+                return False
+        elif _stage_index(current.slug, b.product_line or "STANDALONE") > _stage_index(
+            "follow_up_7", b.product_line or "STANDALONE"
+        ):
             return False
-        # Already past follow_up in the funnel
-        if _stage_index(current.slug, b.product_line or "STANDALONE") > _stage_index("follow_up", b.product_line or "STANDALONE"):
-            return False
-    return advance_at_least(db, b, "follow_up", actor_id=actor_id, note="Auto: scheduled follow-up due")
+    return advance_at_least(
+        db, b, target, actor_id=actor_id, note=f"Auto: scheduled follow-up due → {target}"
+    )
 
 
 def follow_up_badge(b: Business) -> dict:
@@ -404,8 +448,40 @@ def maybe_log_ig_warm_complete(db, b: Business, *, actor_id: Optional[int] = Non
     )
 
 
+def remap_legacy_follow_up_stages(db, *, product_line: Optional[str] = None, limit: int = 2000) -> int:
+    """Move prospects still on inactive legacy follow_up → follow_up_3 / follow_up_7."""
+    stages = list(db.scalars(select(PipelineStage).where(PipelineStage.slug == "follow_up")).all())
+    if product_line:
+        stages = [s for s in stages if s.product_line == product_line.upper()]
+    if not stages:
+        return 0
+    stage_ids = [s.id for s in stages]
+    rows = db.scalars(
+        select(Business)
+        .where(Business.pipeline_stage_id.in_(stage_ids))
+        .limit(max(1, min(int(limit), 5000)))
+    ).all()
+    moved = 0
+    for b in rows:
+        target_slug = follow_up_target_slug(b)
+        pl = (b.product_line or "STANDALONE").upper()
+        target = get_stage(db, pl, target_slug)
+        if not target:
+            continue
+        move_stage(
+            db,
+            b,
+            target.id,
+            note=f"Auto: legacy follow_up → {target_slug}",
+            force=True,
+        )
+        moved += 1
+    return moved
+
+
 def promote_due_follow_ups(db, *, product_line: Optional[str] = None, actor_id: Optional[int] = None, limit: int = 500) -> int:
-    """Batch promote contacted → follow_up when scheduled due is due/past."""
+    """Batch promote contacted → follow_up_3/7 when scheduled due is due/past."""
+    remap_legacy_follow_up_stages(db, product_line=product_line, limit=limit)
     q = select(Business).where(
         Business.contacted.is_(True),
         or_(Business.lost.is_(False), Business.lost.is_(None)),
@@ -478,15 +554,13 @@ def on_outreach_confirmed(
             same_day_call = True
             if not getattr(b, "next_follow_up_at", None):
                 b.next_follow_up_at = follow_up_at
-            b.follow_up_kind = "call_today"
         else:
             follow_up_at = _utcnow() + timedelta(days=3)
-            b.follow_up_kind = "scheduled"
             if not getattr(b, "next_follow_up_at", None):
                 b.next_follow_up_at = follow_up_at
     else:
-        b.follow_up_kind = "scheduled"
         b.next_follow_up_at = follow_up_at
+    b.follow_up_kind = classify_follow_up_kind(follow_up_at, same_day_call=same_day_call)
     due = follow_up_at
     title = (
         f"{biz_name} · Call today after {channel}"
@@ -577,7 +651,15 @@ def revert_to_to_contact(
         target = get_stage(db, pl, "ready_to_contact")
         current = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
         terminal = ("won", "lost", "nurture", "subscribed", "churned")
-        early = ("identified", "to_contact", "ready_to_contact", "contacted", "follow_up")
+        early = (
+            "identified",
+            "to_contact",
+            "ready_to_contact",
+            "contacted",
+            "follow_up",
+            "follow_up_3",
+            "follow_up_7",
+        )
         if target and (not current or current.slug in early) and not (current and current.slug in terminal):
             if not current or current.slug != "ready_to_contact":
                 move_stage(
@@ -772,6 +854,8 @@ def rank_contact_queue(
                 "identified": 1.0,
                 "contacted": 0.5,
                 "follow_up": 2.5,
+                "follow_up_3": 2.5,
+                "follow_up_7": 2.6,
                 "engaged": 2.0,
                 "qualified": 1.5,
             }.get(stage.slug, 0.0)

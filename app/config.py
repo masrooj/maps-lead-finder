@@ -61,12 +61,18 @@ SKRILL_WEBHOOK_SECRET = os.getenv("SKRILL_WEBHOOK_SECRET", "").strip() or SKRILL
 PRODUCT_LINES = ("STANDALONE", "SAAS")
 USER_ROLES = ("owner", "sales", "viewer")
 
+# Early stages mirror Contact queue tabs:
+#   to_contact ("Identified") ↔ To contact
+#   ready_to_contact ↔ Ready to contact
+#   contacted ↔ Contacted
+# Unmarked discovers stay on identified ("Discovered") and are Discover-only (hidden on board).
 STANDALONE_STAGES = [
-    ("identified", "Identified", 0.05, False),
-    ("to_contact", "To Contact", 0.08, False),
+    ("identified", "Discovered", 0.05, False),
+    ("to_contact", "Identified", 0.08, False),
     ("ready_to_contact", "Ready to Contact", 0.10, False),
     ("contacted", "Contacted", 0.15, False),
-    ("follow_up", "Follow-up", 0.20, False),
+    ("follow_up_3", "Follow-up +3", 0.20, False),
+    ("follow_up_7", "Follow-up +7", 0.22, False),
     ("engaged", "Engaged", 0.30, False),
     ("qualified", "Qualified", 0.40, False),
     ("demo_scheduled", "Demo Scheduled", 0.50, False),
@@ -79,11 +85,12 @@ STANDALONE_STAGES = [
 ]
 
 SAAS_STAGES = [
-    ("identified", "Identified", 0.05, False),
-    ("to_contact", "To Contact", 0.08, False),
+    ("identified", "Discovered", 0.05, False),
+    ("to_contact", "Identified", 0.08, False),
     ("ready_to_contact", "Ready to Contact", 0.10, False),
     ("contacted", "Contacted", 0.15, False),
-    ("follow_up", "Follow-up", 0.20, False),
+    ("follow_up_3", "Follow-up +3", 0.20, False),
+    ("follow_up_7", "Follow-up +7", 0.22, False),
     ("engaged", "Engaged", 0.30, False),
     ("qualified", "Qualified", 0.40, False),
     ("demo_scheduled", "Demo Scheduled", 0.50, False),
@@ -96,6 +103,12 @@ SAAS_STAGES = [
     ("lost", "Lost", 0.00, True),
     ("nurture", "Nurture", 0.10, False),
 ]
+
+# Legacy slug kept inactive after seed migration (prospects remapped to follow_up_3).
+LEGACY_FOLLOW_UP_SLUG = "follow_up"
+
+# Pipeline board hides Discover-only column (unmarked leads).
+PIPELINE_BOARD_HIDDEN_SLUGS = frozenset({"identified"})
 
 CURRENCY_BY_COUNTRY = {
     "AU": "AUD",

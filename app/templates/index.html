@@ -147,7 +147,7 @@
       <div class="guide-steps" id="guideSteps">
         <button type="button" class="guide-step" data-goto="leads"><strong>1. Discover</strong><span>Search Places (Fetch: All for city scan). Star ★ leads. Prospects auto-setup on import.</span></button>
         <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → mark to contact → WA / Email / IG → Confirm sent (stay on To contact). Can't contact tab for unreachable.</span></button>
-        <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>Stages advance automatically on confirm-sent, discovery, demo, and score. Drag only to override.</span></button>
+        <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>Identified → Ready → Contacted match Contact queue tabs; then Follow-up +3/+7 → Engaged → Won/Lost.</span></button>
         <button type="button" class="guide-step" data-goto="tasks"><strong>4. Tasks</strong><span>Follow-ups auto-create when you confirm email/WA/IG sent. Complete or reschedule.</span></button>
         <button type="button" class="guide-step" data-goto="activities"><strong>5. Communication</strong><span>Outreach + invoices grouped by lead. Closing stays under Deals.</span></button>
         <button type="button" class="guide-step" data-goto="demos"><strong>6. Demos</strong><span>Record demo outcome; positive demos auto-advance toward proposal.</span></button>
@@ -278,15 +278,29 @@
     <div id="bePipelineBanner" class="money-banner hidden" role="status"></div>
     <section class="panel card">
       <div class="sectionhead">
-        <h2>Standalone pipeline</h2>
+        <h2>Pipeline</h2>
         <div class="head-actions">
-          <select id="pipelineLine"><option value="STANDALONE">Standalone</option><option value="SAAS">SaaS</option></select>
+          <select id="pipelineLine" aria-label="Product line"><option value="STANDALONE">Standalone</option><option value="SAAS">SaaS</option></select>
           <button type="button" id="pipelineRefresh">Refresh</button>
         </div>
       </div>
-      <p class="hint">Drag cards between columns, or use Move for a stage picker. Lost stages ask for a reason.</p>
+      <div class="toolbar pipeline-filters" id="pipelineFilters">
+        <div class="field">
+          <label for="pipelineCountry">Country</label>
+          <select id="pipelineCountry" aria-label="Filter by country"><option value="">All countries</option></select>
+        </div>
+        <div class="field">
+          <label for="pipelineCity">City</label>
+          <select id="pipelineCity" aria-label="Filter by city"><option value="">All cities</option></select>
+        </div>
+        <div class="field">
+          <label for="pipelineCategory">Category</label>
+          <select id="pipelineCategory" aria-label="Filter by category"><option value="">All categories</option></select>
+        </div>
+      </div>
+      <p class="hint" id="pipelineMeta" style="margin-top:0">Identified = Contact queue To contact · Ready = Ready tab · Contacted = Contacted tab. Follow-up +3 / +7 after due. Engaged → Won or Lost.</p>
       <div class="kanban" id="kanban" aria-label="Pipeline board"></div>
-      <div class="empty hidden" id="pipelineEmpty">No prospects in this product line yet. Discover leads first.</div>
+      <div class="empty hidden" id="pipelineEmpty">No prospects match these filters. Mark leads in Contact queue, or clear filters.</div>
     </section>
   </div>
 

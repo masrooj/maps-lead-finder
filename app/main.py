@@ -1155,7 +1155,12 @@ def apply_business_updates(b: Business, data: dict, db=None):
                 del socials[key]
         b.social_links_json = json.dumps(socials)
     if "next_follow_up_at" in data:
-        b.next_follow_up_at = parse_follow_up(data["next_follow_up_at"])
+        follow = parse_follow_up(data["next_follow_up_at"])
+        b.next_follow_up_at = follow
+        if "follow_up_kind" not in data:
+            from app.services.automation import classify_follow_up_kind
+
+            b.follow_up_kind = classify_follow_up_kind(follow) if follow else ""
     if b.lost:
         b.contacted = True
     if data.get("contacted") is True or data.get("email_sent") is True or data.get("whatsapp_sent") is True or data.get("instagram_sent") is True:

@@ -119,12 +119,64 @@ def test_scheduled_due_promotes_follow_up(auth_client):
     assert r.status_code == 200, r.text
     with SessionLocal() as db:
         b = db.get(Business, bid)
-        assert b.follow_up_kind == "scheduled"
+        assert b.follow_up_kind == "plus3"
         # confirm-sent promotes immediately when due is already past
         stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
-        assert stage is not None and stage.slug == "follow_up"
-        # idempotent — already on follow_up
+        assert stage is not None and stage.slug == "follow_up_3"
+        # idempotent — already on follow_up_3
         assert maybe_promote_follow_up(db, b) is False
+
+
+def test_scheduled_plus7_promotes_follow_up_7(auth_client):
+    bid = _lead(ready_for_contact=True, outreach_channel="email")
+    due = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
+    r = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "email", "next_follow_up_at": due, "message": "hi"},
+    )
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        b = db.get(Business, bid)
+        stage0 = db.get(PipelineStage, b.pipeline_stage_id)
+        assert stage0 is not None and stage0.slug == "follow_up_3"
+        b.follow_up_kind = "plus7"
+        db.commit()
+        db.refresh(b)
+        assert maybe_promote_follow_up(db, b) is True
+        db.refresh(b)
+        stage = db.get(PipelineStage, b.pipeline_stage_id)
+        assert stage is not None and stage.slug == "follow_up_7"
+
+
+def test_pipeline_filters_and_hides_discovered(auth_client):
+    bid = _lead(
+        ready_for_contact=False,
+        marked_for_contact=True,
+        city="Sydney",
+        country="Australia",
+        category="Barber",
+    )
+    with SessionLocal() as db:
+        from app.services.automation import on_marked_for_contact
+
+        b = db.get(Business, bid)
+        on_marked_for_contact(db, b)
+        db.commit()
+    r = auth_client.get(
+        "/api/sales/pipeline",
+        params={"product_line": "STANDALONE", "country": "Australia", "city": "Sydney", "category": "Barber"},
+    )
+    assert r.status_code == 200, r.text
+    data = r.json()
+    assert "locations" in data and "categories" in data
+    slugs = [c["stage"]["slug"] for c in data.get("columns") or []]
+    assert "identified" not in slugs
+    assert "to_contact" in slugs
+    assert "follow_up_3" in slugs and "follow_up_7" in slugs
+    col = next(c for c in data["columns"] if c["stage"]["slug"] == "to_contact")
+    assert col["stage"]["name"] == "Identified"
+    assert any(p["id"] == bid for p in col["prospects"])
+    assert col["cq_tab"] == "selected"
 
 
 def test_revert_goes_to_ready(auth_client):

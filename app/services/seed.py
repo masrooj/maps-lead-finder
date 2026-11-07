@@ -63,6 +63,8 @@ def seed_owner(db) -> User:
 
 def seed_stages(db) -> None:
     """Idempotent: insert missing stages and refresh sort_order/names from config."""
+    from app.config import LEGACY_FOLLOW_UP_SLUG
+
     for product_line, stages in (("STANDALONE", STANDALONE_STAGES), ("SAAS", SAAS_STAGES)):
         existing = {
             s.slug: s
@@ -94,6 +96,11 @@ def seed_stages(db) -> None:
                     active=True,
                 )
             )
+        # Retire single Follow-up column after split into +3 / +7.
+        legacy = existing.get(LEGACY_FOLLOW_UP_SLUG)
+        if legacy:
+            legacy.active = False
+            legacy.name = "Follow-up (legacy)"
 
 
 def seed_plans(db) -> None:
@@ -314,6 +321,18 @@ def seed_settings(db) -> None:
     upsert_setting(db, "default_currency", DEFAULT_CURRENCY)
     ensure_setting(db, "default_timezone", DEFAULT_TIMEZONE)
     ensure_setting(db, "won_on", WON_ON)
+    ensure_setting(
+        db,
+        "be.won_policy",
+        json.dumps(
+            {
+                "auto_won_on_be_paid": False,
+                "require_agreement_accepted": False,
+                "require_initial_milestone_paid": False,
+                "require_fully_paid": True,
+            }
+        ),
+    )
     ensure_setting(db, "saas_enabled", "true" if SAAS_ENABLED else "false")
     ensure_setting(db, "demo_data_enabled", "false")
     ensure_setting(db, "currency_by_country", json.dumps(CURRENCY_BY_COUNTRY))

@@ -98,7 +98,7 @@ let enriching=false;
 let lastUndo=null; // {type:'unarchive'|'restore', id, snapshot?}
 let loadSeq=0; // ignore stale responses when views/filters change quickly
 let appPanel='leads'; // dashboard | leads | pipeline | tasks | money | templates
-let lastPipelineStages=[]; // [{id,name,slug,is_lost}] for move dialog
+/* lastPipelineStages / loadPipeline peeled → panels/pipeline.js */
 
 let moneyTab='ledger'; // ledger | invoices | settings
 let commsTab='outreach'; // outreach | invoices
@@ -880,124 +880,11 @@ async function loadSettings(){
 
 
 
-async function moveProspectStage(id, stageId, note='', lostReason=''){
-  try{
-    // force=false so Ready gates (channel + IG warm) are enforced on drag/move
-    await api('/api/sales/prospects/'+id+'/stage',{method:'POST',body:{stage_id:Number(stageId),note,lost_reason:lostReason||'',force:false}});
-    toast('Stage updated'); await loadPipeline();
-    return true;
-  }catch(e){
-    const msg=String(e.message||e);
-    if(msg.includes('lost_reason')){
-      const form=await uiForm({
-        title:'Lost reason required',
-        message:'Moving to Lost needs a short reason for reporting.',
-        confirmLabel:'Mark lost',
-        danger:true,
-        fields:[{name:'lost_reason', label:'Lost reason', type:'textarea', required:true, placeholder:'e.g. chose competitor, timing, budget'}]
-      });
-      if(!form) return false;
-      await api('/api/sales/prospects/'+id+'/stage',{method:'POST',body:{stage_id:Number(stageId),note,lost_reason:form.lost_reason,force:false}});
-      toast('Stage updated'); await loadPipeline();
-      return true;
-    }
-    toast(msg, true);
-    return false;
-  }
-}
-
-async function openStageMoveDialog(prospectId, currentStageId){
-  const stages=lastPipelineStages.length?lastPipelineStages:(await api('/api/sales/stages?product_line='+encodeURIComponent(($('pipelineLine')&&$('pipelineLine').value)||'STANDALONE')).then(d=>{
-    lastPipelineStages=(d.stages||[]).map(s=>({id:s.id,name:s.name,slug:s.slug,is_lost:!!s.is_lost}));
-    return lastPipelineStages;
-  }));
-  const form=await uiForm({
-    title:'Move prospect',
-    message:'Choose the next pipeline stage. Drag-and-drop also works on desktop.',
-    confirmLabel:'Move',
-    fields:[
-      {name:'stage_id', label:'Stage', type:'select', required:true, value:String(currentStageId||''), options:stages.map(s=>({value:String(s.id), label:s.name+(s.is_lost?' (lost)':'')}))},
-      {name:'note', label:'Note (optional)', type:'textarea', rows:2, placeholder:'Why this move?'}
-    ]
-  });
-  if(!form) return;
-  const target=stages.find(s=>String(s.id)===String(form.stage_id));
-  let lost='';
-  if(target&&target.is_lost){
-    const lostForm=await uiForm({
-      title:'Lost reason',
-      message:'Required when moving to a lost stage.',
-      confirmLabel:'Move to Lost',
-      danger:true,
-      fields:[{name:'lost_reason', label:'Lost reason', type:'textarea', required:true}]
-    });
-    if(!lostForm) return;
-    lost=lostForm.lost_reason;
-  }
-  await moveProspectStage(prospectId, form.stage_id, form.note||'', lost);
-}
-
 async function loadPipeline(){
-  const line=($('pipelineLine')&&$('pipelineLine').value)||'STANDALONE';
-  const data=await api('/api/sales/pipeline?product_line='+encodeURIComponent(line));
-  const cols=data.columns||[];
-  lastPipelineStages=cols.map(c=>({
-    id:(c.stage&&c.stage.id),
-    name:(c.stage&&c.stage.name)||'',
-    slug:(c.stage&&c.stage.slug)||'',
-    is_lost:!!(c.stage&&c.stage.is_lost)
-  })).filter(s=>s.id!=null);
-  if(!cols.length){ $('kanban').innerHTML=''; $('pipelineEmpty').classList.remove('hidden'); return; }
-  $('pipelineEmpty').classList.add('hidden');
-  $('kanban').innerHTML=cols.map(col=>{
-    const s=col.stage||{};
-    const val=col.value_by_currency||{};
-    const valStr=Object.keys(val).length?Object.entries(val).map(([c,v])=>`${c} ${Number(v).toFixed(0)}`).join(' · '):'—';
-    const cards=(col.prospects||[]).map(p=>{
-      const badge=p.follow_up_badge&&p.follow_up_badge.label
-        ?`<span class="ch-tag" title="Follow-up timing">${esc(p.follow_up_badge.label)}</span>`
-        :(p.follow_up_kind==='call_today'?`<span class="ch-tag">Call today</span>`:'');
-      const ch=p.outreach_channel?`<span class="sub">${esc(p.outreach_channel)}</span>`:'';
-      return `
-      <div class="kanban-card" draggable="true" data-id="${p.id}" data-stage-id="${s.id}">
-        <strong>${esc(p.name||'Unnamed')}</strong>
-        <span>${esc(p.city||'')} · ${p.deal_value!=null?esc(String(p.currency||''))+' '+esc(String(p.deal_value)):'no value'}</span>
-        ${badge||ch?`<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${badge}${ch}</div>`:''}
-        <div class="actions" style="margin-top:6px"><button type="button" class="stage-move" data-id="${p.id}" data-stage-id="${s.id}">Move</button></div>
-      </div>`;
-    }).join('')||'<div class="hint">Empty — drag a card here</div>';
-    return `<div class="kanban-col" data-stage-id="${s.id}"><h3>${esc(s.name||'')}</h3><div class="kanban-meta">${col.count||0} · ${esc(valStr)} · ${Math.round((s.probability||0)*100)}%</div>${cards}</div>`;
-  }).join('');
-  $('kanban').querySelectorAll('.stage-move').forEach(btn=>btn.addEventListener('click',async ev=>{
-    ev.stopPropagation();
-    try{ await openStageMoveDialog(btn.dataset.id, btn.dataset.stageId); }
-    catch(e){ toast(e.message||String(e), true); }
-  }));
-  let dragId=null;
-  $('kanban').querySelectorAll('.kanban-card').forEach(card=>{
-    card.addEventListener('dragstart',ev=>{
-      dragId=card.dataset.id;
-      card.classList.add('dragging');
-      ev.dataTransfer.setData('text/plain', String(dragId));
-      ev.dataTransfer.effectAllowed='move';
-    });
-    card.addEventListener('dragend',()=>{card.classList.remove('dragging'); dragId=null; $('kanban').querySelectorAll('.kanban-col').forEach(c=>c.classList.remove('drag-over'));});
-  });
-  $('kanban').querySelectorAll('.kanban-col').forEach(col=>{
-    col.addEventListener('dragover',ev=>{ev.preventDefault(); col.classList.add('drag-over');});
-    col.addEventListener('dragleave',()=>col.classList.remove('drag-over'));
-    col.addEventListener('drop',async ev=>{
-      ev.preventDefault();
-      col.classList.remove('drag-over');
-      const id=ev.dataTransfer.getData('text/plain')||dragId;
-      const stageId=col.dataset.stageId;
-      if(!id||!stageId) return;
-      const from=document.querySelector(`.kanban-card[data-id="${id}"]`);
-      if(from && String(from.dataset.stageId)===String(stageId)) return;
-      try{ await moveProspectStage(id, stageId, 'Drag-drop move'); }
-      catch(e){ toast(e.message||String(e), true); }
-    });
-  });
+  if(typeof B.loadPipeline==='function') return B.loadPipeline();
+}
+async function moveProspectStage(id, stageId, note='', lostReason=''){
+  if(typeof B.moveProspectStage==='function') return B.moveProspectStage(id, stageId, note, lostReason);
 }
 
 
@@ -2875,7 +2762,7 @@ function renderDrawer(){
     </div>
     ${crmPanes}
     ${discoverOnly||queueOnly?'':`<div class="drawer-pane ${tab==='pipeline'?'active':''}" data-dpane="pipeline">
-      <p class="hint" style="margin-top:0">Flags sync with auto-pipeline. Confirm-sent on first email/WA/IG starts tasks + activities and moves stage.</p>
+      <p class="hint" style="margin-top:0">Flags sync with pipeline: Identified ↔ To contact, Ready ↔ Ready tab, Contacted ↔ Contacted. Due +3/+7 open Follow-up columns; Engaged → Won/Lost unchanged.</p>
       <label class="flag"><input type="checkbox" data-dfield="marked_for_contact" ${b.marked_for_contact?'checked':''}> Marked for contact</label>
       <label class="flag"><input type="checkbox" data-dfield="email_sent" ${b.email_sent?'checked':''}> Email sent</label>
       <label class="flag"><input type="checkbox" data-dfield="whatsapp_sent" ${b.whatsapp_sent?'checked':''}> WhatsApp sent</label>
@@ -3161,8 +3048,7 @@ document.addEventListener('click',e=>{
   }
   closeTopMenus();
 });
-$('pipelineRefresh')&&$('pipelineRefresh').addEventListener('click',()=>loadPipeline().catch(e=>toast(e.message,true)));
-$('pipelineLine')&&$('pipelineLine').addEventListener('change',()=>loadPipeline().catch(e=>toast(e.message,true)));
+/* pipeline filters/refresh wired in panels/pipeline.js */
 $('tasksRefresh')&&$('tasksRefresh').addEventListener('click',()=>loadTasks().catch(e=>toast(e.message,true)));
 $('taskCreateBtn')&&$('taskCreateBtn').addEventListener('click',()=>createTaskFlow().catch(e=>toast(e.message,true)));
 $('prospectsRefresh')&&$('prospectsRefresh').addEventListener('click',()=>loadProspects().catch(e=>toast(e.message,true)));
@@ -4034,7 +3920,7 @@ registerPanel({ id: 'guide', refresh: async () => {} });
 /* dashboard registered in panels/dashboard.js */
 registerPanel({ id: 'leads', refresh: safeRefresh(typeof load === 'function' ? load : null) });
 /* contactQueue registered in panels/contact-queue.js */
-registerPanel({ id: 'pipeline', refresh: safeRefresh(typeof loadPipeline === 'function' ? loadPipeline : null) });
+/* pipeline registered in panels/pipeline.js */
 /* prospects registered in panels/prospects.js */
 /* tasks registered in panels/tasks.js */
 registerPanel({ id: 'activities', refresh: safeRefresh(typeof loadActivitiesFeed === 'function' ? loadActivitiesFeed : null) });

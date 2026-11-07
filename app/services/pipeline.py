@@ -64,7 +64,9 @@ def infer_slug_from_flags(b: Business) -> str:
         if due and kind != "call_today":
             due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
             if due_aware <= _utcnow():
-                return "follow_up"
+                from app.services.automation import follow_up_target_slug
+
+                return follow_up_target_slug(b)
         return "contacted"
     if getattr(b, "ready_for_contact", False) and b.marked_for_contact:
         return "ready_to_contact"
@@ -117,6 +119,25 @@ def backfill_prospect_stages(db) -> dict:
                     )
                 )
                 changed = True
+        # Retire single follow_up → follow_up_3 / follow_up_7
+        if cur and cur.slug == "follow_up" and not b.lost:
+            from app.services.automation import follow_up_target_slug
+
+            target_slug = follow_up_target_slug(b)
+            to_stage = stages.get((pl, target_slug)) or stages.get(("STANDALONE", target_slug))
+            if to_stage:
+                b.pipeline_stage_id = to_stage.id
+                db.add(
+                    StageHistory(
+                        business_id=b.id,
+                        from_stage_id=cur.id,
+                        to_stage_id=to_stage.id,
+                        changed_by=None,
+                        note=f"Backfill: legacy follow_up → {target_slug}",
+                    )
+                )
+                changed = True
+                cur = to_stage
         if not b.pipeline_stage_id:
             slug = infer_slug_from_flags(b)
             stage = stages.get((pl, slug)) or stages.get(("STANDALONE", slug)) or stages.get(("STANDALONE", "identified"))
@@ -199,7 +220,18 @@ def move_stage(
     elif to_stage.is_won:
         business.lost = False
         business.contacted = True
-    elif to_stage.slug in ("contacted", "follow_up", "engaged", "qualified", "demo_scheduled", "demo_completed", "proposal_sent", "negotiation"):
+    elif to_stage.slug in (
+        "contacted",
+        "follow_up",
+        "follow_up_3",
+        "follow_up_7",
+        "engaged",
+        "qualified",
+        "demo_scheduled",
+        "demo_completed",
+        "proposal_sent",
+        "negotiation",
+    ):
         business.contacted = True
         business.lost = False
     elif to_stage.slug == "ready_to_contact":

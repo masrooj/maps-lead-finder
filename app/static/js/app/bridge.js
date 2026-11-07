@@ -17,6 +17,8 @@ export const B = {
   loadBeCatalog: null,
   loadMoney: null,
   reloadDiscover: null,
+  loadPipeline: null,
+  moveProspectStage: null,
   qrUrlFor: null,
   closeTopMenus: null,
   availableComposeChannels: null,

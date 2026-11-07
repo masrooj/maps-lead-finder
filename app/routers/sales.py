@@ -243,7 +243,15 @@ def sales_backfill(_user: str = Depends(require_user), db=Depends(get_db)):
 
 
 @router.get("/pipeline", tags=["pipeline"])
-def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(require_user), db=Depends(get_db)):
+def sales_pipeline(
+    product_line: str = "STANDALONE",
+    country: str = "",
+    city: str = "",
+    category: str = "",
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    from app.config import PIPELINE_BOARD_HIDDEN_SLUGS
     from app.services.authz import can_view_business, get_user_by_email
     from app.services.automation import follow_up_badge, promote_due_follow_ups
 
@@ -258,7 +266,7 @@ def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(requir
         db.commit()
     except Exception:
         db.rollback()
-    prospects = [
+    all_prospects = [
         p
         for p in db.scalars(
             select(Business).where(
@@ -268,8 +276,36 @@ def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(requir
         ).all()
         if can_view_business(actor, p)
     ]
+    # Facets from unscoped set so filters never collapse their own menus.
+    loc_map: dict[str, set[str]] = {}
+    categories: set[str] = set()
+    for p in all_prospects:
+        ctry = (p.country or "").strip() or "—"
+        cty = (p.city or "").strip()
+        loc_map.setdefault(ctry, set())
+        if cty:
+            loc_map[ctry].add(cty)
+        cat = (p.category or "").strip()
+        if cat:
+            categories.add(cat)
+    locations = {
+        ctry: sorted(cities, key=lambda x: x.lower())
+        for ctry, cities in sorted(loc_map.items(), key=lambda kv: kv[0].lower())
+    }
+    country_f = (country or "").strip()
+    city_f = (city or "").strip()
+    category_f = (category or "").strip()
+    prospects = [
+        p
+        for p in all_prospects
+        if (not country_f or (p.country or "").strip().lower() == country_f.lower())
+        and (not city_f or (p.city or "").strip().lower() == city_f.lower())
+        and (not category_f or (p.category or "").strip().lower() == category_f.lower())
+    ]
     columns = []
     for s in stages:
+        if s.slug in PIPELINE_BOARD_HIDDEN_SLUGS:
+            continue
         items = [p for p in prospects if p.pipeline_stage_id == s.id]
         value = {}
         for p in items:
@@ -280,9 +316,18 @@ def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(requir
                 "stage": stage_dict(s),
                 "count": len(items),
                 "value_by_currency": value,
+                "cq_tab": {
+                    "to_contact": "selected",
+                    "ready_to_contact": "ready",
+                    "contacted": "contacted",
+                }.get(s.slug),
                 "prospects": [
                     {
                         **prospect_sales_dict(p, s),
+                        "category": (p.category or "").strip(),
+                        "country": (p.country or "").strip(),
+                        "city": (p.city or "").strip(),
+                        "marked_for_contact": bool(getattr(p, "marked_for_contact", False)),
                         "follow_up_kind": (getattr(p, "follow_up_kind", None) or "").strip(),
                         "follow_up_badge": follow_up_badge(p),
                         "next_follow_up_at": _iso(getattr(p, "next_follow_up_at", None)),
@@ -294,7 +339,16 @@ def sales_pipeline(product_line: str = "STANDALONE", _user: str = Depends(requir
             }
         )
     unstaged = [p for p in prospects if not p.pipeline_stage_id]
-    return {"product_line": product_line.upper(), "columns": columns, "unstaged": [prospect_sales_dict(p) for p in unstaged]}
+    return {
+        "product_line": product_line.upper(),
+        "country": country_f,
+        "city": city_f,
+        "category": category_f,
+        "locations": locations,
+        "categories": sorted(categories, key=lambda x: x.lower()),
+        "columns": columns,
+        "unstaged": [prospect_sales_dict(p) for p in unstaged],
+    }
 
 
 @router.post("/prospects/{business_id}/stage", tags=["pipeline"])
