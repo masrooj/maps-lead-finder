@@ -376,6 +376,22 @@ def send_purchase(
         inbound_request_id = inbound_from_be
     pay_url = str(res.get("checkoutUrl") or res.get("hostedUrl") or "")
     order_ref = str(res.get("orderReference") or res.get("order_reference") or "").strip()
+    # Nested status (and reused responses) may carry orderReference only there.
+    if not order_ref and isinstance(res.get("status"), dict):
+        order_ref = str(
+            res["status"].get("orderReference") or res["status"].get("order_reference") or ""
+        ).strip()
+    if not order_ref and purchase_id:
+        try:
+            snap = client.get_purchase(purchase_id)
+            order_ref = str(
+                (snap or {}).get("orderReference")
+                or (snap or {}).get("order_reference")
+                or ((snap or {}).get("status") or {}).get("orderReference")
+                or ""
+            ).strip()
+        except BeClientError:
+            pass
     row = _upsert_by_purchase(db, purchase_id) or existing
     if not row:
         row = BeDelivery(business_id=business.id, purpose="purchase")
@@ -744,6 +760,9 @@ def refresh_delivery(db, delivery_id: int) -> dict:
             status = be.get("status") if isinstance(be.get("status"), dict) else be
             pay = ""
             if isinstance(status, dict):
+                # Backfill orderReference + commercial snapshot fields (older rows
+                # may have been created before AH returned orderReference).
+                _apply_snapshot_fields(row, status)
                 pay = str(status.get("checkoutUrl") or "")
                 payment = status.get("payment") or {}
                 if isinstance(payment, dict) and str(payment.get("status") or "").upper() == "PAID":
@@ -756,6 +775,8 @@ def refresh_delivery(db, delivery_id: int) -> dict:
                         biz.be_installation_id = row.installation_id
             else:
                 pay = str(be.get("checkoutUrl") or be.get("hostedUrl") or "")
+                if isinstance(be, dict):
+                    _apply_snapshot_fields(row, be)
             if pay:
                 row.pay_url = pay
                 if row.status in ("sent",):

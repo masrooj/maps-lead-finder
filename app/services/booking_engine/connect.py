@@ -34,10 +34,27 @@ def _running_in_docker() -> bool:
         return False
 
 
+def _is_docker_desktop_host_gateway(host: str) -> bool:
+    """Docker Desktop (Mac/Win) host gateway — prefer host.docker.internal over raw IP."""
+    h = (host or "").lower()
+    if h in ("host.docker.internal",):
+        return True
+    # Classic Docker Desktop Linux VM gateway to the Mac/Windows host.
+    if h == "192.168.65.254":
+        return True
+    parts = h.split(".")
+    if len(parts) == 4 and all(p.isdigit() for p in parts):
+        a, b, c, d = (int(p) for p in parts)
+        # Docker Desktop host.docker.internal often lands in 192.168.65.0/24.
+        if (a, b, c) == (192, 168, 65) and 1 <= d <= 254:
+            return True
+    return False
+
+
 def rewrite_be_base_url_for_runtime(url: str) -> str:
     """Map BE URL to the current runtime network.
 
-    - In Docker: 127.0.0.1/localhost → host.docker.internal (host-published BE).
+    - In Docker: 127.0.0.1/localhost/Docker-Desktop gateway → host.docker.internal.
     - On host: host.docker.internal → 127.0.0.1 (URL saved while Sales OS was in Docker).
     """
     raw = (url or "").strip().rstrip("/")
@@ -51,10 +68,16 @@ def rewrite_be_base_url_for_runtime(url: str) -> str:
     port = parsed.port
     scheme = parsed.scheme or "http"
     in_docker = _running_in_docker()
-    if in_docker and host in ("127.0.0.1", "localhost", "0.0.0.0"):
+    if in_docker and (
+        host in ("127.0.0.1", "localhost", "0.0.0.0") or _is_docker_desktop_host_gateway(host)
+    ):
+        # Always use the DNS name inside Docker — raw gateway IPs break when AH restarts
+        # or Desktop remaps the VM network.
         netloc = f"host.docker.internal:{port}" if port else "host.docker.internal"
         return urlunparse((scheme, netloc, parsed.path or "", "", "", "")).rstrip("/")
-    if (not in_docker) and host == "host.docker.internal":
+    if (not in_docker) and (
+        host == "host.docker.internal" or _is_docker_desktop_host_gateway(host)
+    ):
         netloc = f"127.0.0.1:{port}" if port else "127.0.0.1"
         return urlunparse((scheme, netloc, parsed.path or "", "", "", "")).rstrip("/")
     return raw
@@ -236,11 +259,16 @@ def test_be_connection(db) -> dict:
         msg = str(exc)
         # Sales OS in Docker: 127.0.0.1 is the container, not the host where BE runs.
         low = msg.lower()
-        hostish = "127.0.0.1" in base or "localhost" in base.lower()
+        hostish = (
+            "127.0.0.1" in base
+            or "localhost" in base.lower()
+            or "host.docker.internal" in base.lower()
+            or "192.168.65." in base
+        )
         if hostish and ("connection refused" in low or "unreachable" in low or "connecterror" in low):
             msg = (
                 f"{msg}. Sales OS is likely in Docker — use http://host.docker.internal:3010 "
-                "(Mac/Windows) instead of http://127.0.0.1:3010, then Save and Test again. "
+                "(Mac/Windows) instead of http://127.0.0.1:3010 / 192.168.65.x, then Save and Test again. "
                 "BE ‘Connect’ success only proves BE→Sales OS; this test is Sales OS→BE."
             )
         return {"ok": False, "connected": False, "message": msg, "connection": be_connection_public(db=db)}

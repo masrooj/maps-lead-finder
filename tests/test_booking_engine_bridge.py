@@ -47,11 +47,19 @@ def test_rewrite_be_base_url_for_docker(monkeypatch):
     monkeypatch.setattr(be_connect, "_running_in_docker", lambda: True)
     assert be_connect.rewrite_be_base_url_for_runtime("http://127.0.0.1:3010") == "http://host.docker.internal:3010"
     assert be_connect.rewrite_be_base_url_for_runtime("http://localhost:3010/") == "http://host.docker.internal:3010"
+    assert (
+        be_connect.rewrite_be_base_url_for_runtime("http://192.168.65.254:3010")
+        == "http://host.docker.internal:3010"
+    )
     assert be_connect.rewrite_be_base_url_for_runtime("http://be.example:3010") == "http://be.example:3010"
     monkeypatch.setattr(be_connect, "_running_in_docker", lambda: False)
     assert be_connect.rewrite_be_base_url_for_runtime("http://127.0.0.1:3010") == "http://127.0.0.1:3010"
     assert (
         be_connect.rewrite_be_base_url_for_runtime("http://host.docker.internal:3010")
+        == "http://127.0.0.1:3010"
+    )
+    assert (
+        be_connect.rewrite_be_base_url_for_runtime("http://192.168.65.254:3010")
         == "http://127.0.0.1:3010"
     )
 
@@ -854,6 +862,7 @@ def test_refresh_delivery_updates_pay_url(auth_client):
             crm_lead_id=crm_lead_id_for(biz.id),
             status="sent",
             pay_url="",
+            order_reference="",
         )
         db.add(row)
         db.commit()
@@ -865,15 +874,17 @@ def test_refresh_delivery_updates_pay_url(auth_client):
         "app.services.booking_engine.client.BookingEngineClient.get_purchase",
         return_value={
             "purchaseId": "sp_refresh_1",
-            "status": {
-                "checkoutUrl": "https://pay.example/refreshed",
-                "payment": {"status": "PENDING"},
-            },
+            "orderReference": "AH-ORD-REFRESH-1",
+            "checkoutUrl": "https://pay.example/refreshed",
+            "payment": {"status": "PENDING"},
+            "financialStatus": "PENDING",
         },
     ):
         r = auth_client.post(f"/api/sales/be/deliveries/{did}/refresh")
     assert r.status_code == 200, r.text
-    assert r.json()["delivery"]["pay_url"] == "https://pay.example/refreshed"
+    body = r.json()["delivery"]
+    assert body["pay_url"] == "https://pay.example/refreshed"
+    assert body.get("order_reference") == "AH-ORD-REFRESH-1"
 
 
 def test_webhook_rejects_bad_bearer(auth_client):
@@ -1862,6 +1873,58 @@ def test_license_issued_and_upgrade_applied_by_installation(auth_client):
         assert d.from_revision_id == "rev_a"
     finally:
         db.close()
+
+
+def test_purchase_persists_order_reference_from_nested_status(auth_client):
+    """AH reused purchases historically omitted top-level orderReference — backfill from status/GET."""
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/ordref-nested-{uuid.uuid4().hex[:8]}",
+            name="OrdRef Nested Co",
+            email="ordrefnested@mapsleads.test",
+            currency="AUD",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.commit()
+        bid = biz.id
+    finally:
+        db.close()
+
+    fake_purchase = {
+        "purchaseId": "sp_ordref_nested",
+        "revisionId": "rev_or",
+        "priceCents": 1000,
+        "currency": "AUD",
+        "checkoutUrl": "https://pay.example/or",
+        "crmLeadId": crm_lead_id_for(bid),
+        "reused": True,
+        # top-level orderReference intentionally missing
+        "status": {"orderReference": "AH-ORD-NESTED"},
+    }
+
+    with (
+        patch(
+            "app.services.booking_engine.client.BookingEngineClient.create_request",
+            return_value={"id": "req_or"},
+        ),
+        patch(
+            "app.services.booking_engine.client.BookingEngineClient.create_purchase",
+            return_value=fake_purchase,
+        ),
+    ):
+        r = auth_client.post(
+            "/api/sales/be/send-to-delivery",
+            json={"business_id": bid, "product_revision_id": "rev_or"},
+        )
+    assert r.status_code == 200, r.text
+    assert r.json()["delivery"]["order_reference"] == "AH-ORD-NESTED"
 
 
 def test_soft_intake_failure_logged_but_purchase_continues(auth_client):
