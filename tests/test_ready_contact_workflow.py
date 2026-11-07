@@ -53,6 +53,25 @@ def test_infer_slug_marked_is_to_contact():
     assert infer_slug_from_flags(b) == "ready_to_contact"
 
 
+def test_board_column_slug_mirrors_contact_queue_flags():
+    from app.services.pipeline import board_column_slug
+
+    avail = {"identified", "to_contact", "ready_to_contact", "contacted", "follow_up_3", "follow_up_7", "engaged"}
+    # Stale stage_id on identified, but marked → Identified (to_contact) column
+    marked = Business(marked_for_contact=True, ready_for_contact=False, contacted=False, lost=False)
+    stale = PipelineStage(id=1, product_line="STANDALONE", slug="identified", name="Discovered", sort_order=0)
+    assert board_column_slug(marked, stale, available_slugs=avail) == "to_contact"
+    ready = Business(marked_for_contact=True, ready_for_contact=True, contacted=False, lost=False)
+    assert board_column_slug(ready, stale, available_slugs=avail) == "ready_to_contact"
+    # Confirm-sent via channel flags even if contacted flag false
+    sent = Business(marked_for_contact=True, email_sent=True, contacted=False, lost=False)
+    assert board_column_slug(sent, stale, available_slugs=avail) == "contacted"
+    # Late stage trusted
+    engaged_stage = PipelineStage(id=9, product_line="STANDALONE", slug="engaged", name="Engaged", sort_order=9)
+    engaged = Business(marked_for_contact=True, contacted=True, lost=False)
+    assert board_column_slug(engaged, engaged_stage, available_slugs=avail) == "engaged"
+
+
 def test_email_channel_can_ready():
     b = Business(
         email="a@b.com",

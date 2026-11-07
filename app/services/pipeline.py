@@ -55,10 +55,20 @@ def init_new_prospect(db, b: Business, *, lead_source: str = "google_places") ->
             b.pipeline_stage_id = stage.id
 
 
+def _contacted_like(b: Business) -> bool:
+    """Match Contact queue Contacted tab (confirm-sent or legacy contacted flag)."""
+    return bool(
+        getattr(b, "contacted", False)
+        or getattr(b, "email_sent", False)
+        or getattr(b, "whatsapp_sent", False)
+        or getattr(b, "instagram_sent", False)
+    )
+
+
 def infer_slug_from_flags(b: Business) -> str:
     if b.lost:
         return "lost"
-    if b.contacted:
+    if _contacted_like(b):
         kind = (getattr(b, "follow_up_kind", None) or "").strip()
         due = getattr(b, "next_follow_up_at", None)
         if due and kind != "call_today":
@@ -73,6 +83,38 @@ def infer_slug_from_flags(b: Business) -> str:
     if b.marked_for_contact:
         return "to_contact"
     return "identified"
+
+
+# Early funnel columns mirror Contact queue; later stages keep pipeline_stage_id.
+_EARLY_BOARD_SLUGS = frozenset(
+    {
+        "identified",
+        "to_contact",
+        "ready_to_contact",
+        "contacted",
+        "follow_up",
+        "follow_up_3",
+        "follow_up_7",
+    }
+)
+
+
+def board_column_slug(b: Business, stage: Optional[PipelineStage], *, available_slugs: Optional[set[str]] = None) -> str:
+    """Column slug for Pipeline kanban — CQ flags for early stages, stage_id after Follow-up."""
+    avail = available_slugs or set()
+    if stage and stage.slug not in _EARLY_BOARD_SLUGS:
+        return stage.slug
+    has_booking = bool((getattr(b, "current_booking_software", None) or "").strip())
+    # Contact queue parks Has booking off To contact / Ready — keep them off those columns.
+    if has_booking and not _contacted_like(b) and not b.lost:
+        return "identified"
+    slug = infer_slug_from_flags(b)
+    # Self-heal when DB still has legacy single follow_up only.
+    if slug in ("follow_up_3", "follow_up_7") and slug not in avail and "follow_up" in avail:
+        return "follow_up"
+    if slug == "follow_up" and slug not in avail and "follow_up_3" in avail:
+        return "follow_up_3"
+    return slug
 
 
 def backfill_prospect_stages(db) -> dict:

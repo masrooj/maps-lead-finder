@@ -282,8 +282,19 @@ def sales_pipeline(
     from app.config import PIPELINE_BOARD_HIDDEN_SLUGS
     from app.services.authz import can_view_business, get_user_by_email
     from app.services.automation import follow_up_badge, promote_due_follow_ups
+    from app.services.pipeline import board_column_slug
+    from app.services.seed import seed_stages
 
+    # Self-heal catalog when deploy landed UI before stages were reseeded.
     stages = list_stages(db, product_line.upper())
+    if not any(s.slug == "follow_up_3" for s in stages):
+        try:
+            seed_stages(db)
+            db.commit()
+        except Exception:
+            db.rollback()
+        stages = list_stages(db, product_line.upper())
+
     actor = get_user_by_email(db, _user)
     try:
         promote_due_follow_ups(
@@ -333,11 +344,22 @@ def sales_pipeline(
     from app.services.booking_engine.status import commercial_status_map
 
     be_status = commercial_status_map(db, [p.id for p in prospects])
+    stages_by_id = {s.id: s for s in stages}
+    available_slugs = {s.slug for s in stages}
+    # Bucket by Contact Queue flags for early columns (stale pipeline_stage_id was wrong).
+    by_slug: dict[str, list] = {s.slug: [] for s in stages}
+    for p in prospects:
+        st = stages_by_id.get(p.pipeline_stage_id) if p.pipeline_stage_id else None
+        slug = board_column_slug(p, st, available_slugs=available_slugs)
+        if slug in by_slug:
+            by_slug[slug].append(p)
+        elif st and st.slug in by_slug:
+            by_slug[st.slug].append(p)
     columns = []
     for s in stages:
         if s.slug in PIPELINE_BOARD_HIDDEN_SLUGS:
             continue
-        items = [p for p in prospects if p.pipeline_stage_id == s.id]
+        items = by_slug.get(s.slug) or []
         value = {}
         for p in items:
             cur = (p.currency or "USD").upper()
