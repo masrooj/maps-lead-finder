@@ -235,6 +235,7 @@ def custom_openapi():
         "/api/webhooks/skrill",
         "/api/webhooks/booking-engine",
         "/api/cron/unpaid-invoices",
+        "/api/cron/be-heartbeat",
     }
     for path, methods in (schema.get("paths") or {}).items():
         for op in methods.values():
@@ -2085,6 +2086,12 @@ def business_activity(business_id: int, _user: str = Depends(require_login)):
                     "sort_at": a.created_at.isoformat() if a.created_at else "",
                 }
             )
+        try:
+            from app.services.booking_engine.status import timeline_be_items
+
+            merged.extend(timeline_be_items(db, business_id))
+        except Exception:
+            pass
         merged.sort(key=lambda x: x.get("sort_at") or "", reverse=True)
         return {"count": len(merged), "results": merged}
 

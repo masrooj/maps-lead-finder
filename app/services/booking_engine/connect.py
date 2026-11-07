@@ -1,6 +1,8 @@
 """CRM connect-first: pairing codes, encrypted BE settings, connection status."""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import os
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -87,6 +89,17 @@ def require_be_connected(db=None) -> None:
         raise HTTPException(409, detail={"error": msg, "code": "CRM_NOT_CONNECTED"})
 
 
+def verify_webhook_bearer(token: str, secret: str) -> bool:
+    """Constant-time compare for inbound BE webhook bearer tokens."""
+    if not token or not secret:
+        return False
+    # Digest first so unequal lengths do not raise / leak via compare_digest.
+    return hmac.compare_digest(
+        hmac.new(b"be-webhook", token.encode("utf-8"), hashlib.sha256).digest(),
+        hmac.new(b"be-webhook", secret.encode("utf-8"), hashlib.sha256).digest(),
+    )
+
+
 def be_connection_public(db=None) -> dict:
     status = get_connection_status(db=db)
     secret = get_be_shared_secret(db=db)
@@ -99,18 +112,25 @@ def be_connection_public(db=None) -> dict:
             pairing_live = datetime.fromisoformat(expires) > _utcnow()
         except Exception:
             pairing_live = False
+    from app.services.booking_engine.policy import get_won_policy
+    from app.services.booking_engine.sync import sync_public_fields
+
+    sync = sync_public_fields(db=db)
     return {
         "base_url": base,
         "bridge_enabled": is_bridge_enabled(db=db),
         "connection_status": status,
         "connected": status == "connected" and bool(base) and bool(secret),
         "secret_configured": bool(secret),
-        "secret_hint": ("••••" + secret[-4:]) if secret and len(secret) > 4 else ("••••" if secret else ""),
+        # Never return stored secret material after save — configured flag only.
+        "secret_hint": "configured" if secret else "",
         "last_health_at": resolve_secret("be.last_health_at", "", db=db),
         "pairing_code_active": pairing_live,
         "pairing_expires_at": expires if pairing_live else "",
         "webhook_path": "/api/webhooks/booking-engine",
         "product_name": "AppointHive Sales OS",
+        "won_policy": get_won_policy(db=db),
+        **sync,
     }
 
 
@@ -149,6 +169,10 @@ def issue_pairing_secret(db, *, product_base_url: str, public_base: str) -> dict
     store_setting_value(db, "be.shared_secret", secret, secret=True)
     store_setting_value(db, "be.bridge_enabled", "true", secret=False)
     store_setting_value(db, "be.connection_status", "disconnected", secret=False)
+    store_setting_value(db, "be.secret_rotated_at", _utcnow().isoformat(), secret=False)
+    from app.services.booking_engine.sync import ensure_pairing_id
+
+    ensure_pairing_id(db)
     db.commit()
     webhook = f"{public_base.rstrip('/')}/api/webhooks/booking-engine"
     return {"secret": secret, "webhookUrl": webhook, "sharedSecret": secret}
@@ -166,9 +190,14 @@ def save_manual_connection(db, *, base_url: str, shared_secret: str = "") -> dic
             raise HTTPException(422, "Shared secret required")
         secret = existing
     store_setting_value(db, "be.base_url", base, secret=False)
+    if shared_secret and shared_secret.strip():
+        store_setting_value(db, "be.secret_rotated_at", _utcnow().isoformat(), secret=False)
     store_setting_value(db, "be.shared_secret", secret, secret=True)
     store_setting_value(db, "be.bridge_enabled", "true", secret=False)
     store_setting_value(db, "be.connection_status", "disconnected", secret=False)
+    from app.services.booking_engine.sync import ensure_pairing_id
+
+    ensure_pairing_id(db)
     db.commit()
     return be_connection_public(db=db)
 
@@ -222,12 +251,16 @@ def test_be_connection(db) -> dict:
     # BE may return connected only when both sides configured; also accept ok+secretConfigured+enabled
     if not ok and bool(health.get("ok")) and secret_ok and enabled:
         ok = True
+    from app.services.booking_engine.sync import mark_heartbeat
+
     if ok:
         set_connection_status(db, "connected", health_at=_utcnow().isoformat())
         store_setting_value(db, "be.bridge_enabled", "true", secret=False)
         db.commit()
+        mark_heartbeat(db, ok=True, note="Test connection ok")
         return {"ok": True, "connected": True, "message": "Connected to AppointHive", "health": health, "connection": be_connection_public(db=db)}
     set_connection_status(db, "error", health_at=_utcnow().isoformat())
+    mark_heartbeat(db, ok=False, note=f"health status={status or health}")
     return {
         "ok": False,
         "connected": False,

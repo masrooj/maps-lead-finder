@@ -42,7 +42,8 @@ import {
 import {
   refreshBeConnBanners, renderBeConnDetails, beCatalogIsPlan, beCatalogRows,
   formatBePrice, renderBeCatalogBody, loadBeCatalog, isOwnerRole, applyBeConnectOwnerGate,
-  setBeRole
+  setBeRole, beConnCache, setBeConnCache, loadBeMonitor, loadBeEvents, renderCommercialPanel,
+  bindCommercialPanelActions
 } from '../features/be-bridge.js';
 
 import { bindDashKpis, loadDashboard } from '../panels/dashboard.js';
@@ -104,7 +105,7 @@ let moneyTab='ledger'; // ledger | invoices | settings
 let commsTab='outreach'; // outreach | invoices
 let dealsTab='proposals'; // proposals | paylinks
 let settingsTab='general'; // general | team | ranking | jobs | views
-let ahTab='overview'; // overview | connect | catalogs
+let ahTab='overview'; // overview | connect | events | catalogs
 let currentRole='owner';
 
 
@@ -140,7 +141,7 @@ function setAppPanel(panel, opts){
     if(appPanel==='money') moneyTab=['ledger','invoices','settings'].includes(tabHint)?tabHint:moneyTab;
     if(appPanel==='activities') commsTab=tabHint==='invoices'?'invoices':'outreach';
     if(appPanel==='deals') dealsTab=tabHint==='paylinks'?'paylinks':'proposals';
-    if(appPanel==='appoinHive') ahTab=['overview','connect','catalogs'].includes(tabHint)?tabHint:ahTab;
+    if(appPanel==='appoinHive') ahTab=['overview','connect','events','catalogs'].includes(tabHint)?tabHint:ahTab;
     if(appPanel==='settings') settingsTab=['general','team','ranking','jobs','views'].includes(tabHint)?tabHint:settingsTab;
   }
   if(o.moneyTab) moneyTab=o.moneyTab;
@@ -193,7 +194,7 @@ function setAppPanel(panel, opts){
 }
 
 function setAhTab(tab){
-  const allowed=['overview','connect','catalogs'];
+  const allowed=['overview','connect','events','catalogs'];
   ahTab=allowed.includes(tab)?tab:'overview';
   document.querySelectorAll('#ahTabs [data-ah-tab]').forEach(b=>{
     const on=b.dataset.ahTab===ahTab;
@@ -205,6 +206,8 @@ function setAhTab(tab){
   });
   if(ahTab==='catalogs') loadBeCatalog().catch(()=>{});
   if(ahTab==='connect') applyBeConnectOwnerGate();
+  if(ahTab==='events') loadBeEvents().catch(()=>{});
+  if(ahTab==='overview') loadBeMonitor().catch(()=>{});
 }
 
 
@@ -626,7 +629,6 @@ async function applyLocalPayDefaults(){
   await loadPaySetup();
 }
 
-let beConnCache={connected:false,connection_status:'disconnected'};
 let beRevisionsCache=[];
 
 
@@ -647,7 +649,7 @@ async function loadAppointHive(){
   const revHost=$('beRevisionsHost');
   try{
     const conn=await api('/api/sales/be/connection');
-    beConnCache=conn||{};
+    setBeConnCache(conn);
     const st=conn.connection_status||'disconnected';
     const cls=conn.connected?'ok':(st==='error'?'err':'info');
     if(banner){
@@ -661,7 +663,7 @@ async function loadAppointHive(){
     if($('bePairBox')){
       $('bePairBox').innerHTML=conn.pairing_code_active
         ?`Pairing code active until ${esc(conn.pairing_expires_at)}. On AppointHive Super Admin → AppointHive Sales OS, paste this Sales OS URL and the code.`
-        :(conn.secret_configured?`Secret ${esc(conn.secret_hint||'set')} · webhook ${esc(conn.webhook_path||'')}`:'No secret yet — generate a pairing code or paste one.');
+        :(conn.secret_configured?`Secret configured (value hidden) · webhook ${esc(conn.webhook_path||'')}`:'No secret yet — generate a pairing code or paste one.');
     }
     if(revHost){
       if(!conn.connected){
@@ -687,7 +689,9 @@ async function loadAppointHive(){
       }
     }
     applyBeConnectOwnerGate();
+    await loadBeMonitor().catch(()=>{});
     if(ahTab==='catalogs') await loadBeCatalog().catch(()=>{});
+    if(ahTab==='events') await loadBeEvents().catch(()=>{});
   }catch(e){
     if(banner){ banner.className='pay-status err'; banner.textContent=e.message||'Failed to load connection'; }
     if($('beConnDetails')) $('beConnDetails').textContent=e.message||'Failed to load connection';
@@ -770,6 +774,13 @@ async function loadSettings(){
     const capRaw=(settingsPayload.settings&&settingsPayload.settings.ig_soft_dm_daily_cap);
     const capParsed=parseInt(capRaw,10);
     if($('igSoftDmDailyCap')) $('igSoftDmDailyCap').value=String(Number.isFinite(capParsed)&&capParsed>=0?capParsed:8);
+  }catch(_){}
+  try{
+    const wp=await api('/api/sales/be/won-policy');
+    if($('wonAutoOnPaid')) $('wonAutoOnPaid').checked=!!wp.auto_won_on_be_paid;
+    if($('wonRequireFullyPaid')) $('wonRequireFullyPaid').checked=wp.require_fully_paid!==false;
+    if($('wonRequireAgreement')) $('wonRequireAgreement').checked=!!wp.require_agreement_accepted;
+    if($('wonRequireMilestone')) $('wonRequireMilestone').checked=!!wp.require_initial_milestone_paid;
   }catch(_){}
   $('settingsMeta').innerHTML=`
     <div class="queue-card"><span>Signed in</span><strong style="font-size:14px">${esc((me.user&&me.user.email)||me.username||'')}</strong></div>
@@ -1323,7 +1334,7 @@ async function createDrawerPaylinkForProvider(provider){
   try{
     const conn=await api('/api/sales/be/connection');
     ahConnected=!!(conn&&conn.connected);
-    beConnCache=conn||{};
+    setBeConnCache(conn);
   }catch(e){}
   if(ahConnected && productLine==='STANDALONE' && (provider==='stripe'||provider==='paypal')){
     toast('AppointHive connected — use Delivery / pay tab for Stripe/PayPal card checkout', true);
@@ -1379,7 +1390,7 @@ async function createPaylinksFlow(){
   try{
     const conn=await api('/api/sales/be/connection');
     ahConnected=!!(conn&&conn.connected);
-    beConnCache=conn||{};
+    setBeConnCache(conn);
   }catch(e){}
   const defaultProviders=ahConnected&&productLine==='STANDALONE'?'manual,payoneer,skrill':'manual,stripe,paypal';
   const form=await uiForm({
@@ -2582,7 +2593,13 @@ async function loadActivity(id){
   try{
     const act=await api('/api/businesses/'+id+'/activity');
     if(String(drawerLead&&drawerLead.id)!==String(id))return; // drawer switched
-    list.innerHTML=(act.results||[]).length?(act.results||[]).map(a=>`<li><strong>${esc(a.kind)}</strong>${a.channel?' · '+esc(a.channel):''}${a.note?' · '+esc(a.note):''}<div class="sub">${esc(dateOnly(a.created_at)||a.created_at||'')}</div></li>`).join(''):'<li class="sub">No activity yet</li>';
+    list.innerHTML=(act.results||[]).length?(act.results||[]).map(a=>{
+      const src=a.source||'sales';
+      const srcLabel=src==='appointhive'?'AH':(src==='stage'?'Stage':(src==='discover'?'Discover':'Sales'));
+      const title=a.kind||a.action||a.activity_type||'';
+      const note=a.note||a.summary||a.message||'';
+      return `<li><strong>${esc(title)}</strong> <span class="ch-tag">${esc(srcLabel)}</span>${a.channel?' · '+esc(a.channel):''}${note?' · '+esc(note):''}<div class="sub">${esc(dateOnly(a.created_at||a.sort_at)||a.created_at||a.sort_at||'')}</div></li>`;
+    }).join(''):'<li class="sub">No activity yet</li>';
   }catch(e){
     if(String(drawerLead&&drawerLead.id)===String(id))list.innerHTML='<li class="sub">Could not load activity</li>';
   }
@@ -2719,6 +2736,7 @@ function renderDrawer(){
           <button type="button" id="beSendUpgradeBtn" disabled title="Requires installation_id from prior delivery">Send upgrade</button>
           <button type="button" id="beRefreshDeliveryBtn" disabled>Refresh status</button>
         </div>
+        <div id="beDrawerCommercial" class="hint" style="margin-top:10px"></div>
         <div id="beDrawerPay" class="hint" style="margin-top:8px"></div>
       </div>
     </div>`;
@@ -2814,6 +2832,7 @@ async function hydrateBeDrawer(){
   const st=$('beDrawerStatus');
   const pay=$('beDrawerPay');
   const prices=$('beDrawerPrices');
+  const commercial=$('beDrawerCommercial');
   const sendBtn=$('beSendDeliveryBtn');
   const reqBtn=$('beSendRequestBtn');
   const upBtn=$('beSendUpgradeBtn');
@@ -2821,21 +2840,22 @@ async function hydrateBeDrawer(){
   if(!st||!drawerLead) return;
   try{
     const conn=await api('/api/sales/be/connection');
-    beConnCache=conn||{};
+    setBeConnCache(conn);
     const connected=!!conn.connected;
     const standalone=(drawerLead.product_line||'STANDALONE')==='STANDALONE';
     if(!standalone){
       st.textContent='AppointHive product handover is for STANDALONE deals.';
       if(prices) prices.textContent='';
+      if(commercial) commercial.textContent='';
       return;
     }
     st.innerHTML=connected
-      ?`Connected as <strong>AppointHive Sales OS</strong> · live prices below. Full business + contacts sent on handover. Local PSP blocked.`
+      ?`Connected as <strong>AppointHive Sales OS</strong> · commercial snapshot is read-only from AppointHive. Local PSP blocked.`
       :`Not connected — <button type="button" class="chip ok" data-goto="appoinHive:connect">Connect AppointHive</button> first.`;
     if(sendBtn) sendBtn.disabled=!connected;
     if(reqBtn) reqBtn.disabled=!connected;
     if(refBtn) refBtn.disabled=!connected;
-    if(!connected){ if(pay) pay.textContent=''; if(prices) prices.textContent=''; if(upBtn) upBtn.disabled=true; return; }
+    if(!connected){ if(pay) pay.textContent=''; if(prices) prices.textContent=''; if(commercial) commercial.textContent=''; if(upBtn) upBtn.disabled=true; return; }
     try{
       const data=await api('/api/sales/be/revisions');
       beRevisionsCache=data.revisions||[];
@@ -2849,6 +2869,28 @@ async function hydrateBeDrawer(){
     }catch(e){
       if(prices) prices.textContent=e.message||'Could not load live prices';
     }
+    try{
+      const snap=await api('/api/sales/be/prospects/'+drawerLead.id+'/commercial');
+      let histHtml='';
+      try{
+        const hist=await api('/api/sales/prospects/'+drawerLead.id+'/stage-history');
+        const rows=(hist.history||[]).slice(0,8);
+        if(rows.length){
+          histHtml=`<div class="sub" style="margin-top:10px"><strong>Stage history</strong></div>
+            <div class="sales-table-wrap"><table class="sales-table"><thead><tr><th>When</th><th>Change</th><th>Note</th></tr></thead><tbody>
+            ${rows.map(h=>`<tr><td class="sub">${esc((h.created_at||'').replace('T',' ').slice(0,16))}</td>
+              <td>${esc(h.from_stage||'—')} → ${esc(h.to_stage||'—')}</td>
+              <td class="sub">${esc(h.note||'')}</td></tr>`).join('')}
+            </tbody></table></div>`;
+        }
+      }catch(_e){}
+      if(commercial){
+        commercial.innerHTML=`<div class="sub"><strong>Commercial status</strong> (AppointHive authority · read-only)</div>`+renderCommercialPanel(snap,{businessId:drawerLead.id})+histHtml;
+        bindCommercialPanelActions(commercial,{onDone:()=>hydrateBeDrawer()});
+      }
+    }catch(e){
+      if(commercial) commercial.innerHTML=`<div class="sub">Commercial status unavailable: ${esc(e.message||'')}</div>`;
+    }
     const dels=await api('/api/sales/be/deliveries?business_id='+drawerLead.id);
     const latest=(dels.deliveries||[])[0];
     const installId=(latest&&latest.installation_id)||drawerLead.be_installation_id||'';
@@ -2859,11 +2901,15 @@ async function hydrateBeDrawer(){
         :'Requires installation_id from prior AppointHive delivery webhook';
     }
     if(latest && pay){
+      const fin=latest.financial_status||latest.status||'';
       const label=latest.purpose==='request'&&!latest.pay_url?'Awaiting AppointHive quote'
         :(latest.purpose==='upgrade'?'Upgrade · '+latest.status
-        :(latest.pay_url?'Pay-ready':'Status '+latest.status));
+        :(fin==='partially_paid'?'Partially paid'
+        :(latest.pay_url?'Pay-ready':'Status '+latest.status)));
       const payUrl=latest.pay_url||'';
-      pay.innerHTML=`<div><span class="status-pill ${esc(latest.status)}">${esc(label)}</span> · ${esc(latest.currency||'')} ${((latest.quoted_amount_cents||0)/100).toFixed(2)}</div>
+      pay.innerHTML=`<div><span class="status-pill ${esc(latest.status)}">${esc(label)}</span> · ${esc(latest.currency||'')} ${((latest.quoted_amount_cents||0)/100).toFixed(2)}
+        ${latest.financial_status?` · financial ${esc(latest.financial_status)}`:''}
+        ${latest.delivery_status?` · delivery ${esc(latest.delivery_status)}`:''}</div>
         ${payUrl?`<div class="paylink-card" style="margin-top:8px" data-be-pay-card>
           <img class="paylink-qr" src="${esc(qrUrlFor(payUrl))}" alt="Pay QR" width="140" height="140" loading="lazy">
           <div class="paylink-meta">
@@ -3091,6 +3137,16 @@ document.querySelectorAll('#ahTabs [data-ah-tab]').forEach(btn=>btn.addEventList
 $('beCatalogRefresh')&&$('beCatalogRefresh').addEventListener('click',()=>loadBeCatalog().catch(e=>toast(e.message,true)));
 $('beCatalogLine')&&$('beCatalogLine').addEventListener('change',()=>{ if(ahTab==='catalogs') loadBeCatalog().catch(()=>{}); });
 $('beConnRefresh')&&$('beConnRefresh').addEventListener('click',()=>loadAppointHive().catch(e=>toast(e.message,true)));
+$('beEventsRefresh')&&$('beEventsRefresh').addEventListener('click',()=>loadBeEvents().catch(e=>toast(e.message,true)));
+$('beEventsStatus')&&$('beEventsStatus').addEventListener('change',()=>loadBeEvents().catch(()=>{}));
+$('beHeartbeatBtn')&&$('beHeartbeatBtn').addEventListener('click',async()=>{
+  if(!isOwnerRole()){ toast('Owner only',true); return; }
+  try{
+    const r=await api('/api/sales/be/sync/heartbeat',{method:'POST',body:{}});
+    toast(r.message||(r.ok?'Heartbeat ok':'Heartbeat failed'), !r.ok);
+    await loadAppointHive();
+  }catch(e){ toast(e.message,true); }
+});
 $('beSaveManual')&&$('beSaveManual').addEventListener('click',async()=>{
   if(!isOwnerRole()){ toast('Owner only',true); return; }
   try{
@@ -3274,6 +3330,19 @@ document.addEventListener('visibilitychange',()=>{
 });
 window.addEventListener('pageshow',()=>showComposeConfirmReturn());
 window.addEventListener('focus',()=>showComposeConfirmReturn());
+$('saveWonPolicy')&&$('saveWonPolicy').addEventListener('click',async()=>{
+  try{
+    const body={
+      auto_won_on_be_paid:!!($('wonAutoOnPaid')&&$('wonAutoOnPaid').checked),
+      require_fully_paid:!!($('wonRequireFullyPaid')&&$('wonRequireFullyPaid').checked),
+      require_agreement_accepted:!!($('wonRequireAgreement')&&$('wonRequireAgreement').checked),
+      require_initial_milestone_paid:!!($('wonRequireMilestone')&&$('wonRequireMilestone').checked),
+    };
+    await api('/api/sales/be/won-policy',{method:'PUT',body});
+    toast('Won policy saved');
+    await loadSettings();
+  }catch(e){ toast(e.message,true); }
+});
 $('saveSaasFlag')&&$('saveSaasFlag').addEventListener('click',async()=>{
   try{
     const on=$('saasEnabledToggle').checked;
@@ -3621,6 +3690,9 @@ $('drawerPanel').addEventListener('click',async e=>{
       const url=res.pay_url||(res.delivery&&res.delivery.pay_url)||'';
       if(url){ try{ await navigator.clipboard.writeText(url); }catch(e){} window.open(url,'_blank','noopener'); }
       toast(res.label||'Sent to AppointHive — pay link ready');
+      if(res.soft_intake_warning){
+        toast('Soft intake warning: '+(String(res.soft_intake_warning).slice(0,160)), true);
+      }
       await hydrateBeDrawer();
     }catch(err){ toast(err.message||'Could not send to AppointHive delivery',true); }
     return;
@@ -3690,7 +3762,7 @@ $('drawerPanel').addEventListener('click',async e=>{
       try{
         const conn=await api('/api/sales/be/connection');
         connected=!!(conn&&conn.connected);
-        beConnCache=conn||{};
+        setBeConnCache(conn);
       }catch(e){}
       const line=(drawerLead.product_line||'STANDALONE').toUpperCase();
       if(connected && line==='STANDALONE'){
@@ -3908,6 +3980,7 @@ B.setAhTab = setAhTab;
 B.setSettingsTab = setSettingsTab;
 B.applyBeConnectOwnerGate = applyBeConnectOwnerGate;
 B.loadBeCatalog = loadBeCatalog;
+B.loadAppointHive = typeof loadAppointHive === 'function' ? loadAppointHive : null;
 B.loadMoney = typeof loadMoney === 'function' ? loadMoney : null;
 B.qrUrlFor = typeof qrUrlFor === 'function' ? qrUrlFor : null;
 B.closeTopMenus = closeTopMenus;
@@ -3929,7 +4002,7 @@ registerPanel({ id: 'templates', refresh: safeRefresh(typeof loadTemplates === '
 registerPanel({ id: 'deals', refresh: safeRefresh(typeof loadDeals === 'function' ? loadDeals : null) });
 registerPanel({ id: 'money', refresh: safeRefresh(typeof loadMoney === 'function' ? loadMoney : null) });
 /* reports registered in panels/reports.js */
-registerPanel({ id: 'appoinHive', refresh: safeRefresh(typeof loadAppointHive === 'function' ? loadAppointHive : null) });
+/* appoinHive registered in panels/appointhive.js */
 registerPanel({ id: 'paySetup', refresh: safeRefresh(typeof loadPaySetup === 'function' ? loadPaySetup : null) });
 registerPanel({ id: 'settings', refresh: safeRefresh(typeof loadSettings === 'function' ? loadSettings : null) });
 

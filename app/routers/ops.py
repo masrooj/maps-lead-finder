@@ -411,25 +411,38 @@ def job_tick(job_id: int, _user: str = Depends(require_user), db=Depends(get_db)
     return tick_job(db, job_id)
 
 
-@router.post("/api/cron/unpaid-invoices", tags=["ops"])
-def cron_unpaid(request: Request, x_cron_secret: str = Header(default=""), db=Depends(get_db)):
-    # If CRON_SECRET is configured: header must match (session alone is not enough).
-    # If CRON_SECRET is empty: Owner session may run manually.
+def _authorize_cron(request: Request, x_cron_secret: str, db) -> None:
     cron_secret = os.getenv("CRON_SECRET", "").strip()
     if cron_secret:
         if x_cron_secret != cron_secret:
             raise HTTPException(401, "Invalid cron secret")
-    else:
-        if not _require_login:
-            raise HTTPException(401, "Cron secret or login required")
-        user = _require_login(request)
-        actor = get_user_by_email(db, user)
-        require_role(actor, "owner")
+        return
+    if not _require_login:
+        raise HTTPException(401, "Cron secret or login required")
+    user = _require_login(request)
+    actor = get_user_by_email(db, user)
+    require_role(actor, "owner")
+
+
+@router.post("/api/cron/unpaid-invoices", tags=["ops"])
+def cron_unpaid(request: Request, x_cron_secret: str = Header(default=""), db=Depends(get_db)):
+    # If CRON_SECRET is configured: header must match (session alone is not enough).
+    # If CRON_SECRET is empty: Owner session may run manually.
+    _authorize_cron(request, x_cron_secret, db)
     job = create_job(db, "unpaid_invoice_followups")
     result = tick_job(db, job.id)
     while not result.get("done"):
         result = tick_job(db, job.id)
     return result
+
+
+@router.post("/api/cron/be-heartbeat", tags=["be-bridge"])
+def cron_be_heartbeat(request: Request, x_cron_secret: str = Header(default=""), db=Depends(get_db)):
+    """Scheduled AppointHive health probe — updates heartbeat / sync markers."""
+    _authorize_cron(request, x_cron_secret, db)
+    from app.services.booking_engine.sync import run_heartbeat
+
+    return run_heartbeat(db)
 
 
 @router.post("/api/webhooks/stripe", tags=["ops"])
@@ -629,9 +642,23 @@ def public_product_pairing(body: ProductPairingBody, request: Request, db=Depend
 @router.post("/api/webhooks/booking-engine", tags=["be-bridge"])
 async def booking_engine_webhook(request: Request, db=Depends(get_db)):
     """Inbound AppointHive events. Bearer shared secret. Never creates local product PSP invoices."""
-    from app.services.booking_engine.connect import get_be_shared_secret, get_connection_status, is_bridge_enabled
+    from app.services.booking_engine.connect import (
+        get_be_shared_secret,
+        get_connection_status,
+        is_bridge_enabled,
+        verify_webhook_bearer,
+    )
+    from app.services.booking_engine.events import (
+        extract_event_id,
+        extract_event_version,
+        mark_inbox_duplicate,
+        mark_inbox_failed,
+        normalize_event_type,
+        record_inbox_start,
+    )
     from app.services.booking_engine.handoff import apply_be_webhook
     from app.services.billing.service import record_webhook_once
+    from app.services.booking_engine.sync import mark_sync_fail
 
     # Read body first so auth failures still release the connection quickly.
     try:
@@ -651,10 +678,11 @@ async def booking_engine_webhook(request: Request, db=Depends(get_db)):
         raise HTTPException(503, "Booking Engine webhook secret not configured")
     auth = (request.headers.get("authorization") or "").strip()
     token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
-    if not token or token != secret:
+    if not verify_webhook_bearer(token, secret):
         raise HTTPException(401, "Invalid webhook bearer")
 
-    event = str(payload.get("event") or "unknown")
+    raw_event = str(payload.get("event") or "unknown")
+    event = normalize_event_type(raw_event)
     # Fast path: bridge ping must not block commercial webhook backlog.
     if event == "crm.bridge.connected":
         from app.services.booking_engine.connect import set_connection_status
@@ -662,11 +690,26 @@ async def booking_engine_webhook(request: Request, db=Depends(get_db)):
         set_connection_status(db, "connected")
         return {"ok": True, "event": event, "connected": True}
 
-    event_id = str(
-        payload.get("eventId")
-        or payload.get("id")
-        or f"{event}:{payload.get('purchaseId') or ''}:{payload.get('requestId') or ''}:{payload.get('installationId') or ''}:{payload.get('connectedAt') or ''}"
-    )
+    from app.services.booking_engine.events import is_already_processed
+
+    event_id = extract_event_id(payload)
+    version = extract_event_version(payload)
+    inbox = record_inbox_start(db, event_id=event_id, event_type=raw_event, payload=payload, version=version)
+    if is_already_processed(inbox):
+        db.commit()
+        return {"ok": True, "duplicate": True, "event_id": event_id}
+
     if not record_webhook_once(db, "booking_engine", event_id[:200], payload):
-        return {"ok": True, "duplicate": True}
-    return apply_be_webhook(db, payload)
+        # webhook_events already saw this id — keep failed rows failed for manual retry
+        if inbox.status == "pending":
+            mark_inbox_duplicate(db, inbox)
+        db.commit()
+        return {"ok": True, "duplicate": True, "event_id": event_id}
+
+    try:
+        return apply_be_webhook(db, payload, inbox_row=inbox)
+    except Exception as exc:
+        mark_inbox_failed(db, inbox, str(exc))
+        mark_sync_fail(db, note=str(exc), commit=False)
+        db.commit()
+        raise

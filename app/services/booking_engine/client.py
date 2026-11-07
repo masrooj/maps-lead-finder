@@ -104,3 +104,19 @@ class BookingEngineClient:
 
     def upgrade_quote(self, params: dict) -> dict:
         return self._request("GET", "/standalone/upgrade-quote", params=params)
+
+    def submit_payment_evidence(self, payload: dict) -> dict:
+        """Bank/manual evidence only — AH forces PENDING; never send PAID/REJECTED/finalize."""
+        body = dict(payload or {})
+        body["status"] = "PENDING"
+        body.pop("finalize", None)
+        return self._request("POST", "/standalone/payments", json_body=body)
+
+    def create_demo(self, payload: dict) -> dict:
+        return self._request("POST", "/demos", json_body=payload)
+
+    def create_trial(self, payload: dict) -> dict:
+        return self._request("POST", "/trials", json_body=payload)
+
+    def get_client(self, client_id: str) -> dict:
+        return self._request("GET", f"/clients/{client_id}")

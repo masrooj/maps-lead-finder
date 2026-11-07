@@ -8,7 +8,7 @@ from unittest.mock import patch
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.models import BeDelivery, Business
+from app.models import BeDelivery, BeMilestoneSnapshot, Business
 from app.services.booking_engine.connect import (
     be_connection_public,
     crm_lead_id_for,
@@ -23,6 +23,11 @@ def _force_connected(db, *, base="http://127.0.0.1:3010", secret="test-be-shared
     store_setting(db, "be.bridge_enabled", "true", secret=False)
     store_setting(db, "be.connection_status", "connected", secret=False)
     db.commit()
+    # Guard against settings-session races after disconnect / long suites.
+    from app.services.booking_engine.connect import get_be_shared_secret
+
+    db.expire_all()
+    assert get_be_shared_secret(db=db) == secret
 
 
 def _force_disconnected(db):
@@ -368,6 +373,19 @@ def test_payment_paid_webhook_mirrors_won(auth_client):
     db = SessionLocal()
     try:
         _force_connected(db)
+        store_setting(
+            db,
+            "be.won_policy",
+            json.dumps(
+                {
+                    "auto_won_on_be_paid": True,
+                    "require_agreement_accepted": False,
+                    "require_initial_milestone_paid": False,
+                    "require_fully_paid": True,
+                }
+            ),
+            secret=False,
+        )
         from app.services.pipeline import get_stage, init_new_prospect
 
         biz = Business(
@@ -738,6 +756,19 @@ def test_paid_webhook_idempotent_no_double_activity(auth_client):
     db = SessionLocal()
     try:
         _force_connected(db)
+        store_setting(
+            db,
+            "be.won_policy",
+            json.dumps(
+                {
+                    "auto_won_on_be_paid": True,
+                    "require_agreement_accepted": False,
+                    "require_initial_milestone_paid": False,
+                    "require_fully_paid": True,
+                }
+            ),
+            secret=False,
+        )
         from app.services.pipeline import get_stage, init_new_prospect
 
         biz = Business(
@@ -864,6 +895,19 @@ def test_so_only_full_flow_a_b_c_without_live_be(auth_client):
     db = SessionLocal()
     try:
         _force_connected(db)
+        store_setting(
+            db,
+            "be.won_policy",
+            json.dumps(
+                {
+                    "auto_won_on_be_paid": True,
+                    "require_agreement_accepted": False,
+                    "require_initial_milestone_paid": False,
+                    "require_fully_paid": True,
+                }
+            ),
+            secret=False,
+        )
         from app.services.pipeline import get_stage, init_new_prospect
 
         biz = Business(
@@ -1002,3 +1046,1124 @@ def test_so_only_full_flow_a_b_c_without_live_be(auth_client):
     assert upg.json()["pay_url"] == "https://pay.example/so-upgrade"
     assert upg.json()["delivery"]["purpose"] == "upgrade"
     assert upg.json()["delivery"]["installation_id"] == "inst_so_e2e"
+
+
+def test_payment_paid_default_policy_does_not_auto_won(auth_client):
+    """Default won_policy: payment updates financial snapshot only — not Won."""
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        store_setting(
+            db,
+            "be.won_policy",
+            json.dumps(
+                {
+                    "auto_won_on_be_paid": False,
+                    "require_agreement_accepted": False,
+                    "require_initial_milestone_paid": False,
+                    "require_fully_paid": True,
+                }
+            ),
+            secret=False,
+        )
+        from app.services.pipeline import get_stage, init_new_prospect
+
+        biz = Business(
+            place_id=f"be/bridge-nowon-{uuid.uuid4().hex[:8]}",
+            name="No Auto Won Co",
+            email="nowon@mapsleads.test",
+            currency="AUD",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        nego = get_stage(db, "STANDALONE", "negotiation")
+        assert nego is not None
+        biz.pipeline_stage_id = nego.id
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_nowon_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="pending_payment",
+                quoted_amount_cents=10000,
+            )
+        )
+        db.commit()
+        bid = biz.id
+        nego_id = nego.id
+        secret = "test-be-shared-secret"
+    finally:
+        db.close()
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers={"Authorization": f"Bearer {secret}"},
+        json={
+            "eventId": f"evt-nowon-{uuid.uuid4().hex}",
+            "event": "standalone.payment.paid",
+            "purchaseId": "sp_nowon_1",
+            "crmLeadId": crm_lead_id_for(bid),
+            "paymentStatus": "PAID",
+            "paidAmountCents": 10000,
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body.get("status") == "paid"
+    assert (body.get("won") or {}).get("won_mirrored") is False
+
+    db = SessionLocal()
+    try:
+        biz = db.get(Business, bid)
+        assert biz.pipeline_stage_id == nego_id
+        d = db.scalar(select(BeDelivery).where(BeDelivery.purchase_id == "sp_nowon_1"))
+        assert d and d.financial_status == "paid"
+        assert d.paid_amount_cents == 10000
+    finally:
+        db.close()
+
+
+def test_partial_payment_and_milestone_snapshots(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/bridge-partial-{uuid.uuid4().hex[:8]}",
+            name="Partial Pay Co",
+            email="partial@mapsleads.test",
+            currency="AUD",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_partial_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="pending_payment",
+                quoted_amount_cents=20000,
+            )
+        )
+        db.commit()
+        bid = biz.id
+        secret = "test-be-shared-secret"
+    finally:
+        db.close()
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers={"Authorization": f"Bearer {secret}"},
+        json={
+            "eventId": f"evt-partial-{uuid.uuid4().hex}",
+            "event": "payment.partially_paid",
+            "purchaseId": "sp_partial_1",
+            "crmLeadId": crm_lead_id_for(bid),
+            "paidAmountCents": 5000,
+            "outstandingCents": 15000,
+            "milestones": [
+                {
+                    "id": "ms1",
+                    "name": "Deposit",
+                    "amountCents": 5000,
+                    "status": "paid",
+                    "currency": "AUD",
+                },
+                {
+                    "id": "ms2",
+                    "name": "Balance",
+                    "amountCents": 15000,
+                    "status": "pending",
+                    "dueAt": "2099-01-01T00:00:00+00:00",
+                    "currency": "AUD",
+                },
+            ],
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json().get("financial_status") == "partially_paid"
+
+    commercial = auth_client.get(f"/api/sales/be/prospects/{bid}/commercial")
+    assert commercial.status_code == 200, commercial.text
+    data = commercial.json()
+    assert data["payment_status"] == "partially_paid"
+    assert data["paid_amount_cents"] == 5000
+    assert data["outstanding_balance_cents"] == 15000
+    assert data["milestone_summary"]["milestone_count"] == 2
+    assert data["milestone_summary"]["paid_milestones"] == 1
+    assert data["read_only_commercial"] is True
+
+
+
+def test_agreement_quote_invoice_and_milestone_events(auth_client):
+    """AH commercial OS emitters → SOS snapshot fields (no Won on these alone)."""
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/bridge-docs-{uuid.uuid4().hex[:8]}",
+            name="Docs Event Co",
+            email="docs@mapsleads.test",
+            currency="USD",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_docs_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="sent",
+                quoted_amount_cents=30000,
+            )
+        )
+        db.commit()
+        bid = biz.id
+        secret = "test-be-shared-secret"
+        lead = crm_lead_id_for(bid)
+    finally:
+        db.close()
+
+    headers = {"Authorization": f"Bearer {secret}"}
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-quote-acc-{uuid.uuid4().hex}",
+            "event": "quote.accepted",
+            "purchaseId": "sp_docs_1",
+            "crmLeadId": lead,
+            "documentId": "doc-q1",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-agr-acc-{uuid.uuid4().hex}",
+            "event": "agreement.accepted",
+            "purchaseId": "sp_docs_1",
+            "crmLeadId": lead,
+            "documentId": "doc-a1",
+            "documentNumber": "AG-1",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-inv-{uuid.uuid4().hex}",
+            "event": "invoice.created",
+            "purchaseId": "sp_docs_1",
+            "crmLeadId": lead,
+            "documentId": "doc-i1",
+            "amountCents": 15000,
+            "currency": "USD",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-ms-created-{uuid.uuid4().hex}",
+            "event": "milestone.created",
+            "purchaseId": "sp_docs_1",
+            "crmLeadId": lead,
+            "milestones": [
+                {
+                    "id": "ms_dep",
+                    "name": "Deposit",
+                    "amountCents": 10000,
+                    "status": "pending",
+                    "currency": "USD",
+                },
+                {
+                    "id": "ms_bal",
+                    "name": "Balance",
+                    "amountCents": 20000,
+                    "status": "PARTIALLY_PAID",
+                    "currency": "USD",
+                },
+            ],
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-ms-paid-{uuid.uuid4().hex}",
+            "event": "milestone.paid",
+            "purchaseId": "sp_docs_1",
+            "crmLeadId": lead,
+            "milestoneId": "ms_dep",
+            "milestoneName": "Deposit",
+            "amountCents": 10000,
+            "currency": "USD",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-ms-od-{uuid.uuid4().hex}",
+            "event": "milestone.overdue",
+            "purchaseId": "sp_docs_1",
+            "crmLeadId": lead,
+            "milestoneId": "ms_bal",
+            "milestoneName": "Balance",
+            "amountCents": 20000,
+            "dueAt": "2020-01-01T00:00:00+00:00",
+            "currency": "USD",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        d = db.scalar(select(BeDelivery).where(BeDelivery.purchase_id == "sp_docs_1"))
+        assert d is not None
+        assert d.quote_status == "accepted"
+        assert d.agreement_status == "accepted"
+        assert d.invoice_status == "created"
+        snaps = list(
+            db.scalars(
+                select(BeMilestoneSnapshot).where(BeMilestoneSnapshot.delivery_id == d.id)
+            )
+        )
+        by_id = {s.ah_milestone_id: s for s in snaps}
+        assert by_id["ms_dep"].status == "paid"
+        assert by_id["ms_bal"].status == "overdue"
+        # PARTIALLY_PAID from created payload maps to pending until paid/overdue event
+    finally:
+        db.close()
+
+
+
+def test_refund_dispute_and_delivery_stage_events(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/bridge-rdf-{uuid.uuid4().hex[:8]}",
+            name="Refund Dispute Co",
+            email="rdf@mapsleads.test",
+            currency="USD",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_rdf_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="paid",
+                financial_status="paid",
+                quoted_amount_cents=10000,
+                paid_amount_cents=10000,
+            )
+        )
+        db.commit()
+        bid = biz.id
+        secret = "test-be-shared-secret"
+        lead = crm_lead_id_for(bid)
+    finally:
+        db.close()
+
+    headers = {"Authorization": f"Bearer {secret}"}
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-refund-{uuid.uuid4().hex}",
+            "event": "payment.refunded",
+            "purchaseId": "sp_rdf_1",
+            "crmLeadId": lead,
+            "paidAmountCents": 0,
+            "outstandingCents": 10000,
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-disp-{uuid.uuid4().hex}",
+            "event": "payment.disputed",
+            "purchaseId": "sp_rdf_1",
+            "crmLeadId": lead,
+            "paidAmountCents": 5000,
+            "outstandingCents": 5000,
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-dstart-{uuid.uuid4().hex}",
+            "event": "delivery.started",
+            "purchaseId": "sp_rdf_1",
+            "crmLeadId": lead,
+            "deliveryStatus": "READY_TO_FINALIZE",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers=headers,
+        json={
+            "eventId": f"evt-dfin-{uuid.uuid4().hex}",
+            "event": "delivery.finalized",
+            "purchaseId": "sp_rdf_1",
+            "crmLeadId": lead,
+            "deliveryStatus": "FINALIZED",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+    db = SessionLocal()
+    try:
+        d = db.scalar(select(BeDelivery).where(BeDelivery.purchase_id == "sp_rdf_1"))
+        assert d is not None
+        assert d.financial_status == "disputed"
+        assert d.delivery_status in ("started", "finalized", "ready")
+    finally:
+        db.close()
+
+
+def test_connection_exposes_sync_fields_without_secret(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+    finally:
+        db.close()
+    r = auth_client.get("/api/sales/be/connection")
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get("secret_configured") is True
+    assert body.get("secret_hint") == "configured"
+    assert "test-be-shared-secret" not in json.dumps(body)
+    assert "pending_events" in body
+    assert "failed_events" in body
+    assert "permissions" in body
+    assert "secret_rotation_status" in body
+    assert "won_policy" in body
+
+
+def test_event_alias_payment_paid(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        store_setting(
+            db,
+            "be.won_policy",
+            json.dumps({"auto_won_on_be_paid": False, "require_fully_paid": True}),
+            secret=False,
+        )
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/bridge-alias-{uuid.uuid4().hex[:8]}",
+            name="Alias Event Co",
+            email="alias@mapsleads.test",
+            currency="AUD",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_alias_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="pending_payment",
+            )
+        )
+        db.commit()
+        bid = biz.id
+        secret = "test-be-shared-secret"
+    finally:
+        db.close()
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers={"Authorization": f"Bearer {secret}"},
+        json={
+            "eventId": f"evt-alias-{uuid.uuid4().hex}",
+            "event": "payment.paid",
+            "purchaseId": "sp_alias_1",
+            "crmLeadId": crm_lead_id_for(bid),
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json().get("event") == "standalone.payment.paid"
+    assert r.json().get("status") == "paid"
+
+    events = auth_client.get("/api/sales/be/events")
+    assert events.status_code == 200
+    assert events.json()["counts"]["processed"] >= 1
+
+
+def test_monitor_and_stage_history_endpoints(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/bridge-mon-{uuid.uuid4().hex[:8]}",
+            name="Monitor Co",
+            email="mon@mapsleads.test",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.commit()
+        bid = biz.id
+    finally:
+        db.close()
+
+    mon = auth_client.get("/api/sales/be/monitor")
+    assert mon.status_code == 200
+    assert "connection" in mon.json()
+    assert "funnel" in mon.json()
+    assert "event_counts" in mon.json()
+
+    hist = auth_client.get(f"/api/sales/prospects/{bid}/stage-history")
+    assert hist.status_code == 200
+    assert "history" in hist.json()
+
+    dash = auth_client.get("/api/sales/dashboard?product_line=STANDALONE")
+    assert dash.status_code == 200
+    assert "appointhive" in dash.json()
+
+
+def test_customer_ref_links_prospects(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        a = Business(
+            place_id=f"be/cust-a-{uuid.uuid4().hex[:8]}",
+            name="Cust A",
+            email="a@mapsleads.test",
+            product_line="STANDALONE",
+            be_customer_ref="cust_shared_1",
+        )
+        b = Business(
+            place_id=f"be/cust-b-{uuid.uuid4().hex[:8]}",
+            name="Cust B",
+            email="b@mapsleads.test",
+            product_line="STANDALONE",
+            be_customer_ref="cust_shared_1",
+        )
+        db.add(a)
+        db.add(b)
+        db.flush()
+        init_new_prospect(db, a)
+        init_new_prospect(db, b)
+        db.commit()
+    finally:
+        db.close()
+
+    r = auth_client.get("/api/sales/be/customers/cust_shared_1")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["customer_ref"] == "cust_shared_1"
+    assert len(body["prospects"]) == 2
+
+
+def test_pipeline_includes_financial_delivery_fields(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/pipe-fin-{uuid.uuid4().hex[:8]}",
+            name="Pipe Fin Co",
+            email="pipe@mapsleads.test",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_pipe_1",
+                status="pending_payment",
+                financial_status="partially_paid",
+                delivery_status="started",
+                crm_lead_id=crm_lead_id_for(biz.id),
+            )
+        )
+        db.commit()
+        bid = biz.id
+    finally:
+        db.close()
+
+    r = auth_client.get("/api/sales/pipeline?product_line=STANDALONE")
+    assert r.status_code == 200, r.text
+    found = None
+    for col in r.json().get("columns") or []:
+        for p in col.get("prospects") or []:
+            if p.get("id") == bid:
+                found = p
+                break
+    assert found is not None
+    assert found.get("financial_status") == "partially_paid"
+    assert found.get("delivery_status") == "started"
+
+
+def test_dashboard_filters_and_won_policy_roundtrip(auth_client):
+    r = auth_client.put(
+        "/api/sales/be/won-policy",
+        json={
+            "auto_won_on_be_paid": False,
+            "require_fully_paid": True,
+            "require_agreement_accepted": True,
+            "require_initial_milestone_paid": False,
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["require_agreement_accepted"] is True
+
+    g = auth_client.get("/api/sales/be/won-policy")
+    assert g.status_code == 200
+    assert g.json()["require_agreement_accepted"] is True
+
+    d = auth_client.get("/api/sales/dashboard?product_line=STANDALONE&payment_status=paid")
+    assert d.status_code == 200
+    assert "filtered" in d.json()
+    assert "filters" in d.json()
+
+
+def test_webhook_stores_customer_ref_on_business(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/cust-ref-{uuid.uuid4().hex[:8]}",
+            name="Cust Ref Co",
+            email="cref@mapsleads.test",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_cref_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="sent",
+            )
+        )
+        db.commit()
+        bid = biz.id
+        secret = "test-be-shared-secret"
+    finally:
+        db.close()
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers={"Authorization": f"Bearer {secret}"},
+        json={
+            "eventId": f"evt-cref-{uuid.uuid4().hex}",
+            "event": "standalone.purchase.recorded",
+            "purchaseId": "sp_cref_1",
+            "crmLeadId": crm_lead_id_for(bid),
+            "customerRef": "ah_cust_99",
+        },
+    )
+    assert r.status_code == 200, r.text
+    db = SessionLocal()
+    try:
+        biz = db.get(Business, bid)
+        assert biz.be_customer_ref == "ah_cust_99"
+    finally:
+        db.close()
+
+
+def test_standalone_quote_created_alias_and_order_reference(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/quote-alias-{uuid.uuid4().hex[:8]}",
+            name="Quote Alias Co",
+            email="quotealias@mapsleads.test",
+            currency="AUD",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_quote_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="sent",
+            )
+        )
+        db.commit()
+        bid = biz.id
+        secret = "test-be-shared-secret"
+    finally:
+        db.close()
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers={"Authorization": f"Bearer {secret}"},
+        json={
+            "eventId": f"evt-quote-{uuid.uuid4().hex}",
+            "event": "standalone.quote.created",
+            "purchaseId": "sp_quote_1",
+            "crmLeadId": crm_lead_id_for(bid),
+            "orderReference": "AH-ORD-77",
+            "quoteStatus": "CREATED",
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json().get("event") == "quote.created"
+
+    commercial = auth_client.get(f"/api/sales/be/prospects/{bid}/commercial")
+    assert commercial.status_code == 200, commercial.text
+    data = commercial.json()
+    assert data["quotation_status"] == "created"
+    assert data["order_reference"] == "AH-ORD-77"
+    assert data["purchase_order_reference"] == "AH-ORD-77"
+
+    db = SessionLocal()
+    try:
+        d = db.scalar(select(BeDelivery).where(BeDelivery.purchase_id == "sp_quote_1"))
+        assert d and d.order_reference == "AH-ORD-77"
+        assert d.quote_status == "created"
+    finally:
+        db.close()
+
+
+def test_license_issued_and_upgrade_applied_by_installation(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/upgrade-inst-{uuid.uuid4().hex[:8]}",
+            name="Upgrade Install Co",
+            email="upinst@mapsleads.test",
+            product_line="STANDALONE",
+            be_installation_id="inst_match_1",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_up_inst_1",
+                installation_id="inst_match_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="delivery_ready",
+            )
+        )
+        db.commit()
+        bid = biz.id
+        secret = "test-be-shared-secret"
+    finally:
+        db.close()
+
+    lic = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers={"Authorization": f"Bearer {secret}"},
+        json={
+            "eventId": f"evt-lic-{uuid.uuid4().hex}",
+            "event": "standalone.license.issued",
+            "purchaseId": "sp_up_inst_1",
+            "licenseId": "lic_abc",
+            "crmLeadId": crm_lead_id_for(bid),
+        },
+    )
+    assert lic.status_code == 200, lic.text
+
+    # No crmLeadId / purchaseId — match via installationId only
+    up = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers={"Authorization": f"Bearer {secret}"},
+        json={
+            "eventId": f"evt-up-inst-{uuid.uuid4().hex}",
+            "event": "standalone.upgrade.applied",
+            "installationId": "inst_match_1",
+            "fromRevisionId": "rev_a",
+            "toRevisionId": "rev_b",
+        },
+    )
+    assert up.status_code == 200, up.text
+    assert up.json().get("event") == "standalone.upgrade.applied"
+
+    db = SessionLocal()
+    try:
+        d = db.scalar(select(BeDelivery).where(BeDelivery.business_id == bid).order_by(BeDelivery.id.desc()))
+        assert d is not None
+        assert d.release_status == "licensed"
+        assert d.upgrade_status == "applied"
+        assert d.revision_id == "rev_b"
+        assert d.from_revision_id == "rev_a"
+    finally:
+        db.close()
+
+
+def test_soft_intake_failure_logged_but_purchase_continues(auth_client):
+    from app.models import BeOutboundFailure
+    from app.services.booking_engine.client import BeClientError
+
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/soft-fail-{uuid.uuid4().hex[:8]}",
+            name="Soft Fail Co",
+            email="softfail@mapsleads.test",
+            currency="AUD",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.commit()
+        bid = biz.id
+    finally:
+        db.close()
+
+    fake_purchase = {
+        "purchaseId": "sp_soft_fail_1",
+        "inboundRequestId": "",
+        "revisionId": "rev_sf",
+        "priceCents": 5000,
+        "currency": "AUD",
+        "checkoutUrl": "https://pay.example/sf",
+        "orderReference": "AH-ORD-SF",
+        "crmLeadId": crm_lead_id_for(bid),
+    }
+
+    def boom_request(self, payload):
+        raise BeClientError("soft intake down", status=502)
+
+    with (
+        patch(
+            "app.services.booking_engine.client.BookingEngineClient.create_request",
+            boom_request,
+        ),
+        patch(
+            "app.services.booking_engine.client.BookingEngineClient.create_purchase",
+            return_value=fake_purchase,
+        ),
+    ):
+        r = auth_client.post(
+            "/api/sales/be/send-to-delivery",
+            json={"business_id": bid, "product_revision_id": "rev_sf"},
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["delivery"]["purchase_id"] == "sp_soft_fail_1"
+    assert body["delivery"]["order_reference"] == "AH-ORD-SF"
+    assert "soft_intake_warning" in body
+
+    db = SessionLocal()
+    try:
+        fails = list(
+            db.scalars(
+                select(BeOutboundFailure).where(
+                    BeOutboundFailure.business_id == bid,
+                    BeOutboundFailure.operation == "send_purchase_soft_intake",
+                )
+            ).all()
+        )
+        assert len(fails) >= 1
+    finally:
+        db.close()
+
+
+def test_payment_refunded_and_disputed_webhooks(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/refund-{uuid.uuid4().hex[:8]}",
+            name="Refund Co",
+            email="refund@mapsleads.test",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_refund_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="paid",
+                financial_status="paid",
+            )
+        )
+        db.commit()
+        bid = biz.id
+        secret = "test-be-shared-secret"
+    finally:
+        db.close()
+
+    r = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers={"Authorization": f"Bearer {secret}"},
+        json={
+            "eventId": f"evt-refund-{uuid.uuid4().hex}",
+            "event": "payment.refunded",
+            "purchaseId": "sp_refund_1",
+            "crmLeadId": crm_lead_id_for(bid),
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert r.json().get("financial_status") == "refunded"
+
+    d = auth_client.post(
+        "/api/webhooks/booking-engine",
+        headers={"Authorization": f"Bearer {secret}"},
+        json={
+            "eventId": f"evt-dispute-{uuid.uuid4().hex}",
+            "event": "payment.disputed",
+            "purchaseId": "sp_refund_1",
+            "crmLeadId": crm_lead_id_for(bid),
+        },
+    )
+    assert d.status_code == 200, d.text
+    assert d.json().get("financial_status") == "disputed"
+
+
+def test_inbox_auto_retry_batch(auth_client):
+    from app.models import BeEventInbox
+    from app.services.booking_engine.events import retry_failed_events_batch
+
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/retry-batch-{uuid.uuid4().hex[:8]}",
+            name="Retry Batch Co",
+            email="retrybatch@mapsleads.test",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_retry_batch_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="sent",
+            )
+        )
+        row = BeEventInbox(
+            event_id=f"evt-retry-batch-{uuid.uuid4().hex}",
+            event_type="standalone.payment.paid",
+            status="failed",
+            business_id=biz.id,
+            attempts=1,
+            error="simulated",
+            payload_json=json.dumps(
+                {
+                    "event": "standalone.payment.paid",
+                    "purchaseId": "sp_retry_batch_1",
+                    "crmLeadId": crm_lead_id_for(biz.id),
+                    "paidAmountCents": 1000,
+                }
+            ),
+        )
+        db.add(row)
+        db.commit()
+        eid = row.id
+        bid = biz.id
+    finally:
+        db.close()
+
+    db = SessionLocal()
+    try:
+        store_setting(
+            db,
+            "be.won_policy",
+            json.dumps({"auto_won_on_be_paid": False, "require_fully_paid": True}),
+            secret=False,
+        )
+        db.commit()
+        out = retry_failed_events_batch(db, limit=5)
+        assert out["retried"] >= 1
+        assert out["succeeded"] >= 1
+        row = db.get(BeEventInbox, eid)
+        assert row and row.status == "processed"
+        d = db.scalar(select(BeDelivery).where(BeDelivery.business_id == bid).order_by(BeDelivery.id.desc()))
+        assert d and d.financial_status == "paid"
+    finally:
+        db.close()
+
+
+def test_saas_proxy_routes_require_connection_and_forward(auth_client):
+    db = SessionLocal()
+    try:
+        _force_disconnected(db)
+    finally:
+        db.close()
+    blocked = auth_client.post(
+        "/api/sales/be/saas/demos",
+        json={"business_name": "Acme", "owner_email": "owner@mapsleads.test"},
+    )
+    assert blocked.status_code == 409
+
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+    finally:
+        db.close()
+
+    with patch(
+        "app.services.booking_engine.client.BookingEngineClient.create_demo",
+        return_value={"clientId": "c1", "url": "https://demo.example/c1"},
+    ):
+        r = auth_client.post(
+            "/api/sales/be/saas/demos",
+            json={"business_name": "Acme", "owner_email": "owner@mapsleads.test"},
+        )
+    assert r.status_code == 200, r.text
+    assert r.json()["clientId"] == "c1"
+
+    with patch(
+        "app.services.booking_engine.client.BookingEngineClient.create_trial",
+        return_value={"clientId": "c2", "billingStatus": "TRIAL"},
+    ):
+        t = auth_client.post(
+            "/api/sales/be/saas/trials",
+            json={"business_name": "Acme", "owner_email": "owner@mapsleads.test"},
+        )
+    assert t.status_code == 200, t.text
+
+    with patch(
+        "app.services.booking_engine.client.BookingEngineClient.get_client",
+        return_value={"clientId": "c2", "billingStatus": "TRIAL"},
+    ):
+        g = auth_client.get("/api/sales/be/saas/clients/c2")
+    assert g.status_code == 200, g.text
+
+
+def test_payment_evidence_forces_pending(auth_client):
+    db = SessionLocal()
+    try:
+        _force_connected(db)
+        from app.services.pipeline import init_new_prospect
+
+        biz = Business(
+            place_id=f"be/evidence-{uuid.uuid4().hex[:8]}",
+            name="Evidence Co",
+            email="evidence@mapsleads.test",
+            currency="AUD",
+            product_line="STANDALONE",
+        )
+        db.add(biz)
+        db.flush()
+        init_new_prospect(db, biz)
+        db.add(
+            BeDelivery(
+                business_id=biz.id,
+                purpose="purchase",
+                purchase_id="sp_ev_1",
+                crm_lead_id=crm_lead_id_for(biz.id),
+                status="pending_payment",
+                currency="AUD",
+            )
+        )
+        db.commit()
+        bid = biz.id
+    finally:
+        db.close()
+
+    captured = {}
+
+    def fake_submit(self, payload):
+        captured["payload"] = dict(payload)
+        return {
+            "paymentId": "pay_ev_1",
+            "paymentStatus": "PENDING",
+            "verificationRequired": True,
+        }
+
+    with patch(
+        "app.services.booking_engine.client.BookingEngineClient.submit_payment_evidence",
+        fake_submit,
+    ):
+        r = auth_client.post(
+            "/api/sales/be/payment-evidence",
+            json={
+                "business_id": bid,
+                "method": "BANK_TRANSFER",
+                "amount_cents": 2500,
+                "reference_note": "Transfer ref ABC",
+            },
+        )
+    assert r.status_code == 200, r.text
+    assert r.json().get("verification_required") is True
+    assert captured["payload"]["status"] == "PENDING"
+    assert captured["payload"]["purchaseId"] == "sp_ev_1"
+    assert "finalize" not in captured["payload"]

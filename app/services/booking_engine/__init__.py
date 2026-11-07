@@ -16,6 +16,7 @@ from app.services.booking_engine.handoff import (
     send_purchase,
     send_request,
     send_upgrade,
+    submit_payment_evidence,
 )
 
 __all__ = [
@@ -34,5 +35,6 @@ __all__ = [
     "send_purchase",
     "send_request",
     "send_upgrade",
+    "submit_payment_evidence",
     "test_be_connection",
 ]

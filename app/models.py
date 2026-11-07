@@ -131,6 +131,7 @@ class Business(Base):
     trial_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     saas_plan_code: Mapped[str] = mapped_column(String(80), default="")
     be_installation_id: Mapped[str] = mapped_column(String(120), default="")
+    be_customer_ref: Mapped[str] = mapped_column(String(120), default="", index=True)
 
 
 class MessageTemplate(Base):
@@ -504,5 +505,72 @@ class BeDelivery(Base):
     crm_lead_id: Mapped[str] = mapped_column(String(120), default="", index=True)
     status: Mapped[str] = mapped_column(String(40), default="sent", index=True)
     last_event_json: Mapped[str] = mapped_column(Text, default="{}")
+    # Read-only commercial snapshots from AppointHive (never mark paid here).
+    customer_ref: Mapped[str] = mapped_column(String(120), default="")
+    order_reference: Mapped[str] = mapped_column(String(120), default="", index=True)
+    package_name: Mapped[str] = mapped_column(String(200), default="")
+    order_type: Mapped[str] = mapped_column(String(40), default="")
+    quote_status: Mapped[str] = mapped_column(String(40), default="")
+    agreement_status: Mapped[str] = mapped_column(String(40), default="")
+    invoice_status: Mapped[str] = mapped_column(String(40), default="")
+    financial_status: Mapped[str] = mapped_column(String(40), default="")
+    delivery_status: Mapped[str] = mapped_column(String(40), default="")
+    upgrade_status: Mapped[str] = mapped_column(String(40), default="")
+    paid_amount_cents: Mapped[int] = mapped_column(Integer, default=0)
+    outstanding_cents: Mapped[int] = mapped_column(Integer, default=0)
+    release_status: Mapped[str] = mapped_column(String(40), default="")
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+class BeEventInbox(Base):
+    """Inbound AppointHive events with status for monitoring / safe retry."""
+    __tablename__ = "be_event_inbox"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    event_type: Mapped[str] = mapped_column(String(120), default="", index=True)
+    event_version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(40), default="processed", index=True)  # pending|processed|failed|duplicate
+    business_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    delivery_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    error: Mapped[str] = mapped_column(Text, default="")
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+class BeOutboundFailure(Base):
+    """Failed Sales OS → AppointHive outbound calls (for monitoring / safe retry)."""
+    __tablename__ = "be_outbound_failures"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    business_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    operation: Mapped[str] = mapped_column(String(80), default="")
+    error: Mapped[str] = mapped_column(Text, default="")
+    payload_json: Mapped[str] = mapped_column(Text, default="{}")
+    status: Mapped[str] = mapped_column(String(40), default="failed", index=True)  # failed|resolved
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    last_attempt_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+
+class BeMilestoneSnapshot(Base):
+    """Read-only milestone copy from AppointHive. Never edit/verify/waive here."""
+    __tablename__ = "be_milestone_snapshots"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    delivery_id: Mapped[int] = mapped_column(Integer, index=True)
+    business_id: Mapped[int] = mapped_column(Integer, index=True)
+    ah_milestone_id: Mapped[str] = mapped_column(String(120), default="")
+    name: Mapped[str] = mapped_column(String(200), default="")
+    amount_cents: Mapped[int] = mapped_column(Integer, default=0)
+    currency: Mapped[str] = mapped_column(String(10), default="USD")
+    due_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(40), default="pending")  # pending|paid|overdue
+    pay_url: Mapped[str] = mapped_column(Text, default="")
+    last_synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)

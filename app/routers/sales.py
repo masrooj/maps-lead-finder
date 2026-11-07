@@ -113,6 +113,7 @@ def prospect_sales_dict(b: Business, stage=None) -> dict:
         "estimated_close_date": _iso(b.estimated_close_date),
         "score_criteria": criteria,
         "be_installation_id": getattr(b, "be_installation_id", "") or "",
+        "be_customer_ref": getattr(b, "be_customer_ref", "") or "",
         "current_booking_software": getattr(b, "current_booking_software", "") or "",
         "google_maps_url": getattr(b, "google_maps_url", "") or "",
         "email": getattr(b, "email", "") or "",
@@ -223,8 +224,35 @@ def _parse_dt(value: Optional[str]):
 
 
 @router.get("/dashboard", tags=["pipeline"])
-def sales_dashboard(product_line: str = "STANDALONE", _user: str = Depends(require_user), db=Depends(get_db)):
-    return dashboard_bundle(db, product_line.upper())
+def sales_dashboard(
+    product_line: str = "STANDALONE",
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    country: Optional[str] = None,
+    city: Optional[str] = None,
+    package: Optional[str] = None,
+    sales_stage: Optional[str] = None,
+    payment_status: Optional[str] = None,
+    delivery_status: Optional[str] = None,
+    owner_id: Optional[int] = None,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    return dashboard_bundle(
+        db,
+        product_line.upper(),
+        filters={
+            "date_from": date_from,
+            "date_to": date_to,
+            "country": country,
+            "city": city,
+            "package": package,
+            "sales_stage": sales_stage,
+            "payment_status": payment_status,
+            "delivery_status": delivery_status,
+            "owner_id": owner_id,
+        },
+    )
 
 
 @router.get("/providers", tags=["money"])
@@ -302,6 +330,9 @@ def sales_pipeline(
         and (not city_f or (p.city or "").strip().lower() == city_f.lower())
         and (not category_f or (p.category or "").strip().lower() == category_f.lower())
     ]
+    from app.services.booking_engine.status import commercial_status_map
+
+    be_status = commercial_status_map(db, [p.id for p in prospects])
     columns = []
     for s in stages:
         if s.slug in PIPELINE_BOARD_HIDDEN_SLUGS:
@@ -333,6 +364,9 @@ def sales_pipeline(
                         "next_follow_up_at": _iso(getattr(p, "next_follow_up_at", None)),
                         "ready_for_contact": bool(getattr(p, "ready_for_contact", False)),
                         "outreach_channel": (getattr(p, "outreach_channel", None) or "").strip(),
+                        "be_commercial": be_status.get(p.id) or {},
+                        "financial_status": (be_status.get(p.id) or {}).get("financial_status") or "",
+                        "delivery_status": (be_status.get(p.id) or {}).get("delivery_status") or "",
                     }
                     for p in items
                 ],
@@ -358,6 +392,16 @@ def sales_move_stage(business_id: int, body: StageMoveBody, _user: str = Depends
     b = db.get(Business, business_id)
     if not b:
         raise HTTPException(404, "Prospect not found")
+    target = db.get(PipelineStage, body.stage_id)
+    if target and (target.is_won or target.is_lost or (target.slug or "").lower() in ("won", "lost", "subscribed", "churned")):
+        if not (body.note or "").strip() and not (body.lost_reason or "").strip():
+            raise HTTPException(
+                422,
+                detail={
+                    "error": "Won/Lost stage changes require a reason note for audit history.",
+                    "code": "STAGE_REASON_REQUIRED",
+                },
+            )
     owner = db.scalar(select(User).where(User.email == _user.lower()))
     move_stage(
         db,
@@ -2352,6 +2396,16 @@ class BeSendUpgradeBody(BaseModel):
     provider: Optional[str] = None
 
 
+class BePaymentEvidenceBody(BaseModel):
+    """Bank/manual evidence only — Sales OS never marks PAID (AH verifies)."""
+    business_id: int
+    purchase_id: Optional[str] = None
+    method: str = Field(default="BANK_TRANSFER", max_length=40)
+    amount_cents: int = Field(ge=0)
+    currency: Optional[str] = Field(default=None, max_length=10)
+    reference_note: str = Field(default="", max_length=2000)
+
+
 @router.get("/be/connection", tags=["be-bridge"])
 def be_get_connection(_user: str = Depends(require_user), db=Depends(get_db)):
     from app.services.booking_engine.connect import be_connection_public
@@ -2500,6 +2554,105 @@ def be_send_upgrade(body: BeSendUpgradeBody, _user: str = Depends(require_user),
     )
 
 
+@router.post("/be/payment-evidence", tags=["be-bridge"])
+def be_submit_payment_evidence(
+    body: BePaymentEvidenceBody, _user: str = Depends(require_user), db=Depends(get_db)
+):
+    """Forward PENDING bank/manual evidence to AppointHive. Never marks paid."""
+    from app.services.authz import get_user_by_email
+    from app.services.booking_engine.handoff import submit_payment_evidence
+
+    actor = get_user_by_email(db, _user)
+    return submit_payment_evidence(
+        db,
+        business_id=body.business_id,
+        purchase_id=body.purchase_id,
+        method=body.method,
+        amount_cents=body.amount_cents,
+        currency=body.currency,
+        reference_note=body.reference_note or "",
+        recorded_by_email=_user,
+        actor_id=actor.id if actor else None,
+    )
+
+
+class BeSaasDemoBody(BaseModel):
+    business_name: str = Field(min_length=2, max_length=200)
+    owner_email: str = Field(min_length=3, max_length=200)
+    owner_phone: Optional[str] = None
+    brand_color: Optional[str] = None
+    city: Optional[str] = None
+    country: Optional[str] = None
+    website: Optional[str] = None
+    sample_data: Optional[bool] = None
+
+
+class BeSaasTrialBody(BaseModel):
+    business_name: str = Field(min_length=2, max_length=200)
+    owner_email: str = Field(min_length=3, max_length=200)
+    owner_phone: Optional[str] = None
+    client_id: Optional[str] = None
+    plan_code: Optional[str] = None
+
+
+@router.post("/be/saas/demos", tags=["be-bridge"])
+def be_create_saas_demo(body: BeSaasDemoBody, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Thin proxy to AppointHive SaaS demo provision (AH owns tenant lifecycle)."""
+    from app.services.booking_engine.client import BeClientError, BookingEngineClient
+    from app.services.booking_engine.errors import be_http_detail
+
+    client = BookingEngineClient(db=db)
+    payload = {
+        "businessName": body.business_name,
+        "ownerEmail": body.owner_email,
+        "ownerPhone": body.owner_phone,
+        "brandColor": body.brand_color,
+        "city": body.city,
+        "country": body.country,
+        "website": body.website,
+        "sampleData": body.sample_data,
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+    try:
+        return client.create_demo(payload)
+    except BeClientError as exc:
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
+
+
+@router.post("/be/saas/trials", tags=["be-bridge"])
+def be_create_saas_trial(body: BeSaasTrialBody, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Thin proxy to AppointHive SaaS trial start."""
+    from app.services.booking_engine.client import BeClientError, BookingEngineClient
+    from app.services.booking_engine.errors import be_http_detail
+
+    client = BookingEngineClient(db=db)
+    payload = {
+        "businessName": body.business_name,
+        "ownerEmail": body.owner_email,
+        "ownerPhone": body.owner_phone,
+        "clientId": body.client_id,
+        "planCode": body.plan_code,
+    }
+    payload = {k: v for k, v in payload.items() if v is not None}
+    try:
+        return client.create_trial(payload)
+    except BeClientError as exc:
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
+
+
+@router.get("/be/saas/clients/{client_id}", tags=["be-bridge"])
+def be_get_saas_client(client_id: str, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Thin proxy to AppointHive SaaS client snapshot."""
+    from app.services.booking_engine.client import BeClientError, BookingEngineClient
+    from app.services.booking_engine.errors import be_http_detail
+
+    client = BookingEngineClient(db=db)
+    try:
+        return client.get_client(client_id)
+    except BeClientError as exc:
+        raise HTTPException(exc.status or 502, detail=be_http_detail(exc)) from exc
+
+
 @router.get("/be/deliveries", tags=["be-bridge"])
 def be_list_deliveries(business_id: Optional[int] = None, _user: str = Depends(require_user), db=Depends(get_db)):
     from app.models import BeDelivery
@@ -2517,3 +2670,211 @@ def be_refresh_delivery(delivery_id: int, _user: str = Depends(require_user), db
     from app.services.booking_engine.handoff import refresh_delivery
 
     return refresh_delivery(db, delivery_id)
+
+
+@router.get("/be/monitor", tags=["be-bridge"])
+def be_monitor(_user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.booking_engine.commercial import monitor_bundle
+
+    return monitor_bundle(db)
+
+
+@router.get("/be/events", tags=["be-bridge"])
+def be_list_events(
+    status: Optional[str] = None,
+    limit: int = 50,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    from app.services.booking_engine.events import event_counts, inbox_dict, list_events, prospect_name_for
+
+    rows = list_events(db, status=status, limit=limit)
+    events = []
+    for row in rows:
+        item = inbox_dict(row)
+        item["prospect_name"] = prospect_name_for(db, row.business_id)
+        events.append(item)
+    return {"events": events, "counts": event_counts(db)}
+
+
+@router.get("/be/events/{event_id}", tags=["be-bridge"])
+def be_get_event(event_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.booking_engine.events import get_event, inbox_dict, prospect_name_for
+
+    row = get_event(db, event_id)
+    if not row:
+        raise HTTPException(404, detail={"error": "Event not found", "code": "EVENT_NOT_FOUND"})
+    item = inbox_dict(row)
+    item["prospect_name"] = prospect_name_for(db, row.business_id)
+    return item
+
+
+@router.post("/be/events/{event_id}/retry", tags=["be-bridge"])
+def be_retry_event(event_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.booking_engine.events import retry_failed_event
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner")
+    return retry_failed_event(db, event_id)
+
+
+@router.post("/be/sync/heartbeat", tags=["be-bridge"])
+def be_heartbeat(_user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.booking_engine.sync import run_heartbeat
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner")
+    return run_heartbeat(db)
+
+
+@router.get("/be/prospects/{business_id}/commercial", tags=["be-bridge"])
+def be_prospect_commercial(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.booking_engine.commercial import commercial_for_business
+
+    return commercial_for_business(db, business_id)
+
+
+@router.get("/be/prospects/{business_id}/milestones", tags=["be-bridge"])
+def be_prospect_milestones(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.booking_engine.commercial import commercial_for_business
+
+    data = commercial_for_business(db, business_id)
+    return {
+        "milestones": data.get("milestones") or [],
+        "summary": data.get("milestone_summary") or {},
+        "read_only": True,
+    }
+
+
+class BeWonPolicyBody(BaseModel):
+    auto_won_on_be_paid: Optional[bool] = None
+    require_agreement_accepted: Optional[bool] = None
+    require_initial_milestone_paid: Optional[bool] = None
+    require_fully_paid: Optional[bool] = None
+
+
+@router.get("/be/won-policy", tags=["be-bridge"])
+def be_get_won_policy(_user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.booking_engine.policy import get_won_policy
+
+    return get_won_policy(db)
+
+
+@router.put("/be/won-policy", tags=["be-bridge"])
+def be_put_won_policy(body: BeWonPolicyBody, _user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.booking_engine.policy import get_won_policy, save_won_policy
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner")
+    current = get_won_policy(db)
+    patch = {k: v for k, v in body.model_dump().items() if v is not None}
+    current.update(patch)
+    return save_won_policy(db, current)
+
+
+@router.get("/prospects/{business_id}/stage-history", tags=["pipeline"])
+def sales_stage_history(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    from app.models import PipelineStage, StageHistory
+
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    rows = db.scalars(
+        select(StageHistory).where(StageHistory.business_id == business_id).order_by(StageHistory.id.desc()).limit(100)
+    ).all()
+    out = []
+    for h in rows:
+        fr = db.get(PipelineStage, h.from_stage_id) if h.from_stage_id else None
+        to = db.get(PipelineStage, h.to_stage_id) if h.to_stage_id else None
+        out.append(
+            {
+                "id": h.id,
+                "from_stage_id": h.from_stage_id,
+                "to_stage_id": h.to_stage_id,
+                "from_stage": fr.name if fr else "",
+                "to_stage": to.name if to else "",
+                "changed_by": h.changed_by,
+                "note": h.note or "",
+                "created_at": h.created_at.isoformat() if h.created_at else "",
+            }
+        )
+    return {"history": out}
+
+
+@router.get("/be/customers/{customer_ref}", tags=["be-bridge"])
+def be_customer_profile(customer_ref: str, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Prospects sharing an AppointHive customer reference (no second customer invent)."""
+    ref = (customer_ref or "").strip()
+    if not ref:
+        raise HTTPException(422, detail={"error": "customer_ref required", "code": "CUSTOMER_REF_REQUIRED"})
+    from app.models import BeDelivery
+    from app.services.booking_engine.commercial import commercial_for_business
+
+    prospects = list(
+        db.scalars(select(Business).where(Business.be_customer_ref == ref).order_by(Business.id.desc()).limit(50)).all()
+    )
+    if not prospects:
+        # Also match delivery snapshot refs
+        dels = list(
+            db.scalars(select(BeDelivery).where(BeDelivery.customer_ref == ref).order_by(BeDelivery.id.desc()).limit(50)).all()
+        )
+        seen = set()
+        for d in dels:
+            if d.business_id in seen:
+                continue
+            seen.add(d.business_id)
+            b = db.get(Business, d.business_id)
+            if b:
+                prospects.append(b)
+    if not prospects:
+        raise HTTPException(404, detail={"error": "No prospects for customer ref", "code": "CUSTOMER_NOT_FOUND"})
+    primary = prospects[0]
+    return {
+        "customer_ref": ref,
+        "primary_prospect_id": primary.id,
+        "prospects": [prospect_sales_dict(p) for p in prospects],
+        "commercial": commercial_for_business(db, primary.id),
+    }
+
+
+@router.get("/be/outbound-failures", tags=["be-bridge"])
+def be_outbound_failures(_user: str = Depends(require_user), db=Depends(get_db)):
+    from app.models import BeOutboundFailure
+    from app.services.booking_engine.events import prospect_name_for
+
+    rows = list(
+        db.scalars(
+            select(BeOutboundFailure).where(BeOutboundFailure.status == "failed").order_by(BeOutboundFailure.id.desc()).limit(100)
+        ).all()
+    )
+    return {
+        "failures": [
+            {
+                "id": r.id,
+                "business_id": r.business_id,
+                "operation": r.operation,
+                "error": r.error,
+                "attempts": r.attempts,
+                "created_at": r.created_at.isoformat() if r.created_at else "",
+                "prospect_name": prospect_name_for(db, r.business_id),
+            }
+            for r in rows
+        ]
+    }
+
+
+@router.post("/be/outbound-failures/{failure_id}/resolve", tags=["be-bridge"])
+def be_resolve_outbound(failure_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.booking_engine.status import resolve_outbound_failure
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner")
+    row = resolve_outbound_failure(db, failure_id)
+    if not row:
+        raise HTTPException(404, detail={"error": "Failure not found", "code": "OUTBOUND_NOT_FOUND"})
+    db.commit()
+    return {"ok": True, "id": row.id, "status": row.status}

@@ -165,6 +165,19 @@
   <div class="panel-page hidden" id="dashboardPanel">
     <section class="panel card">
       <div class="sectionhead"><h2>Dashboard</h2><span>In-app follow-ups only — email/push reminders not enabled</span></div>
+      <div class="fields filter-bar" id="dashFilters" style="margin:0 0 12px;flex-wrap:wrap;gap:8px">
+        <div class="field"><label for="dashDateFrom">From</label><input type="date" id="dashDateFrom"></div>
+        <div class="field"><label for="dashDateTo">To</label><input type="date" id="dashDateTo"></div>
+        <div class="field"><label for="dashCountry">Country</label><input id="dashCountry" placeholder="Country"></div>
+        <div class="field"><label for="dashCity">City</label><input id="dashCity" placeholder="City"></div>
+        <div class="field"><label for="dashPackage">Package</label><input id="dashPackage" placeholder="Package / revision"></div>
+        <div class="field"><label for="dashStage">Sales stage</label><input id="dashStage" placeholder="e.g. negotiation"></div>
+        <div class="field"><label for="dashPayStatus">Payment</label><input id="dashPayStatus" placeholder="paid / pending / partially_paid"></div>
+        <div class="field"><label for="dashDelStatus">Delivery</label><input id="dashDelStatus" placeholder="ready / delivered"></div>
+        <div class="field"><label for="dashOwnerId">Owner id</label><input id="dashOwnerId" type="number" min="1" placeholder="Owner #"></div>
+        <div class="field" style="align-self:end"><button type="button" class="primary" id="dashApplyFilters">Apply filters</button></div>
+      </div>
+      <div class="hint" id="dashFilterNote" style="margin:0 0 10px"></div>
       <div class="queue-grid" id="dashQueues"></div>
       <div class="queue-grid" id="dashMoney"></div>
       <p class="hint" id="dashNote"></p>
@@ -516,6 +529,15 @@
           <p class="hint">When off, Pipeline still lists SaaS stages in API but UI defaults to Standalone. Standalone history is untouched.</p>
           <button type="button" class="primary" id="saveSaasFlag">Save SaaS flag</button>
         </div>
+        <h3 class="panel-title">AppointHive Won policy</h3>
+        <p class="hint" style="margin-top:0">Payment events update financial snapshots only unless auto-Won is enabled. Owner only.</p>
+        <div class="fields" style="max-width:520px;margin-top:8px">
+          <label class="flag"><input type="checkbox" id="wonAutoOnPaid"> Auto-Won when AppointHive marks fully paid</label>
+          <label class="flag"><input type="checkbox" id="wonRequireFullyPaid" checked> Require fully paid (partial ≠ Won)</label>
+          <label class="flag"><input type="checkbox" id="wonRequireAgreement"> Require agreement accepted</label>
+          <label class="flag"><input type="checkbox" id="wonRequireMilestone"> Require initial milestone paid</label>
+          <button type="button" class="primary" id="saveWonPolicy" style="margin-top:8px">Save Won policy</button>
+        </div>
         <h3 class="panel-title">Instagram soft DM cap</h3>
         <p class="hint" style="margin-top:0">Hard daily limit on IG Confirm sent (after warm follow / like / comment). Uses Settings timezone day.</p>
         <div class="field" style="max-width:280px;margin-top:8px">
@@ -644,18 +666,43 @@
       <div class="queue-tabs" id="ahTabs" role="tablist" aria-label="AppointHive sections" style="margin-bottom:14px">
         <button type="button" class="active" data-ah-tab="overview" role="tab" aria-selected="true">Overview</button>
         <button type="button" data-ah-tab="connect" role="tab" aria-selected="false">Connect</button>
+        <button type="button" data-ah-tab="events" role="tab" aria-selected="false">Events</button>
         <button type="button" data-ah-tab="catalogs" role="tab" aria-selected="false">Pricing catalogs</button>
       </div>
 
       <div class="ah-pane" id="ahOverviewPane" data-ah-pane="overview">
-        <p class="hint" style="margin-top:0">Workspace bridge to the Booking Engine: live STANDALONE prices, pay links, and Won mirroring. Product cash and ZIP stay on AppointHive. Per-lead Send to delivery lives on the prospect drawer <strong>Delivery / pay</strong> tab — not here.</p>
+        <p class="hint" style="margin-top:0">Workspace bridge to the Booking Engine: live STANDALONE prices, pay links, and commercial sync. Product cash, invoices, milestones, and ZIP stay on AppointHive. Per-lead Send to delivery lives on the prospect drawer <strong>Delivery / pay</strong> tab — not here.</p>
         <div id="beConnBanner" class="pay-status info">Loading connection…</div>
-        <h3 class="panel-title">Connection details</h3>
-        <p class="hint" style="margin-top:0">Read-only status. To pair or change URL/secret, open the <button type="button" class="chip ok" data-goto="appoinHive:connect">Connect</button> tab.</p>
+        <h3 class="panel-title">Connection health</h3>
+        <p class="hint" style="margin-top:0">Read-only status. Secrets are never shown after save. To pair or change URL/secret, open the <button type="button" class="chip ok" data-goto="appoinHive:connect">Connect</button> tab.</p>
         <div id="beConnDetails" class="prov-card" style="margin-bottom:14px">Loading connection details…</div>
+        <div class="pay-actions" style="margin:0 0 14px">
+          <button type="button" id="beHeartbeatBtn">Refresh heartbeat</button>
+          <button type="button" class="chip ok" data-goto="appoinHive:events">View events</button>
+        </div>
+        <h3 class="panel-title">Recent commercial activity</h3>
+        <div id="beMonitorHost" class="hint">Loading monitor…</div>
         <h3 class="panel-title">Live STANDALONE packages</h3>
         <p class="hint" style="margin-top:0">FINALIZED revisions used for Send to delivery (<code>/standalone/revisions</code>). For the full line catalog (STANDALONE/SAAS), open <strong>Pricing catalogs</strong>.</p>
         <div id="beRevisionsHost" class="hint">Connect first to load packages.</div>
+      </div>
+
+      <div class="ah-pane hidden" id="ahEventsPane" data-ah-pane="events">
+        <h3 class="panel-title">Event inbox</h3>
+        <p class="hint" style="margin-top:0">Inbound AppointHive events (idempotent). Failed events can be retried by an owner when safe. Payment/delivery records stay read-only here.</p>
+        <div class="pay-actions" style="margin:0 0 10px">
+          <button type="button" id="beEventsRefresh">Refresh events</button>
+          <label class="hint" for="beEventsStatus">Status
+            <select id="beEventsStatus">
+              <option value="">All</option>
+              <option value="failed">Failed</option>
+              <option value="pending">Pending</option>
+              <option value="processed">Processed</option>
+              <option value="duplicate">Duplicate</option>
+            </select>
+          </label>
+        </div>
+        <div id="beEventsHost" class="hint">Loading events…</div>
       </div>
 
       <div class="ah-pane hidden" id="ahConnectPane" data-ah-pane="connect">
