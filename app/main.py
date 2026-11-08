@@ -886,12 +886,12 @@ def _score_criteria_dict(b: Business) -> dict:
         return {}
 
 
-def business_dict(b: Business) -> dict:
+def business_dict(b: Business, db=None) -> dict:
     try:
         socials = json.loads(b.social_links_json or "{}")
     except Exception:
         socials = {}
-    return {
+    out = {
         "id": b.id,
         "place_id": b.place_id,
         "name": b.name,
@@ -938,6 +938,7 @@ def business_dict(b: Business) -> dict:
         "marked_for_contact": bool(getattr(b, "marked_for_contact", False)),
         "ready_for_contact": bool(getattr(b, "ready_for_contact", False)),
         "outreach_channel": (getattr(b, "outreach_channel", None) or "").strip(),
+        "ig_ready_at": iso_or_empty(getattr(b, "ig_ready_at", None)),
         "follow_up_kind": (getattr(b, "follow_up_kind", None) or "").strip(),
         "archived": bool(getattr(b, "archived", False)),
         **cannot_contact_payload(b),
@@ -965,6 +966,11 @@ def business_dict(b: Business) -> dict:
         "be_installation_id": getattr(b, "be_installation_id", None) or "",
         "current_booking_software": getattr(b, "current_booking_software", None) or "",
     }
+    if db is not None:
+        from app.services.automation import ig_ready_wait_payload
+
+        out["ig_ready_wait"] = ig_ready_wait_payload(db, b)
+    return out
 
 
 def template_dict(t: MessageTemplate) -> dict:
@@ -1093,17 +1099,24 @@ def apply_business_updates(b: Business, data: dict, db=None):
                 continue
             setattr(b, field, bool(data[field]))
     if "ready_for_contact" in data and data["ready_for_contact"] is not None:
-        from app.services.automation import advance_at_least, assert_ready_for_contact
+        from app.services.automation import (
+            advance_at_least,
+            assert_ready_for_contact,
+            clear_ig_ready_at,
+            stamp_ig_ready_at,
+        )
 
         want_ready = bool(data["ready_for_contact"])
         if want_ready:
             assert_ready_for_contact(b)
             b.marked_for_contact = True
             b.ready_for_contact = True
+            stamp_ig_ready_at(b)
             if db is not None:
                 advance_at_least(db, b, "ready_to_contact", note="Promoted to Ready via PATCH")
         else:
             b.ready_for_contact = False
+            clear_ig_ready_at(b)
     str_fields = {
         "notes": 5000,
         "outcome": 80,
@@ -1125,21 +1138,30 @@ def apply_business_updates(b: Business, data: dict, db=None):
         if raw:
             apply_outreach_channel(b, raw)
         else:
+            from app.services.automation import clear_ig_ready_at
+
             b.outreach_channel = ""
             b.ready_for_contact = False
+            clear_ig_ready_at(b)
     if "cannot_contact" in data and data["cannot_contact"] is False:
         clear_cannot_contact(b, rematch=False)
     elif data.get("cannot_contact") is True:
         via = normalize_via(data.get("cannot_contact_via")) or cannot_contact_payload(b).get("cannot_contact_via") or "both"
         apply_cannot_contact(b, via=via, notes="")
     if data.get("marked_for_contact") is True:
+        from app.services.automation import clear_ig_ready_at
+
         clear_cannot_contact(b, rematch=False)
         b.marked_for_contact = True
         if "ready_for_contact" not in data:
             b.ready_for_contact = False
+            clear_ig_ready_at(b)
     if data.get("marked_for_contact") is False:
+        from app.services.automation import clear_ig_ready_at
+
         b.ready_for_contact = False
         b.outreach_channel = ""
+        clear_ig_ready_at(b)
     if data.get("contacted") is True or data.get("email_sent") is True or data.get("whatsapp_sent") is True or data.get("instagram_sent") is True:
         if getattr(b, "cannot_contact", False) or cannot_contact_payload(b).get("cannot_contact"):
             clear_cannot_contact(b, rematch=False)
@@ -1940,7 +1962,7 @@ def update_business(business_id: int, payload: UpdateBusiness, _user: str = Depe
                 log_activity(db, b.id, "ig_warm", channel="instagram", note=",".join(changed))
         db.commit()
         db.refresh(b)
-        return business_dict(b)
+        return business_dict(b, db)
 
 
 class BulkUpdate(BaseModel):
@@ -2058,7 +2080,7 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
         maybe_promote_follow_up(db, b, actor_id=actor.id if actor else None)
         db.commit()
         db.refresh(b)
-        return business_dict(b)
+        return business_dict(b, db)
 
 
 @app.get("/api/businesses/{business_id}/activity", tags=["discover"])

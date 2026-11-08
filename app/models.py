@@ -77,6 +77,7 @@ class Business(Base):
     marked_for_contact: Mapped[bool] = mapped_column(Boolean, default=False)
     ready_for_contact: Mapped[bool] = mapped_column(Boolean, default=False)
     outreach_channel: Mapped[str] = mapped_column(String(40), default="")  # whatsapp | instagram | email
+    ig_ready_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     follow_up_kind: Mapped[str] = mapped_column(String(40), default="")  # call_today | scheduled | ""
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     cannot_contact: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -28,6 +28,13 @@ export async function loadIgSoftDmCapSetting() {
     if ($('igSoftDmDailyCap')) {
       $('igSoftDmDailyCap').value = String(Number.isFinite(parsed) && parsed >= 0 ? parsed : 8);
     }
+    const waitRaw = data.settings && data.settings.ig_ready_wait_days;
+    const waitParsed = parseInt(waitRaw, 10);
+    if ($('igReadyWaitDays')) {
+      $('igReadyWaitDays').value = String(
+        Number.isFinite(waitParsed) && waitParsed >= 0 && waitParsed <= 14 ? waitParsed : 1
+      );
+    }
   } catch (_) { /* settings may be owner-gated elsewhere */ }
 }
 
@@ -85,13 +92,21 @@ function wireSettingsOnce() {
       const raw = $('igSoftDmDailyCap') ? $('igSoftDmDailyCap').value : '8';
       const n = Math.max(0, Math.min(100, parseInt(raw, 10)));
       if (Number.isNaN(n)) {
-        toast('Enter a number 0–100', true);
+        toast('Enter a daily cap 0–100', true);
+        return;
+      }
+      const waitRaw = $('igReadyWaitDays') ? $('igReadyWaitDays').value : '1';
+      const waitN = Math.max(0, Math.min(14, parseInt(waitRaw, 10)));
+      if (Number.isNaN(waitN)) {
+        toast('Enter Ready wait days 0–14', true);
         return;
       }
       await api(`/api/sales/settings/ig_soft_dm_daily_cap?value=${encodeURIComponent(String(n))}`, { method: 'PUT' });
+      await api(`/api/sales/settings/ig_ready_wait_days?value=${encodeURIComponent(String(waitN))}`, { method: 'PUT' });
       if ($('igSoftDmDailyCap')) $('igSoftDmDailyCap').value = String(n);
+      if ($('igReadyWaitDays')) $('igReadyWaitDays').value = String(waitN);
       await refreshIgOutreachQuota().catch(() => {});
-      toast(`IG soft DM daily cap saved (${n})`);
+      toast(`IG soft DM saved (cap ${n}, Ready wait ${waitN}d)`);
     } catch (e) {
       toast(e.message, true);
     }

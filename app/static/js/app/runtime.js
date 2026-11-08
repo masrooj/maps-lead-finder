@@ -779,6 +779,9 @@ async function loadSettings(){
     const capRaw=(settingsPayload.settings&&settingsPayload.settings.ig_soft_dm_daily_cap);
     const capParsed=parseInt(capRaw,10);
     if($('igSoftDmDailyCap')) $('igSoftDmDailyCap').value=String(Number.isFinite(capParsed)&&capParsed>=0?capParsed:8);
+    const waitRaw=(settingsPayload.settings&&settingsPayload.settings.ig_ready_wait_days);
+    const waitParsed=parseInt(waitRaw,10);
+    if($('igReadyWaitDays')) $('igReadyWaitDays').value=String(Number.isFinite(waitParsed)&&waitParsed>=0&&waitParsed<=14?waitParsed:1);
   }catch(_){}
   try{
     const wp=await api('/api/sales/be/won-policy');

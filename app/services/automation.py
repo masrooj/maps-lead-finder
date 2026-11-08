@@ -221,19 +221,128 @@ def apply_outreach_channel(b: Business, channel: str) -> None:
     b.outreach_channel = ch
     if ch == "instagram" and not ig_warm_complete(b):
         b.ready_for_contact = False
+        clear_ig_ready_at(b)
+    elif ch == "instagram" and bool(getattr(b, "ready_for_contact", False)):
+        stamp_ig_ready_at(b)
+    elif ch != "instagram":
+        clear_ig_ready_at(b)
     b.updated_at = _utcnow()
+
+
+def stamp_ig_ready_at(b: Business) -> None:
+    """Clock starts when lead enters Ready on Instagram (Settings-timezone day wait)."""
+    ch = normalize_outreach_channel(getattr(b, "outreach_channel", ""))
+    if ch == "instagram":
+        b.ig_ready_at = _utcnow()
+    else:
+        b.ig_ready_at = None
+
+
+def clear_ig_ready_at(b: Business) -> None:
+    b.ig_ready_at = None
+
+
+def ig_ready_wait_days(db) -> int:
+    raw = _setting_value(db, "ig_ready_wait_days", "1").strip() or "1"
+    try:
+        return max(0, min(14, int(raw)))
+    except ValueError:
+        return 1
+
+
+def ig_ready_wait_payload(db, b: Business) -> dict:
+    """IG soft-ask unlock after N calendar days in Settings timezone (promote stamp).
+
+    Missing stamp → grandfather (unlocked). WA/Email and already-contacted/IG-sent skip wait.
+    """
+    wait_days = ig_ready_wait_days(db)
+    tz, tz_name = _timezone_for_quota(db)
+    ch = normalize_outreach_channel(getattr(b, "outreach_channel", ""))
+    stamp = getattr(b, "ig_ready_at", None)
+    stamp_iso = stamp.isoformat() if stamp else ""
+    base = {
+        "applies": False,
+        "wait_days": wait_days,
+        "unlocked": True,
+        "ig_ready_at": stamp_iso,
+        "unlocks_on": None,
+        "unlocks_at": None,
+        "timezone": tz_name,
+        "reason": "",
+        "can_message": True,
+    }
+    if ch != "instagram":
+        return base
+    # Bumps / already contacted: no Ready wait (Follow-only warm still applies separately).
+    if ig_warm_follow_only(b):
+        return base
+    ready = bool(getattr(b, "ready_for_contact", False))
+    if not ready:
+        return {**base, "can_message": False}
+    # Grandfather existing Ready leads without a stamp.
+    if not stamp:
+        return {**base, "applies": True, "unlocked": True, "can_message": True}
+    stamp_aware = stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
+    stamp_local = stamp_aware.astimezone(tz)
+    if wait_days <= 0:
+        return {
+            **base,
+            "applies": True,
+            "unlocked": True,
+            "can_message": True,
+            "unlocks_on": stamp_local.date().isoformat(),
+        }
+
+    unlock_date = stamp_local.date() + timedelta(days=wait_days)
+    now_local = datetime.now(timezone.utc).astimezone(tz)
+    unlocked = now_local.date() >= unlock_date
+    unlocks_at = datetime.combine(unlock_date, datetime.min.time(), tzinfo=tz).astimezone(timezone.utc)
+    reason = ""
+    if not unlocked:
+        days_left = (unlock_date - now_local.date()).days
+        if wait_days == 1 and days_left == 1:
+            reason = "Warming — soft ask tomorrow"
+        elif days_left <= 1:
+            reason = f"Warming — soft ask unlocks {unlock_date.isoformat()}"
+        else:
+            reason = f"Warming — soft ask in {days_left} days ({unlock_date.isoformat()})"
+    return {
+        "applies": True,
+        "wait_days": wait_days,
+        "unlocked": unlocked,
+        "ig_ready_at": stamp_iso,
+        "unlocks_on": unlock_date.isoformat(),
+        "unlocks_at": unlocks_at.isoformat(),
+        "timezone": tz_name,
+        "reason": reason,
+        "can_message": unlocked,
+    }
+
+
+def assert_ig_ready_wait_elapsed(db, b: Business) -> None:
+    payload = ig_ready_wait_payload(db, b)
+    if payload.get("applies") and not payload.get("unlocked"):
+        raise ValueError(payload.get("reason") or "IG Ready wait not elapsed")
 
 
 def promote_to_ready(db, b: Business, *, actor_id: Optional[int] = None) -> dict:
     assert_ready_for_contact(b)
     b.marked_for_contact = True
     b.ready_for_contact = True
+    stamp_ig_ready_at(b)
     clear_cannot_contact(b, rematch=False)
     b.updated_at = _utcnow()
     advance_at_least(db, b, "ready_to_contact", actor_id=actor_id, note="Promoted to Ready to contact")
     db.commit()
     db.refresh(b)
-    return {"ok": True, "ready_for_contact": True, "outreach_channel": b.outreach_channel or ""}
+    wait = ig_ready_wait_payload(db, b)
+    return {
+        "ok": True,
+        "ready_for_contact": True,
+        "outreach_channel": b.outreach_channel or "",
+        "ig_ready_at": wait.get("ig_ready_at") or "",
+        "ig_ready_wait": wait,
+    }
 
 
 def demote_to_to_contact(db, b: Business, *, actor_id: Optional[int] = None, note: str = "") -> dict:
@@ -241,6 +350,7 @@ def demote_to_to_contact(db, b: Business, *, actor_id: Optional[int] = None, not
     b.marked_for_contact = True
     b.ready_for_contact = False
     b.contacted = False
+    clear_ig_ready_at(b)
     b.updated_at = _utcnow()
     db.add(
         Activity(
@@ -257,10 +367,10 @@ def demote_to_to_contact(db, b: Business, *, actor_id: Optional[int] = None, not
     if target:
         move_stage(db, b, target.id, actor_id=actor_id, note=note or "Demoted to To contact", force=True)
         moved = True
-        return {"ok": True, "ready_for_contact": False, "stage_moved": moved}
+        return {"ok": True, "ready_for_contact": False, "stage_moved": moved, "ig_ready_at": ""}
     db.commit()
     db.refresh(b)
-    return {"ok": True, "ready_for_contact": False, "stage_moved": moved}
+    return {"ok": True, "ready_for_contact": False, "stage_moved": moved, "ig_ready_at": ""}
 
 
 def maybe_promote_follow_up(db, b: Business, *, actor_id: Optional[int] = None) -> bool:
@@ -416,6 +526,7 @@ def assert_ig_soft_send_allowed(db, b: Business, *, skip_cap: bool = False) -> N
         raise ValueError(f"IG warm incomplete: {', '.join(missing) or 'follow + like/comment'}")
     if skip_cap:
         return
+    assert_ig_ready_wait_elapsed(db, b)
     quota = ig_outreach_quota(db)
     if quota["remaining"] <= 0:
         raise ValueError(
@@ -607,6 +718,7 @@ def on_outreach_confirmed(
         )
     # Confirm-sent lands in Contacted only. Follow-up waits for scheduled due.
     b.ready_for_contact = False
+    clear_ig_ready_at(b)
     advance_at_least(db, b, "contacted", actor_id=actor_id, note=f"Auto after {channel} confirm-sent")
     return {"ok": True, "channel": channel, "same_day_call": same_day_call}
 
@@ -631,6 +743,7 @@ def revert_to_to_contact(
     b.instagram_sent = False
     b.marked_for_contact = True
     b.ready_for_contact = True
+    stamp_ig_ready_at(b)
     clear_cannot_contact(b, rematch=True)
     b.last_contacted_at = None
     b.next_follow_up_at = None
@@ -679,6 +792,7 @@ def revert_to_to_contact(
 
 def on_marked_for_contact(db, b: Business, *, actor_id: Optional[int] = None) -> None:
     b.ready_for_contact = False
+    clear_ig_ready_at(b)
     advance_at_least(db, b, "to_contact", actor_id=actor_id, note="Auto: marked for contact")
 
 
@@ -914,6 +1028,8 @@ def rank_contact_queue(
                 "whatsapp_sent": bool(b.whatsapp_sent),
                 "instagram_sent": bool(b.instagram_sent),
                 **ig_warm_payload(b),
+                "ig_ready_at": b.ig_ready_at.isoformat() if getattr(b, "ig_ready_at", None) else "",
+                "ig_ready_wait": ig_ready_wait_payload(db, b),
                 "last_contacted_at": b.last_contacted_at.isoformat() if getattr(b, "last_contacted_at", None) else "",
                 "channels": {
                     "email": ch["has_email"],

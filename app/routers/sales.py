@@ -515,6 +515,70 @@ def sales_promote_ready(business_id: int, _user: str = Depends(require_user), db
     }
 
 
+@router.get("/prospects/{business_id}/ready-status", tags=["pipeline"])
+def sales_ready_status(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
+    """Mobile/web: Ready + IG warm + Ready-wait + soft-DM quota for messaging gates."""
+    from app.services.automation import (
+        ig_outreach_quota,
+        ig_ready_wait_payload,
+        ig_warm_payload,
+        normalize_outreach_channel,
+    )
+
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    ch = normalize_outreach_channel(getattr(b, "outreach_channel", ""))
+    warm = ig_warm_payload(b)
+    wait = ig_ready_wait_payload(db, b)
+    quota = ig_outreach_quota(db)
+    ready = bool(getattr(b, "ready_for_contact", False))
+    contacted = bool(
+        getattr(b, "contacted", False)
+        or getattr(b, "email_sent", False)
+        or getattr(b, "whatsapp_sent", False)
+        or getattr(b, "instagram_sent", False)
+    )
+    already_ig = bool(getattr(b, "instagram_sent", False))
+    block_reason = ""
+    can_confirm = True
+    if not ready and not contacted:
+        can_confirm = False
+        block_reason = "Move to Ready to contact first"
+    elif ch == "instagram":
+        if not warm.get("ig_warm_complete"):
+            can_confirm = False
+            block_reason = (
+                "IG warm incomplete: follow"
+                if warm.get("ig_warm_follow_only")
+                else "IG warm incomplete: follow + like or comment"
+            )
+        elif not already_ig and wait.get("applies") and not wait.get("unlocked"):
+            can_confirm = False
+            block_reason = wait.get("reason") or "IG Ready wait not elapsed"
+        elif not already_ig and quota.get("remaining", 0) <= 0:
+            can_confirm = False
+            block_reason = (
+                f"IG soft DM daily cap reached ({quota['used']}/{quota['cap']} in {quota['timezone']})"
+            )
+    return {
+        "ok": True,
+        "id": b.id,
+        "name": b.name or "",
+        "ready_for_contact": ready,
+        "contacted": contacted,
+        "outreach_channel": ch,
+        "ig_ready_at": wait.get("ig_ready_at") or "",
+        "ig_ready_wait": wait,
+        "ig_warm": warm,
+        "ig_outreach_quota": quota,
+        "instagram_sent": already_ig,
+        "can_confirm_sent": can_confirm,
+        "can_open_message": can_confirm,
+        "block_reason": block_reason,
+    }
+
+
 @router.post("/prospects/{business_id}/demote-to-contact", tags=["pipeline"])
 def sales_demote_to_contact(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     """Ready → To contact prep (keeps channel + warm ticks)."""
@@ -1220,6 +1284,7 @@ _SETTINGS_PUT_ALLOW = frozenset(
         "tax_rate_AU",
         "tax_label_AU",
         "ig_soft_dm_daily_cap",
+        "ig_ready_wait_days",
     }
 )
 
@@ -1243,6 +1308,14 @@ def sales_put_setting(key: str, value: str, _user: str = Depends(require_user), 
             raise HTTPException(422, "ig_soft_dm_daily_cap must be an integer 0–100") from e
         if n < 0 or n > 100:
             raise HTTPException(422, "ig_soft_dm_daily_cap must be an integer 0–100")
+        store_value = str(n)
+    if key == "ig_ready_wait_days":
+        try:
+            n = int(str(value).strip())
+        except (TypeError, ValueError) as e:
+            raise HTTPException(422, "ig_ready_wait_days must be an integer 0–14") from e
+        if n < 0 or n > 14:
+            raise HTTPException(422, "ig_ready_wait_days must be an integer 0–14")
         store_value = str(n)
     row = db.scalar(select(AppSetting).where(AppSetting.key == key))
     if not row:

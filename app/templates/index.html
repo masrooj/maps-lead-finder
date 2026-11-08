@@ -538,12 +538,18 @@
           <label class="flag"><input type="checkbox" id="wonRequireMilestone"> Require initial milestone paid</label>
           <button type="button" class="primary" id="saveWonPolicy" style="margin-top:8px">Save Won policy</button>
         </div>
-        <h3 class="panel-title">Instagram soft DM cap</h3>
-        <p class="hint" style="margin-top:0">Hard daily limit on IG Confirm sent (after warm follow / like / comment). Uses Settings timezone day.</p>
-        <div class="field" style="max-width:280px;margin-top:8px">
-          <label for="igSoftDmDailyCap">IG soft DMs per day</label>
-          <input type="number" id="igSoftDmDailyCap" min="0" max="100" step="1" value="8">
-          <button type="button" class="primary" id="saveIgSoftDmCap" style="margin-top:8px">Save IG daily cap</button>
+        <h3 class="panel-title">Instagram soft DM</h3>
+        <p class="hint" style="margin-top:0">Daily Confirm sent cap and Ready wait (calendar days in Settings timezone). Wait starts when you move an IG lead to Ready — soft ask unlocks after N days. Soft DM cap already exists; wait is IG-only.</p>
+        <div class="fields" style="max-width:320px;margin-top:8px">
+          <div class="field">
+            <label for="igSoftDmDailyCap">IG soft DMs per day</label>
+            <input type="number" id="igSoftDmDailyCap" min="0" max="100" step="1" value="8">
+          </div>
+          <div class="field">
+            <label for="igReadyWaitDays">IG Ready wait (days)</label>
+            <input type="number" id="igReadyWaitDays" min="0" max="14" step="1" value="1">
+          </div>
+          <button type="button" class="primary" id="saveIgSoftDmCap" style="margin-top:4px">Save IG soft DM settings</button>
         </div>
         <h3 class="panel-title">Prospect auto-setup</h3>
         <p class="hint" style="margin-top:0">Assign product line, currency, pipeline stage, and follow-up tasks for leads missing Sales OS fields.</p>

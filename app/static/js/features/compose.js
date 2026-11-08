@@ -252,8 +252,15 @@ export function igSoftSendBlockReason(lead, channel) {
     if (!(lead?.ig_warm_like || lead?.ig_warm_comment)) missing.push('like or comment');
     return `IG warm incomplete: ${missing.join(' + ') || 'follow + like/comment'}`;
   }
-  // Already IG-sent re-confirm: do not block on daily cap (server skip_cap).
+  // Already IG-sent re-confirm: do not block on wait or daily cap (server skip_cap).
   if (lead?.instagram_sent) return null;
+  // Already contacted (WA/email) bumps: Ready wait does not apply.
+  if (!igWarmFollowOnly(lead)) {
+    const wait = lead?.ig_ready_wait;
+    if (wait && wait.applies && wait.unlocked === false) {
+      return wait.reason || 'Warming — soft ask not unlocked yet';
+    }
+  }
   const q = getIgOutreachQuota();
   if (q.remaining <= 0) {
     return `IG soft DM daily cap reached (${q.used}/${q.cap}${q.timezone ? ` in ${q.timezone}` : ''})`;

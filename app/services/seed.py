@@ -340,6 +340,7 @@ def seed_settings(db) -> None:
     ensure_setting(db, "tax_label_AU", "GST")
     ensure_setting(db, "contact_queue_mode", "default")
     ensure_setting(db, "ig_soft_dm_daily_cap", "8")
+    ensure_setting(db, "ig_ready_wait_days", "1")
     try:
         from app.services.email_signature import ensure_defaults
 

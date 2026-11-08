@@ -346,12 +346,24 @@ export function channelTagsHtml(b){
   return tags.map(t=>`<span class="ch-tag ${t.cls}${t.on?'':' off'}">${t.label}</span>`).join(' ');
 }
 
+function igReadyWaitChipHtml(b){
+  const wait=b&&b.ig_ready_wait;
+  if(!wait||!wait.applies||wait.unlocked!==false) return '';
+  const tip=esc(wait.reason||'Warming — soft ask not unlocked yet');
+  return `<span class="ch-tag" title="${tip}">${tip}</span>`;
+}
+
 function composeChosenChannelButtonHtml(b){
   const ch=(b.outreach_channel||'').trim().toLowerCase();
   if(!ch) return '';
   const short={whatsapp:'WA',email:'Email',instagram:'IG'};
   const label=short[ch]||channelLabel(ch);
-  return `<button type="button" class="primary" data-compose-queue="${b.id}" data-compose-channel="${ch}" title="Open ${channelLabel(ch)} compose">${label}</button>`;
+  const wait=b&&b.ig_ready_wait;
+  const waiting=ch==='instagram'&&wait&&wait.applies&&wait.unlocked===false;
+  const tip=waiting
+    ? esc(wait.reason||'Warming — soft ask not unlocked yet')
+    : `Open ${channelLabel(ch)} compose`;
+  return `<button type="button" class="primary" data-compose-queue="${b.id}" data-compose-channel="${ch}" ${waiting?'disabled':''} title="${tip}">${label}</button>`;
 }
 
 function prepChannelPickerHtml(b){
@@ -532,6 +544,7 @@ export function renderContactQueueList(){
         <button type="button" data-cq-unmark="${b.id}">Remove</button>`;
     }else if(isReady){
       actions=`
+        ${igReadyWaitChipHtml(b)}
         ${composeChosenChannelButtonHtml(b)}
         <button type="button" data-cq-demote="${b.id}">Demote</button>
         <button type="button" data-cq-cannot="${b.id}">Can't contact</button>
@@ -711,9 +724,16 @@ export function renderContactQueueList(){
         row.ready_for_contact=true;
         row.marked_for_contact=true;
         if(res&&res.outreach_channel!=null) row.outreach_channel=res.outreach_channel;
+        if(res&&res.ig_ready_at!=null) row.ig_ready_at=res.ig_ready_at;
+        if(res&&res.ig_ready_wait) row.ig_ready_wait=res.ig_ready_wait;
       }
       await goContactQueueTab('ready');
-      toast('Moved to Ready to contact');
+      const wait=res&&res.ig_ready_wait;
+      if(wait&&wait.applies&&wait.unlocked===false){
+        toast(wait.reason||'On Ready — soft ask unlocks after wait');
+      }else{
+        toast('Moved to Ready to contact');
+      }
     }catch(e){ toast(e.message||'Could not move to Ready',true); }
   }));
   list.querySelectorAll('[data-cq-demote]').forEach(btn=>btn.addEventListener('click',async ev=>{

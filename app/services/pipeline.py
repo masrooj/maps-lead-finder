@@ -277,7 +277,7 @@ def move_stage(
         business.contacted = True
         business.lost = False
     elif to_stage.slug == "ready_to_contact":
-        from app.services.automation import assert_ready_for_contact
+        from app.services.automation import assert_ready_for_contact, stamp_ig_ready_at
 
         try:
             assert_ready_for_contact(business)
@@ -286,18 +286,25 @@ def move_stage(
                 raise HTTPException(422, str(e)) from e
         business.marked_for_contact = True
         business.ready_for_contact = True
+        stamp_ig_ready_at(business)
         business.contacted = False
         business.lost = False
     elif to_stage.slug == "to_contact":
+        from app.services.automation import clear_ig_ready_at
+
         business.marked_for_contact = True
         business.ready_for_contact = False
+        clear_ig_ready_at(business)
         business.contacted = False
         business.lost = False
     elif to_stage.slug == "identified":
+        from app.services.automation import clear_ig_ready_at
+
         business.contacted = False
         business.lost = False
         business.marked_for_contact = False
         business.ready_for_contact = False
+        clear_ig_ready_at(business)
 
     business.updated_at = _utcnow()
     db.add(
