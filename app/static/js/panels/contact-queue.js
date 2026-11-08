@@ -19,6 +19,8 @@ import {
   channelLabel,
   contactChannels,
   preferredColdChannel,
+  phoneDigits,
+  instagramHandle,
 } from '../features/compose.js';
 import {
   cannotContactVia,
@@ -389,6 +391,19 @@ function prepReadyButtonHtml(b){
   return `<button type="button" class="primary" data-cq-promote="${b.id}" ${gate.ok?'':'disabled'} title="${esc(gate.reason||'Move to Ready to contact')}">Ready to contact</button>`;
 }
 
+/** Open WA / Open IG for prep (warm + reachability) — not compose/messaging. */
+function prepOpenAppsHtml(b){
+  const c=contactChannels(b);
+  const bits=[];
+  if(c.whatsapp){
+    bits.push(`<button type="button" data-cq-open-wa="${b.id}" title="Open WhatsApp (web or app)">Open WA</button>`);
+  }
+  if(c.instagram){
+    bits.push(`<button type="button" data-cq-open-ig="${b.id}" title="Open Instagram profile (web or app)">Open IG</button>`);
+  }
+  return bits.join('');
+}
+
 async function promptCannotContact(id){
   const form=await uiForm({
     title:"Can't contact",
@@ -509,6 +524,7 @@ export function renderContactQueueList(){
     if(isSelected){
       actions=`
         <div class="cq-prep">${prepChannelPickerHtml(b)} ${prepWarmChecklistHtml(b)}</div>
+        ${prepOpenAppsHtml(b)}
         ${prepReadyButtonHtml(b)}
         <button type="button" data-cq-booking="${b.id}" data-booking-on="1">Has booking</button>
         <button type="button" data-cq-cannot="${b.id}">Can't contact</button>
@@ -589,6 +605,26 @@ export function renderContactQueueList(){
     try{
       await B.openCompose(lead, preferred);
     }catch(e){ toast(e.message,true); }
+  }));
+  list.querySelectorAll('[data-cq-open-wa]').forEach(btn=>btn.addEventListener('click',ev=>{
+    ev.stopPropagation();
+    const lead=state.contactQueueLeads.find(x=>String(x.id)===String(btn.dataset.cqOpenWa));
+    if(!lead){ toast('Lead not in queue',true); return; }
+    const digits=phoneDigits(lead);
+    if(digits.length<8){ toast('No phone on this lead',true); return; }
+    if(typeof B.openWhatsAppChat==='function') B.openWhatsAppChat(digits, '');
+    else toast('WhatsApp open unavailable',true);
+  }));
+  list.querySelectorAll('[data-cq-open-ig]').forEach(btn=>btn.addEventListener('click',ev=>{
+    ev.stopPropagation();
+    const lead=state.contactQueueLeads.find(x=>String(x.id)===String(btn.dataset.cqOpenIg));
+    if(!lead){ toast('Lead not in queue',true); return; }
+    const ig=((lead.social_links||{}).instagram)||'';
+    const handle=instagramHandle(ig);
+    if(!ig && !handle){ toast('No Instagram on this lead',true); return; }
+    if(typeof B.openInstagramProfile==='function'){
+      B.openInstagramProfile(ig, handle, lead.name||'');
+    }else toast('Instagram open unavailable',true);
   }));
   list.querySelectorAll('[data-cq-mark]').forEach(btn=>btn.addEventListener('click',async ev=>{
     ev.stopPropagation();

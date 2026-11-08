@@ -353,7 +353,8 @@ export function syncOptionalCallNow(lead) {
 export function preferredSoftTemplate(templates, channel) {
   const list = Array.isArray(templates) ? templates : [];
   if (channel !== 'instagram' && channel !== 'whatsapp') return null;
-  return list.find((t) => (t.purpose || '') === 'soft_opener') || null;
+  const softs = list.filter((t) => (t.purpose || '') === 'soft_opener');
+  return softs.find((t) => t.isDefault) || softs[0] || null;
 }
 
 async function patchIgWarmTick(field, checked) {

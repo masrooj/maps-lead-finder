@@ -28,6 +28,10 @@ def test_index_has_21_item_markers(auth_client):
     assert 'id="notifClearAll"' in html
     assert "data-notif-dismiss" in src
     assert "contactQueueIsParked" in src
+    assert "prepOpenAppsHtml" in src
+    assert "data-cq-open-wa" in src
+    assert "data-cq-open-ig" in src
+    assert "openWhatsAppChat" in src
     assert 'id="settingsTabs"' in html
     assert "setSettingsTab" in src
     assert 'data-settings-tab="general"' in html

@@ -76,8 +76,16 @@ import {
   ensureLeadInstagram,
   leadNeedsIgDiscover,
 } from '../features/instagram-discover.js';
+import {
+  loadTemplates,
+  setTplChannel,
+  templatesFor,
+  defaultTemplate,
+  getTemplate,
+  templateOptionLabel,
+  getTemplatesStore,
+} from '../panels/templates.js';
 
-const CHANNELS=['email','whatsapp','instagram','invoice'];
 let rowsData=[];
 let locations={};
 let selectedIds=new Set();
@@ -88,9 +96,6 @@ let composeAllowUnready=false;
 let drawerLead=null;
 let drawerTab='overview';
 let drawerMode='crm'; // outreach (Discover/CQ) | crm (Prospects + money flows)
-let activeTplChannel='email';
-let selectedTplId=null;
-let templatesStore=null;
 let viewMode='city'; // city | queue | due
 let openedChannel=null;
 let composeAwaitingReturn=false;
@@ -1675,6 +1680,16 @@ function openInstagramProfile(profileUrl, handle, businessName){
   if(app) launchAppWithFallback(app, web, 800);
   else launchExternal(web);
 }
+/** Open WhatsApp chat (empty body OK for To-contact prep). Web on desktop, app on mobile. */
+function openWhatsAppChat(phone, body){
+  const digits=String(phone||'').replace(/\D/g,'');
+  if(digits.length<8){
+    toast('No valid phone for WhatsApp', true);
+    return;
+  }
+  if(isMobileClient()) launchExternal(whatsappAppUrl(digits, body||''));
+  else launchExternal(whatsappWebUrl(digits, body||''));
+}
 function launchExternal(url){
   if(!url) return;
   const raw=String(url).trim();
@@ -2137,97 +2152,6 @@ function composeContactInfo(b,channel){
   return{label:'Contact',html:'—'};
 }
 
-function templatesFor(channel){return (templatesStore&&templatesStore[channel])||[]}
-/** Prefer soft_opener for IG/WA cold ask; else channel default. */
-function defaultTemplate(channel){
-  const list=templatesFor(channel);
-  if(channel==='instagram'||channel==='whatsapp'){
-    const soft=list.find(t=>(t.purpose||'')==='soft_opener');
-    if(soft) return soft;
-  }
-  return list.find(t=>t.isDefault)||list[0]||null;
-}
-function getTemplate(channel,id){return templatesFor(channel).find(t=>String(t.id)===String(id))||defaultTemplate(channel)}
-function templateOptionLabel(t){
-  const bits=[];
-  if(t&&t.isDefault) bits.push('default');
-  if(t&&(t.purpose||'')==='soft_opener') bits.push('soft');
-  return bits.length?` (${bits.join(' · ')})`:'';
-}
-
-async function migrateLocalTemplates(){
-  try{
-    if(localStorage.getItem('mlf_templates_migrated'))return;
-    const raw=localStorage.getItem('mlf_channel_templates');
-    if(!raw){localStorage.setItem('mlf_templates_migrated','1');return}
-    const parsed=JSON.parse(raw);
-    let migrated=0;
-    for(const ch of CHANNELS){
-      const list=Array.isArray(parsed?.[ch])?parsed[ch]:[];
-      for(const t of list){
-        if(!t||!(t.body||t.subject))continue;
-        if(t.id&&String(t.id).endsWith('-default')&&list.length===1)continue;
-        await api('/api/templates',{method:'POST',body:{channel:ch,name:t.name||`Imported ${ch}`,subject:t.subject||'',body:t.body||'',is_default:!!t.isDefault}});
-        migrated++;
-      }
-    }
-    localStorage.setItem('mlf_templates_migrated','1');
-    if(migrated)toast(`Migrated ${migrated} local templates to server.`);
-  }catch(e){localStorage.setItem('mlf_templates_migrated','1')}
-}
-async function loadTemplates(){
-  await migrateLocalTemplates();
-  templatesStore=await api('/api/templates');
-  renderTemplateList();
-}
-
-function renderTemplateList(){
-  const list=$('templateList');
-  const items=templatesFor(activeTplChannel);
-  if(!selectedTplId||!items.some(t=>String(t.id)===String(selectedTplId)))selectedTplId=(defaultTemplate(activeTplChannel)||items[0]||{}).id;
-  list.innerHTML=items.map(t=>`<button type="button" class="${String(t.id)===String(selectedTplId)?'active':''}" data-tpl-id="${esc(t.id)}"><strong>${esc(t.name)}</strong><span class="meta">${t.isDefault?'Default · ':''}${channelLabel(activeTplChannel)}</span></button>`).join('')||'<span class="sub">No templates</span>';
-  $('tplSubjectField').classList.toggle('hidden',activeTplChannel!=='email');
-  const t=getTemplate(activeTplChannel,selectedTplId);
-  if(!t){$('tplName').value='';$('tplSubject').value='';$('tplBody').value='';return}
-  $('tplName').value=t.name;$('tplSubject').value=t.subject||'';$('tplBody').value=t.body||'';
-}
-
-function setTplChannel(channel){
-  activeTplChannel=channel;selectedTplId=null;
-  document.querySelectorAll('[data-tpl-channel]').forEach(btn=>btn.classList.toggle('active',btn.dataset.tplChannel===channel));
-  renderTemplateList();
-}
-
-async function saveCurrentTemplate(){
-  const t=getTemplate(activeTplChannel,selectedTplId);
-  const body={channel:activeTplChannel,name:$('tplName').value.trim()||'Template',subject:$('tplSubject').value,body:$('tplBody').value,is_default:!!(t&&t.isDefault)};
-  if(t&&t.id){await api('/api/templates/'+t.id,{method:'PATCH',body});toast('Template saved.')}
-  else{const created=await api('/api/templates',{method:'POST',body});selectedTplId=created.id;toast('Template created.')}
-  await loadTemplates();
-}
-async function newTemplate(){
-  const created=await api('/api/templates',{method:'POST',body:{channel:activeTplChannel,name:`New ${channelLabel(activeTplChannel)}`,subject:activeTplChannel==='email'?'Quick idea for {{name}}':'',body:'Hi {{name}},\n\n',is_default:false}});
-  selectedTplId=created.id;await loadTemplates();$('tplName').focus();toast('New template created.');
-}
-async function setDefaultTemplate(){
-  if(!selectedTplId){toast('Select a template first.',true);return}
-  await api('/api/templates/'+selectedTplId+'/default',{method:'POST'});
-  await loadTemplates();toast('Default updated.');
-}
-async function deleteTemplate(){
-  if(!selectedTplId){toast('Select a template first.',true);return}
-  const tpl=getTemplate(activeTplChannel, selectedTplId);
-  const ok=await uiConfirm({
-    title:'Delete template?',
-    message:`“${(tpl&&tpl.name)||'This template'}” will be permanently removed.`,
-    confirmLabel:'Delete template',
-    danger:true
-  });
-  if(!ok) return;
-  try{await api('/api/templates/'+selectedTplId,{method:'DELETE'});selectedTplId=null;await loadTemplates();toast('Template deleted.')}
-  catch(e){toast(e.message,true)}
-}
-
 function fillComposeTemplates(channel){
   const list=templatesFor(channel);
   const def=defaultTemplate(channel);
@@ -2376,7 +2300,7 @@ async function openCompose(b,preferred,opts={}){
   }
   const channels=availableComposeChannels(b);
   if(!channels.length){showMessage('No email, WhatsApp, or Instagram on this lead. Edit contacts in Details or run Enrich / Find IG.',true);return}
-  if(!templatesStore){try{await loadTemplates()}catch(e){}}
+  if(!getTemplatesStore()){try{await loadTemplates()}catch(e){}}
   composePreferred=preferredColdChannel(b, preferred);
   $('composeLead').textContent=`${b.name} · ${b.city}, ${b.country}`;
   $('composeChannel').innerHTML=channels.map(ch=>`<option value="${ch}" ${ch===composePreferred?'selected':''}>${channelLabel(ch)}</option>`).join('');
@@ -3872,12 +3796,6 @@ $('drawerPanel').addEventListener('click',async e=>{
     }catch(err){toast(err.message,true)}
   }
 });
-document.querySelectorAll('[data-tpl-channel]').forEach(btn=>btn.addEventListener('click',e=>{e.stopPropagation();setTplChannel(btn.dataset.tplChannel)}));
-$('templateList').addEventListener('click',e=>{const btn=e.target.closest('[data-tpl-id]');if(!btn)return;selectedTplId=btn.dataset.tplId;renderTemplateList()});
-$('saveTplBtn').addEventListener('click',()=>saveCurrentTemplate().catch(e=>toast(e.message,true)));
-$('newTplBtn').addEventListener('click',()=>newTemplate().catch(e=>toast(e.message,true)));
-$('setDefaultTplBtn').addEventListener('click',()=>setDefaultTemplate().catch(e=>toast(e.message,true)));
-$('deleteTplBtn').addEventListener('click',()=>deleteTemplate());
 $('uiDialogConfirm')&&$('uiDialogConfirm').addEventListener('click',()=>closeUiDialog(true));
 $('uiDialogCancel')&&$('uiDialogCancel').addEventListener('click',()=>closeUiDialog(null));
 $('uiDialog')&&$('uiDialog').addEventListener('click',e=>{ if(e.target===$('uiDialog')) closeUiDialog(null); });
@@ -3969,10 +3887,11 @@ B.setAppPanel = setAppPanel;
 B.openProspectById = openProspectById;
 B.openDrawer = typeof openDrawer === 'function' ? openDrawer : null;
 B.openCompose = typeof openCompose === 'function' ? openCompose : null;
+B.openWhatsAppChat = typeof openWhatsAppChat === 'function' ? openWhatsAppChat : null;
+B.openInstagramProfile = typeof openInstagramProfile === 'function' ? openInstagramProfile : null;
 B.getComposeLead = () => composeLead;
 B.getContactQueueLeads = () => sharedState.contactQueueLeads || [];
 B.loadSettings = typeof loadSettings === 'function' ? loadSettings : null;
-B.loadTemplates = typeof loadTemplates === 'function' ? loadTemplates : null;
 B.refreshBeConnBanners = refreshBeConnBanners;
 B.setMoneyTab = setMoneyTab;
 B.setCommsTab = setCommsTab;
@@ -3998,7 +3917,7 @@ registerPanel({ id: 'leads', refresh: safeRefresh(typeof load === 'function' ? l
 /* tasks registered in panels/tasks.js */
 registerPanel({ id: 'activities', refresh: safeRefresh(typeof loadActivitiesFeed === 'function' ? loadActivitiesFeed : null) });
 /* demos registered in panels/demos.js */
-registerPanel({ id: 'templates', refresh: safeRefresh(typeof loadTemplates === 'function' ? loadTemplates : null) });
+/* templates registered in panels/templates.js */
 registerPanel({ id: 'deals', refresh: safeRefresh(typeof loadDeals === 'function' ? loadDeals : null) });
 registerPanel({ id: 'money', refresh: safeRefresh(typeof loadMoney === 'function' ? loadMoney : null) });
 /* reports registered in panels/reports.js */

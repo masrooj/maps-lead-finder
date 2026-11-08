@@ -4,6 +4,8 @@ export const B = {
   openProspectById: null,
   openDrawer: null,
   openCompose: null,
+  openWhatsAppChat: null,
+  openInstagramProfile: null,
   getComposeLead: null,
   getContactQueueLeads: null,
   loadSettings: null,

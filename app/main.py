@@ -1002,16 +1002,23 @@ def seed_default_templates(db):
     existing = db.scalars(select(MessageTemplate)).all()
     have_channels = {t.channel for t in existing}
     have_keys = {(t.channel, (t.purpose or ""), (t.name or "")) for t in existing}
+    soft_default_channels = {
+        t.channel
+        for t in existing
+        if t.is_default and t.channel in ("whatsapp", "instagram")
+    }
     created = False
     for channel, data in DEFAULT_TEMPLATES.items():
         if channel in have_channels:
             continue
+        # IG/WA cold ask prefers soft openers as the marked default; long-form stays available.
+        is_default = channel not in ("whatsapp", "instagram")
         db.add(MessageTemplate(
             channel=channel,
             name=data["name"],
             subject=data["subject"],
             body=data["body"],
-            is_default=True,
+            is_default=is_default,
             purpose="",
             governance_ok=True,
         ))
@@ -1025,15 +1032,22 @@ def seed_default_templates(db):
         key = (channel, purpose, name)
         if key in have_keys:
             continue
+        make_default = (
+            channel in ("whatsapp", "instagram")
+            and channel not in soft_default_channels
+            and not any(t.channel == channel and t.is_default for t in existing)
+        )
         db.add(MessageTemplate(
             channel=channel,
             name=name,
             subject=data.get("subject") or "",
             body=data.get("body") or "",
-            is_default=False,
+            is_default=make_default,
             purpose=purpose,
             governance_ok=True,
         ))
+        if make_default:
+            soft_default_channels.add(channel)
         created = True
         have_keys.add(key)
     if created or not existing:
