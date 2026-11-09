@@ -285,9 +285,14 @@ def sales_pipeline(
     from app.services.pipeline import board_column_slug
     from app.services.seed import seed_stages
 
-    # Self-heal catalog when deploy landed UI before stages were reseeded.
+    # Self-heal catalog when deploy landed UI before stages were reseeded
+    # (missing follow_up_3, or legacy "Identified" label for to_contact).
     stages = list_stages(db, product_line.upper())
-    if not any(s.slug == "follow_up_3" for s in stages):
+    to_contact = next((s for s in stages if s.slug == "to_contact"), None)
+    needs_seed = (not any(s.slug == "follow_up_3" for s in stages)) or (
+        to_contact is not None and (to_contact.name or "") == "Identified"
+    )
+    if needs_seed:
         try:
             seed_stages(db)
             db.commit()

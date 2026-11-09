@@ -49,6 +49,16 @@ def _set_cap(value: str) -> None:
         db.commit()
 
 
+def _set_wait_days(value: str) -> None:
+    with SessionLocal() as db:
+        row = db.scalar(select(AppSetting).where(AppSetting.key == "ig_ready_wait_days"))
+        if not row:
+            db.add(AppSetting(key="ig_ready_wait_days", value=value))
+        else:
+            row.value = value
+        db.commit()
+
+
 def test_patch_ig_warm_ticks_round_trip(auth_client):
     bid = _make_ig_lead()
     r = auth_client.patch(
@@ -245,6 +255,34 @@ def test_ig_cap_zero_blocks_all(auth_client):
         assert settings.json()["ig_outreach_quota"]["remaining"] == 0
     finally:
         _set_cap("8")
+
+
+def test_promote_ready_allowed_when_ig_cap_zero(auth_client):
+    """Daily cap blocks Confirm sent only — To contact → Ready must stay doable."""
+    _set_cap("0")
+    _set_wait_days("0")  # unlock Ready-wait so Confirm reaches the cap gate
+    try:
+        bid = _make_ig_lead(
+            ready_for_contact=False,
+            ig_warm_follow=True,
+            ig_warm_like=True,
+            ig_warm_comment=True,
+        )
+        prom = auth_client.post(f"/api/sales/prospects/{bid}/promote-ready")
+        assert prom.status_code == 200, prom.text
+        assert prom.json().get("ready_for_contact") is True
+        with SessionLocal() as db:
+            b = db.get(Business, bid)
+            assert b.ready_for_contact is True
+        blocked = auth_client.post(
+            f"/api/businesses/{bid}/confirm-sent",
+            json={"channel": "instagram", "message": "soft"},
+        )
+        assert blocked.status_code == 422, blocked.text
+        assert "cap" in blocked.text.lower()
+    finally:
+        _set_cap("8")
+        _set_wait_days("1")
 
 
 def test_ig_soft_dm_cap_rejects_invalid(auth_client):

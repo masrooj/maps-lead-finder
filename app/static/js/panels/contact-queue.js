@@ -21,6 +21,9 @@ import {
   preferredColdChannel,
   phoneDigits,
   instagramHandle,
+  getIgOutreachQuota,
+  igSoftSendBlockReason,
+  refreshIgOutreachQuota,
 } from '../features/compose.js';
 import {
   cannotContactVia,
@@ -79,6 +82,23 @@ async function goContactQueueTab(tab){
   }
   await loadContactQueue({keepTab:true});
   renderContactQueueList();
+}
+
+/** Patch CQ row stage from promote/demote/confirm API prospect payload. */
+function patchQueueLeadStage(row, prospect){
+  if(!row || !prospect) return;
+  if(prospect.stage) row.stage = prospect.stage;
+  if(prospect.ready_for_contact != null) row.ready_for_contact = !!prospect.ready_for_contact;
+  if(prospect.marked_for_contact != null) row.marked_for_contact = !!prospect.marked_for_contact;
+  if(prospect.contacted != null) row.contacted = !!prospect.contacted;
+  if(prospect.outreach_channel != null) row.outreach_channel = prospect.outreach_channel;
+}
+
+/** Keep Pipeline kanban in sync after CQ tab moves (flags + stage). */
+function refreshPipelineAfterQueueMove(){
+  if(typeof B.loadPipeline === 'function'){
+    B.loadPipeline().catch(()=>{});
+  }
 }
 export function setContactQueueQuery(q) { contactQueueQuery = q || ''; }
 export function setContactQueueChannel(ch) { contactQueueChannel = ch || ''; }
@@ -278,8 +298,17 @@ export function renderContactQueueExplain(data){
       </div>
     </div>
     <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → Mark to contact → pick channel (+ IG warm 2/3) → Ready to contact → Message → Confirm sent. Can't contact parks unreachable.</p>
+    ${igCapBannerHtml()}
     ${parts.length?`<p class="hint" style="margin:8px 0 0"><strong style="color:var(--text)">Top why:</strong> ${esc(parts.join(' · '))}</p>`:''}
   `;
+}
+
+/** Cap blocks IG Confirm sent only — promote To contact → Ready stays allowed. */
+function igCapBannerHtml(){
+  const q=getIgOutreachQuota();
+  if(!(q&&q.remaining<=0)) return '';
+  const tz=q.timezone?` · ${esc(q.timezone)}`:'';
+  return `<p class="hint" style="margin:8px 0 0" role="status"><strong style="color:var(--danger, #b42318)">IG soft DM daily cap hit</strong> (${esc(String(q.used))}/${esc(String(q.cap))}${tz}). You can still move <strong>To contact → Ready</strong>; Confirm sent unlocks when the daily quota resets.</p>`;
 }
 
 export function syncContactQueueSearchUi(){
@@ -358,12 +387,12 @@ function composeChosenChannelButtonHtml(b){
   if(!ch) return '';
   const short={whatsapp:'WA',email:'Email',instagram:'IG'};
   const label=short[ch]||channelLabel(ch);
-  const wait=b&&b.ig_ready_wait;
-  const waiting=ch==='instagram'&&wait&&wait.applies&&wait.unlocked===false;
-  const tip=waiting
-    ? esc(wait.reason||'Warming — soft ask not unlocked yet')
+  // Messaging gates only (Ready wait / daily cap / warm) — never promote-Ready.
+  const blockReason=ch==='instagram' ? (igSoftSendBlockReason(b, ch)||'') : '';
+  const tip=blockReason
+    ? esc(blockReason)
     : `Open ${channelLabel(ch)} compose`;
-  return `<button type="button" class="primary" data-compose-queue="${b.id}" data-compose-channel="${ch}" ${waiting?'disabled':''} title="${tip}">${label}</button>`;
+  return `<button type="button" class="primary" data-compose-queue="${b.id}" data-compose-channel="${ch}" data-block-reason="${esc(blockReason)}" ${blockReason?'disabled':''} title="${tip}">${label}</button>`;
 }
 
 function prepChannelPickerHtml(b){
@@ -611,6 +640,18 @@ export function renderContactQueueList(){
   }));
   list.querySelectorAll('[data-compose-queue]').forEach(btn=>btn.addEventListener('click',async ev=>{
     ev.stopPropagation();
+    if(btn.disabled){
+      const reason=(btn.dataset.blockReason||btn.title||'').trim();
+      toast(
+        reason
+          ? (/daily cap/i.test(reason)
+            ? `${reason}. To contact → Ready still works — messaging unlocks when the daily quota resets.`
+            : reason)
+          : 'Cannot open message yet',
+        true,
+      );
+      return;
+    }
     const id=btn.dataset.composeQueue;
     const lead=state.contactQueueLeads.find(x=>String(x.id)===String(id));
     if(!lead){ toast('Lead not in queue',true); return; }
@@ -726,11 +767,17 @@ export function renderContactQueueList(){
         if(res&&res.outreach_channel!=null) row.outreach_channel=res.outreach_channel;
         if(res&&res.ig_ready_at!=null) row.ig_ready_at=res.ig_ready_at;
         if(res&&res.ig_ready_wait) row.ig_ready_wait=res.ig_ready_wait;
+        if(res&&res.prospect) patchQueueLeadStage(row, res.prospect);
       }
       await goContactQueueTab('ready');
+      refreshPipelineAfterQueueMove();
       const wait=res&&res.ig_ready_wait;
+      const ch=((row&&row.outreach_channel)||(res&&res.outreach_channel)||'').toLowerCase();
+      const q=getIgOutreachQuota();
       if(wait&&wait.applies&&wait.unlocked===false){
         toast(wait.reason||'On Ready — soft ask unlocks after wait');
+      }else if(ch==='instagram' && q.remaining<=0){
+        toast('Moved to Ready — IG daily soft DM cap hit; messaging unlocks when the daily quota resets');
       }else{
         toast('Moved to Ready to contact');
       }
@@ -739,8 +786,12 @@ export function renderContactQueueList(){
   list.querySelectorAll('[data-cq-demote]').forEach(btn=>btn.addEventListener('click',async ev=>{
     ev.stopPropagation();
     try{
-      await api('/api/sales/prospects/'+btn.dataset.cqDemote+'/demote-to-contact',{method:'POST',body:{}});
+      const id=btn.dataset.cqDemote;
+      const res=await api('/api/sales/prospects/'+id+'/demote-to-contact',{method:'POST',body:{}});
+      const row=state.contactQueueLeads.find(x=>String(x.id)===String(id));
+      if(row && res && res.prospect) patchQueueLeadStage(row, res.prospect);
       await goContactQueueTab('selected');
+      refreshPipelineAfterQueueMove();
       toast('Demoted to To contact');
     }catch(e){ toast(e.message,true); }
   }));
@@ -864,6 +915,7 @@ export async function loadContactQueue(opts={}){
   if(country) qs.set('country', country);
   if(city) qs.set('city', city);
   const data=await api('/api/sales/contact-queue?'+qs.toString());
+  await refreshIgOutreachQuota().catch(()=>{});
   fillContactQueueModes(data.modes||[], data.mode||'default');
   fillContactQueueLocationFilters(data.locations||{}, country, city);
   const scope=[country,city].filter(Boolean).join(' · ');

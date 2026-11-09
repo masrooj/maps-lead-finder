@@ -177,6 +177,8 @@ async function setDefaultTemplate() {
   }
   await api('/api/templates/' + selectedTplId + '/default', { method: 'POST' });
   await loadTemplates();
+  // Re-fill open compose so message pane picks the new default immediately.
+  if (typeof B.refreshComposeTemplates === 'function') B.refreshComposeTemplates();
   toast('Default updated.');
 }
 

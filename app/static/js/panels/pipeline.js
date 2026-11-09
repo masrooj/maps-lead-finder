@@ -1,8 +1,6 @@
 /** Panel owner: `pipeline` (Pipeline).
  * Stages align with Contact queue early tabs:
- *   Identified (to_contact) → To contact
- *   Ready to Contact → Ready
- *   Contacted → Contacted
+ *   To contact → Ready to contact → Contacted
  * Then Follow-up +3 / +7 → Engaged → … → Won/Lost.
  */
 import { $ } from '../core/dom.js';

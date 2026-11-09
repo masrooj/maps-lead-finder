@@ -10,6 +10,7 @@ export const B = {
   getContactQueueLeads: null,
   loadSettings: null,
   loadTemplates: null,
+  refreshComposeTemplates: null,
   refreshBeConnBanners: null,
   setMoneyTab: null,
   setCommsTab: null,

@@ -62,14 +62,14 @@ PRODUCT_LINES = ("STANDALONE", "SAAS")
 USER_ROLES = ("owner", "sales", "viewer")
 
 # Early stages mirror Contact queue tabs:
-#   to_contact ("Identified") ↔ To contact
+#   to_contact ↔ To contact
 #   ready_to_contact ↔ Ready to contact
 #   contacted ↔ Contacted
 # Unmarked discovers stay on identified ("Discovered") and are Discover-only (hidden on board).
 STANDALONE_STAGES = [
     ("identified", "Discovered", 0.05, False),
-    ("to_contact", "Identified", 0.08, False),
-    ("ready_to_contact", "Ready to Contact", 0.10, False),
+    ("to_contact", "To contact", 0.08, False),
+    ("ready_to_contact", "Ready to contact", 0.10, False),
     ("contacted", "Contacted", 0.15, False),
     ("follow_up_3", "Follow-up +3", 0.20, False),
     ("follow_up_7", "Follow-up +7", 0.22, False),
@@ -86,8 +86,8 @@ STANDALONE_STAGES = [
 
 SAAS_STAGES = [
     ("identified", "Discovered", 0.05, False),
-    ("to_contact", "Identified", 0.08, False),
-    ("ready_to_contact", "Ready to Contact", 0.10, False),
+    ("to_contact", "To contact", 0.08, False),
+    ("ready_to_contact", "Ready to contact", 0.10, False),
     ("contacted", "Contacted", 0.15, False),
     ("follow_up_3", "Follow-up +3", 0.20, False),
     ("follow_up_7", "Follow-up +7", 0.22, False),

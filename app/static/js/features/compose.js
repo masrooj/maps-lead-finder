@@ -263,9 +263,20 @@ export function igSoftSendBlockReason(lead, channel) {
   }
   const q = getIgOutreachQuota();
   if (q.remaining <= 0) {
-    return `IG soft DM daily cap reached (${q.used}/${q.cap}${q.timezone ? ` in ${q.timezone}` : ''})`;
+    return formatIgDailyCapReached(q);
   }
   return null;
+}
+
+/** Operator-facing daily-cap copy (Confirm / Message — not promote-Ready). */
+export function formatIgDailyCapReached(q = null) {
+  const quota = q || getIgOutreachQuota();
+  const tz = quota.timezone ? ` in ${quota.timezone}` : '';
+  return `IG soft DM daily cap reached (${quota.used}/${quota.cap}${tz})`;
+}
+
+export function igDailyCapHit() {
+  return getIgOutreachQuota().remaining <= 0;
 }
 
 function paintIgQuotaLine() {
@@ -321,21 +332,40 @@ export function syncIgWarmComposeUi(lead, channel) {
   const chOpens = document.querySelectorAll('#composeChannelControls [data-compose-open="instagram"]');
 
   if (isIg) {
-    if (openBtn) openBtn.disabled = blocked;
-    if (confirmBtn) confirmBtn.disabled = blocked;
-    if (confirmNext) confirmNext.disabled = blocked;
-    chOpens.forEach((btn) => { btn.disabled = blocked; });
+    // Keep buttons clickable when blocked so guardIgSoftSend can toast the reason
+    // (native disabled buttons swallow clicks → silent failure).
+    const reason = igSoftSendBlockReason(lead, 'instagram');
+    [openBtn, confirmBtn, confirmNext].forEach((btn) => {
+      if (!btn) return;
+      btn.disabled = false;
+      btn.setAttribute('aria-disabled', blocked ? 'true' : 'false');
+      btn.classList.toggle('is-blocked', blocked);
+      btn.title = reason || '';
+    });
+    chOpens.forEach((btn) => {
+      btn.disabled = false;
+      btn.setAttribute('aria-disabled', blocked ? 'true' : 'false');
+      btn.classList.toggle('is-blocked', blocked);
+      btn.title = reason || '';
+    });
     const hint = $('igWarmGateHint');
     if (hint) {
-      const reason = igSoftSendBlockReason(lead, 'instagram');
-      hint.textContent = reason
-        || (followOnly ? 'Follow ticked — soft DM unlocked. Call now is optional.' : 'Warm ready — soft DM unlocked.');
+      if (reason && /daily cap/i.test(reason)) {
+        hint.textContent = `${reason}. To contact → Ready still works — messaging unlocks when the daily quota resets.`;
+      } else {
+        hint.textContent = reason
+          || (followOnly ? 'Follow ticked — soft DM unlocked. Call now is optional.' : 'Warm ready — soft DM unlocked.');
+      }
       hint.classList.toggle('ok', !reason);
     }
   } else {
-    if (openBtn) openBtn.disabled = false;
-    if (confirmBtn) confirmBtn.disabled = false;
-    if (confirmNext) confirmNext.disabled = false;
+    [openBtn, confirmBtn, confirmNext].forEach((btn) => {
+      if (!btn) return;
+      btn.disabled = false;
+      btn.removeAttribute('aria-disabled');
+      btn.classList.remove('is-blocked');
+      btn.title = '';
+    });
   }
 }
 
@@ -434,7 +464,10 @@ export function wireIgWarmCompose() {
 export function guardIgSoftSend(lead, channel) {
   const reason = igSoftSendBlockReason(lead, channel);
   if (!reason) return true;
-  toast(reason, true);
+  const msg = /daily cap/i.test(reason)
+    ? `${reason}. To contact → Ready still works — messaging unlocks when the daily quota resets.`
+    : reason;
+  toast(msg, true);
   syncIgWarmComposeUi(lead, channel);
   return false;
 }

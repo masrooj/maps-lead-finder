@@ -29,6 +29,7 @@ button.primary:hover{filter:brightness(1.05);border-color:transparent}
 button.ghost{background:transparent}
 button.danger{color:var(--red);border-color:#8b394b;background:rgba(139,57,75,.12)}
 button:disabled{opacity:.5;cursor:wait;transform:none}
+button.is-blocked{opacity:.5;cursor:not-allowed;transform:none}
 button:focus-visible,a:focus-visible,.stat:focus-visible,.guide-step:focus-visible,.queue-card:focus-visible{
   outline:2px solid var(--accent);outline-offset:2px
 }

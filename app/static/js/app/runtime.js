@@ -2163,23 +2163,28 @@ function fillComposeTemplates(channel){
     $('composeSubject').value='';
     $('composeBody').value='';
   }else{
-    // Soft openers first for IG/WA so the short ask is easy to pick.
-    const ordered=(channel==='instagram'||channel==='whatsapp')
-      ?[...list].sort((a,b)=>{
+    // Marked default first so the dropdown matches the message pane; soft openers next for IG/WA.
+    const ordered=[...list].sort((a,b)=>{
+      const ad=a&&a.isDefault?0:1;
+      const bd=b&&b.isDefault?0:1;
+      if(ad!==bd) return ad-bd;
+      if(channel==='instagram'||channel==='whatsapp'){
         const as=(a.purpose||'')==='soft_opener'?0:1;
         const bs=(b.purpose||'')==='soft_opener'?0:1;
-        return as-bs || String(a.name||'').localeCompare(String(b.name||''));
-      })
-      :list;
+        if(as!==bs) return as-bs;
+      }
+      return String(a.name||'').localeCompare(String(b.name||''));
+    });
     $('composeTemplate').innerHTML=ordered.map(t=>`<option value="${esc(t.id)}" ${String(t.id)===String(def&&def.id)?'selected':''}>${esc(t.name)}${esc(templateOptionLabel(t))}</option>`).join('');
+    if(def&&def.id!=null) $('composeTemplate').value=String(def.id);
   }
-  applyComposeTemplate();
+  applyComposeTemplate(channel);
 }
-function applyComposeTemplate(){
+function applyComposeTemplate(channel){
   if(!composeLead)return;
-  const channel=$('composeChannel').value;
-  const tpl=getTemplate(channel,$('composeTemplate').value);
-  $('composeSubjectField').classList.toggle('hidden',channel!=='email');
+  const ch=channel||($('composeChannel')&&$('composeChannel').value)||composePreferred||'email';
+  const tpl=getTemplate(ch,$('composeTemplate').value);
+  $('composeSubjectField').classList.toggle('hidden',ch!=='email');
   const subject=fillTemplate((tpl&&tpl.subject)||'',composeLead);
   const body=fillTemplate((tpl&&tpl.body)||'',composeLead);
   $('composeSubject').value=subject;
@@ -2187,10 +2192,10 @@ function applyComposeTemplate(){
   if(!body){
     // Fallback so Email/WA never open empty if templates failed to load
     $('composeBody').value=fillTemplate('Hi {{name}},\n\nI came across your {{category}} business in {{city}} and wanted to reach out.\n\nThanks!',composeLead);
-    if(channel==='email'&&!$('composeSubject').value)$('composeSubject').value=fillTemplate('Quick idea for {{name}}',composeLead);
+    if(ch==='email'&&!$('composeSubject').value)$('composeSubject').value=fillTemplate('Quick idea for {{name}}',composeLead);
   }
-  const info=composeContactInfo(composeLead,channel);
-  $('composeContactLabel').textContent='Sending via '+channelLabel(channel);
+  const info=composeContactInfo(composeLead,ch);
+  $('composeContactLabel').textContent='Sending via '+channelLabel(ch);
   $('composeContactValue').innerHTML=info.html;
   const igBtn=$('composeContactValue').querySelector('[data-open-ig-profile]');
   if(igBtn){
@@ -2226,11 +2231,11 @@ function applyComposeTemplate(){
     });
   }
   const mobile=isMobileClient();
-  $('composeNote').textContent=channel==='email'
+  $('composeNote').textContent=ch==='email'
     ?(mobile
       ?'Open app launches your mail app (set Zoho Mail as default). Message is also copied — paste if needed, then Confirm sent.'
       :'Copy subject + body, or Open Zoho web compose. Then Confirm sent.')
-    :channel==='whatsapp'
+    :ch==='whatsapp'
       ?(mobile
         ?'Open app launches WhatsApp Business (or WhatsApp). Message is prefilled when possible — then Confirm sent.'
         :'Copy message, or Open WhatsApp Web. Then Confirm sent.')
@@ -2238,14 +2243,22 @@ function applyComposeTemplate(){
         ?'Open app launches Instagram. Message is copied — paste into DM, then Confirm sent.'
         :'Copy message, or Open Instagram web. Then Confirm sent.');
   if($('openComposeBtn')){
-    $('openComposeBtn').textContent=channel==='email'
+    $('openComposeBtn').textContent=ch==='email'
       ?(mobile?'Open Zoho / Mail app':'Open Zoho Mail')
-      :channel==='whatsapp'
+      :ch==='whatsapp'
         ?(mobile?'Open WhatsApp app':'Open WhatsApp Web')
         :(mobile?'Open Instagram app':'Open Instagram');
   }
   renderComposeChannelControls();
-  syncIgWarmComposeUi(composeLead, channel);
+  syncIgWarmComposeUi(composeLead, ch);
+}
+
+/** Re-apply default/selected template into compose message pane (after Set default). */
+function refreshComposeTemplates(){
+  const modal=$('composeModal');
+  if(!modal || modal.classList.contains('hidden')) return;
+  const ch=($('composeChannel')&&$('composeChannel').value)||composePreferred||'email';
+  fillComposeTemplates(ch);
 }
 async function copyComposeMessage(){
   if(!composeLead)return;
@@ -2303,7 +2316,7 @@ async function openCompose(b,preferred,opts={}){
   }
   const channels=availableComposeChannels(b);
   if(!channels.length){showMessage('No email, WhatsApp, or Instagram on this lead. Edit contacts in Details or run Enrich / Find IG.',true);return}
-  if(!getTemplatesStore()){try{await loadTemplates()}catch(e){}}
+  try{await loadTemplates()}catch(e){}
   composePreferred=preferredColdChannel(b, preferred);
   $('composeLead').textContent=`${b.name} · ${b.city}, ${b.country}`;
   $('composeChannel').innerHTML=channels.map(ch=>`<option value="${ch}" ${ch===composePreferred?'selected':''}>${channelLabel(ch)}</option>`).join('');
@@ -2509,6 +2522,8 @@ async function confirmSent(opts={}){
         }
       }catch(e){}
     }
+    // Pipeline columns bucket by CQ flags — refresh so Contacted / Follow-up move shows up.
+    if(typeof B.loadPipeline==='function') B.loadPipeline().catch(()=>{});
     if(opts.next)openNextLead(currentId);
   }catch(e){toast(e.message,true)}
 }
@@ -2707,7 +2722,7 @@ function renderDrawer(){
     </div>
     ${crmPanes}
     ${discoverOnly||queueOnly?'':`<div class="drawer-pane ${tab==='pipeline'?'active':''}" data-dpane="pipeline">
-      <p class="hint" style="margin-top:0">Flags sync with pipeline: Identified ↔ To contact, Ready ↔ Ready tab, Contacted ↔ Contacted. Due +3/+7 open Follow-up columns; Engaged → Won/Lost unchanged.</p>
+      <p class="hint" style="margin-top:0">Flags sync with pipeline: To contact · Ready to contact · Contacted match Contact queue tabs. Due +3/+7 open Follow-up columns; Engaged → Won/Lost unchanged.</p>
       <label class="flag"><input type="checkbox" data-dfield="marked_for_contact" ${b.marked_for_contact?'checked':''}> Marked for contact</label>
       <label class="flag"><input type="checkbox" data-dfield="email_sent" ${b.email_sent?'checked':''}> Email sent</label>
       <label class="flag"><input type="checkbox" data-dfield="whatsapp_sent" ${b.whatsapp_sent?'checked':''}> WhatsApp sent</label>
@@ -3192,6 +3207,7 @@ $('contactQueueClearReady')&&$('contactQueueClearReady').addEventListener('click
       await api('/api/sales/prospects/'+id+'/demote-to-contact',{method:'POST',body:{}});
     }
     await loadContactQueue({keepTab:true});
+    if(typeof B.loadPipeline==='function') B.loadPipeline().catch(()=>{});
     toast('Demoted to To contact');
   }catch(e){ toast(e.message,true); }
 });
@@ -3890,6 +3906,7 @@ B.setAppPanel = setAppPanel;
 B.openProspectById = openProspectById;
 B.openDrawer = typeof openDrawer === 'function' ? openDrawer : null;
 B.openCompose = typeof openCompose === 'function' ? openCompose : null;
+B.refreshComposeTemplates = typeof refreshComposeTemplates === 'function' ? refreshComposeTemplates : null;
 B.openWhatsAppChat = typeof openWhatsAppChat === 'function' ? openWhatsAppChat : null;
 B.openInstagramProfile = typeof openInstagramProfile === 'function' ? openInstagramProfile : null;
 B.getComposeLead = () => composeLead;

@@ -193,7 +193,7 @@ def test_pipeline_filters_and_hides_discovered(auth_client):
     assert "to_contact" in slugs
     assert "follow_up_3" in slugs and "follow_up_7" in slugs
     col = next(c for c in data["columns"] if c["stage"]["slug"] == "to_contact")
-    assert col["stage"]["name"] == "Identified"
+    assert col["stage"]["name"] == "To contact"
     assert any(p["id"] == bid for p in col["prospects"])
     assert col["cq_tab"] == "selected"
 

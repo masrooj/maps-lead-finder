@@ -57,6 +57,9 @@ def test_set_default_whatsapp_overrides_soft_opener_in_ui_helper(auth_client):
     assert "if (marked) return marked" in src
     # Soft must not win before isDefault (old bug).
     assert "Prefer soft_opener for IG/WA cold ask; else channel default." not in src
+    # Compose dropdown must sort marked default ahead of soft openers.
+    assert "a&&a.isDefault?0:1" in src or "a.isDefault?0:1" in src
+    assert "refreshComposeTemplates" in src
 
 
 def test_set_default_instagram_and_invoice(auth_client):

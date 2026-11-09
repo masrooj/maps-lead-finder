@@ -168,7 +168,10 @@ def normalize_outreach_channel(value: Any) -> str:
 
 
 def can_ready_for_contact(b: Business, channel: Optional[str] = None) -> tuple[bool, str]:
-    """Whether promote-to-Ready is allowed. Returns (ok, reason)."""
+    """Whether promote-to-Ready is allowed. Returns (ok, reason).
+
+    Intentionally ignores IG soft-DM daily cap — that gate is Confirm sent only.
+    """
     ch = normalize_outreach_channel(channel if channel is not None else getattr(b, "outreach_channel", ""))
     if not ch:
         return False, "Pick WhatsApp, Instagram, or Email first"
@@ -365,11 +368,12 @@ def demote_to_to_contact(db, b: Business, *, actor_id: Optional[int] = None, not
     target = get_stage(db, pl, "to_contact")
     moved = False
     if target:
+        # move_stage commits flags + stage together
         move_stage(db, b, target.id, actor_id=actor_id, note=note or "Demoted to To contact", force=True)
         moved = True
-        return {"ok": True, "ready_for_contact": False, "stage_moved": moved, "ig_ready_at": ""}
-    db.commit()
-    db.refresh(b)
+    else:
+        db.commit()
+        db.refresh(b)
     return {"ok": True, "ready_for_contact": False, "stage_moved": moved, "ig_ready_at": ""}
 
 
