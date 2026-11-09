@@ -850,6 +850,72 @@ def _discovery_boost(db, business_id: int) -> float:
     return boost
 
 
+_IG_BLOCKED_PATHS = frozenset(
+    {
+        "p",
+        "reel",
+        "reels",
+        "stories",
+        "direct",
+        "explore",
+        "accounts",
+        "account",
+        "about",
+        "legal",
+        "developer",
+        "directory",
+        "nametag",
+        "login",
+        "signup",
+    }
+)
+
+
+def normalize_instagram_profile(value: Any) -> str:
+    """
+    Canonical https://www.instagram.com/{handle}/ or '' when empty.
+    Raises ValueError for non-empty invalid input (reel/post/login/garbage).
+    """
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("//"):
+        raw = "https:" + raw
+    if re.match(r"^(www\.)?instagram\.com([/?#]|$)", raw, flags=re.I):
+        raw = "https://" + raw
+    handle = ""
+    if not re.match(r"^https?://", raw, flags=re.I):
+        handle = raw.lstrip("@").strip().split("/")[0].split("?")[0].split("#")[0].strip()
+    else:
+        try:
+            from urllib.parse import unquote, urlparse
+
+            u = urlparse(raw)
+            host = (u.hostname or "").lower()
+            if host and "instagram.com" not in host:
+                raise ValueError(
+                    "Enter a valid Instagram @handle or profile URL (not a reel/post/login link)"
+                )
+            path = unquote(u.path or "").strip("/")
+            part = (path.split("/")[0] if path else "").lstrip("@").strip()
+            handle = part
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(
+                "Enter a valid Instagram @handle or profile URL (not a reel/post/login link)"
+            ) from e
+    if not re.fullmatch(r"[A-Za-z0-9._]{1,30}", handle or ""):
+        raise ValueError(
+            "Enter a valid Instagram @handle or profile URL (not a reel/post/login link)"
+        )
+    if handle.lower() in _IG_BLOCKED_PATHS:
+        raise ValueError(
+            "Enter a valid Instagram @handle or profile URL (not a reel/post/login link)"
+        )
+    return f"https://www.instagram.com/{handle}/"
+
+
 def _channel_facts(b: Business) -> dict[str, Any]:
     try:
         socials = json.loads(b.social_links_json or "{}") or {}

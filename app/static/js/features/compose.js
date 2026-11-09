@@ -80,6 +80,26 @@ export function instagramProfileHref(handleOrUrl) {
   return `https://www.instagram.com/${encodeURIComponent(h)}/`;
 }
 
+/**
+ * Validate Instagram input before save. Empty is allowed (clear).
+ * @returns {{ ok:boolean, href:string, handle:string, reason:string }}
+ */
+export function validateInstagramInput(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return { ok: true, href: '', handle: '', reason: '' };
+  const handle = instagramHandle(text);
+  const href = handle ? instagramProfileHref(handle) : '';
+  if (!handle || !href) {
+    return {
+      ok: false,
+      href: '',
+      handle: '',
+      reason: 'Enter a valid Instagram @handle or profile URL (not a reel/post/login link)',
+    };
+  }
+  return { ok: true, href, handle, reason: '' };
+}
+
 /** Slug a business display name into a possible IG username (display/guess only — not used for open). */
 export function instagramHandleFromBusinessName(name) {
   const raw = String(name || '').trim().toLowerCase();

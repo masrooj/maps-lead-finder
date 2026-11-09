@@ -285,6 +285,28 @@ def test_promote_ready_allowed_when_ig_cap_zero(auth_client):
         _set_wait_days("1")
 
 
+def test_cq_promote_ui_ignores_cap_and_uses_warm_ticks():
+    """Contact queue Ready button must gate on warm ticks, never daily cap."""
+    from tests.conftest import frontend_source
+
+    src = frontend_source()
+    assert "export function canPromoteReady" in src or "function canPromoteReady" in src
+    assert "igWarmTicksComplete" in src
+    assert "daily cap must NEVER block" in src or "Cap never applies here" in src or "IG soft-DM daily cap must NEVER block" in src
+    # Ready button must not use native disabled-only (silent); gate hint + is-blocked.
+    assert "data-cq-promote" in src
+    assert "cq-gate-hint" in src
+    assert "data-gate-ok" in src
+    # Must not consult quota inside canPromoteReady body — remaining/cap belong to confirm/message.
+    # Locate canPromoteReady and ensure no quota call before next export.
+    start = src.find("export function canPromoteReady")
+    assert start >= 0
+    chunk = src[start : start + 900]
+    assert "getIgOutreachQuota" not in chunk
+    assert "igSoftSendBlockReason" not in chunk
+    assert "remaining" not in chunk
+
+
 def test_ig_soft_dm_cap_rejects_invalid(auth_client):
     bad = auth_client.put("/api/sales/settings/ig_soft_dm_daily_cap?value=nope")
     assert bad.status_code == 422, bad.text

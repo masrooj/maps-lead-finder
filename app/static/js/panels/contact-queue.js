@@ -146,16 +146,22 @@ export function availableOutreachChannels(b){
   return ['whatsapp','instagram','email'].filter(ch=>c[ch]);
 }
 
+/** Warm complete from ticks (do not trust a stale ig_warm_complete flag alone). Cap never applies here. */
+export function igWarmTicksComplete(b){
+  if(!b) return false;
+  const followOnly = !!(b.ig_warm_follow_only || b.contacted || b.instagram_sent);
+  if(followOnly) return !!b.ig_warm_follow;
+  return !!(b.ig_warm_follow && (b.ig_warm_like || b.ig_warm_comment));
+}
+
 export function canPromoteReady(b){
+  // IG soft-DM daily cap must NEVER block To contact → Ready (Confirm sent only).
   const ch=(b.outreach_channel||'').trim().toLowerCase();
-  if(!ch) return {ok:false, reason:'Pick WhatsApp, Instagram, or Email'};
+  if(!ch) return {ok:false, reason:'Pick WhatsApp, Instagram, or Email first'};
   const avail=availableOutreachChannels(b);
   if(!avail.includes(ch)) return {ok:false, reason:`No ${ch} on this lead`};
   if(ch==='instagram'){
-    const complete = typeof b.ig_warm_complete === 'boolean'
-      ? !!b.ig_warm_complete
-      : !!(b.ig_warm_follow && (b.ig_warm_like || b.ig_warm_comment));
-    if(!complete){
+    if(!igWarmTicksComplete(b)){
       if(!b.ig_warm_follow){
         return {ok:false, reason:'Tick Follow (required) — Like+Comment alone is not enough'};
       }
@@ -395,6 +401,13 @@ function composeChosenChannelButtonHtml(b){
   return `<button type="button" class="primary" data-compose-queue="${b.id}" data-compose-channel="${ch}" data-block-reason="${esc(blockReason)}" ${blockReason?'disabled':''} title="${tip}">${label}</button>`;
 }
 
+/** Open existing Contacts → Instagram URL field (validated + locked on save). */
+function prepAddIgHtml(b){
+  const c=contactChannels(b);
+  if(c.instagram) return '';
+  return `<button type="button" data-cq-add-ig="${b.id}" title="Opens Contacts → Instagram URL (validated before save)">Add IG</button>`;
+}
+
 function prepChannelPickerHtml(b){
   const avail=availableOutreachChannels(b);
   const cur=(b.outreach_channel||'').trim().toLowerCase();
@@ -403,7 +416,7 @@ function prepChannelPickerHtml(b){
     const findIg=(b.website||'').trim()
       ? `<button type="button" data-cq-ig-discover="${b.id}" title="Find Instagram on website">Find IG</button>`
       : '';
-    return `<span class="cq-prep-hint" title="Open → Contacts to add phone/email, or Find IG">No WA / IG / Email — use Open → Contacts</span>${findIg}`;
+    return `<span class="cq-prep-hint" title="Add IG opens Contacts → Instagram URL, or Find IG on website">No WA / IG / Email — Add IG or Open → Contacts</span>${findIg}`;
   }
   const pills=avail.map(ch=>{
     const on=cur===ch?'primary':'';
@@ -429,7 +442,13 @@ function prepWarmChecklistHtml(b){
 
 function prepReadyButtonHtml(b){
   const gate=canPromoteReady(b);
-  return `<button type="button" class="primary" data-cq-promote="${b.id}" ${gate.ok?'':'disabled'} title="${esc(gate.reason||'Move to Ready to contact')}">Ready to contact</button>`;
+  const tip=gate.ok
+    ? 'Move to Ready to contact (daily IG soft-DM cap does not block this)'
+    : (gate.reason||'Finish channel + IG warm first');
+  // Keep clickable when blocked so toast always surfaces the real gate (not silent disabled).
+  const blockedCls=gate.ok?'':' is-blocked';
+  const hint=gate.ok?'':`<span class="cq-gate-hint" role="status">${esc(gate.reason||'Not ready')}</span>`;
+  return `<button type="button" class="primary${blockedCls}" data-cq-promote="${b.id}" data-gate-ok="${gate.ok?'1':'0'}" data-gate-reason="${esc(gate.reason||'')}" aria-disabled="${gate.ok?'false':'true'}" title="${esc(tip)}">Ready to contact</button>${hint}`;
 }
 
 /** Open WA / Open IG for prep (warm + reachability) — not compose/messaging. */
@@ -564,7 +583,7 @@ export function renderContactQueueList(){
     let actions='';
     if(isSelected){
       actions=`
-        <div class="cq-prep">${prepChannelPickerHtml(b)} ${prepWarmChecklistHtml(b)}</div>
+        <div class="cq-prep">${prepChannelPickerHtml(b)} ${prepAddIgHtml(b)} ${prepWarmChecklistHtml(b)}</div>
         ${prepOpenAppsHtml(b)}
         ${prepReadyButtonHtml(b)}
         <button type="button" data-cq-booking="${b.id}" data-booking-on="1">Has booking</button>
@@ -737,28 +756,51 @@ export function renderContactQueueList(){
     ev.stopPropagation();
     const id=inp.dataset.cqWarm;
     const field=inp.dataset.warmField;
+    const row=state.contactQueueLeads.find(x=>String(x.id)===String(id));
+    // Optimistic tick + recompute complete so Ready unlocks immediately (avoids PATCH race).
+    if(row){
+      row[field]=!!inp.checked;
+      row.ig_warm_complete=igWarmTicksComplete(row);
+    }
     try{
       const body={[field]:!!inp.checked};
       const updated=await api('/api/businesses/'+id,{method:'PATCH',body});
-      const row=state.contactQueueLeads.find(x=>String(x.id)===String(id));
-      if(row&&updated) syncQueueLeadFromBusiness(row, updated);
-      else if(row){ row[field]=!!inp.checked; }
+      if(row&&updated){
+        // Merge server warm flags but keep local tick just set (outrunning responses).
+        row.ig_warm_follow = field==='ig_warm_follow' ? !!inp.checked : !!updated.ig_warm_follow;
+        row.ig_warm_like = field==='ig_warm_like' ? !!inp.checked : !!updated.ig_warm_like;
+        row.ig_warm_comment = field==='ig_warm_comment' ? !!inp.checked : !!updated.ig_warm_comment;
+        row.ig_warm_follow_only = !!updated.ig_warm_follow_only;
+        row.ig_warm_complete = igWarmTicksComplete(row);
+        if(updated.outreach_channel!=null) row.outreach_channel=updated.outreach_channel;
+        syncQueueLeadFromBusiness(row, {
+          ...updated,
+          ig_warm_follow: row.ig_warm_follow,
+          ig_warm_like: row.ig_warm_like,
+          ig_warm_comment: row.ig_warm_comment,
+          ig_warm_complete: row.ig_warm_complete,
+        });
+      }
       renderContactQueueList();
     }catch(e){
       inp.checked=!inp.checked;
+      if(row){
+        row[field]=!!inp.checked;
+        row.ig_warm_complete=igWarmTicksComplete(row);
+      }
       toast(e.message,true);
+      renderContactQueueList();
     }
   }));
   list.querySelectorAll('[data-cq-promote]').forEach(btn=>btn.addEventListener('click',async ev=>{
     ev.stopPropagation();
-    if(btn.disabled){
-      toast(btn.title||'Finish channel + IG warm first',true);
-      return;
-    }
     const id=btn.dataset.cqPromote;
     const row=state.contactQueueLeads.find(x=>String(x.id)===String(id));
     const gate=canPromoteReady(row||{});
-    if(!gate.ok){ toast(gate.reason||'Not ready',true); return; }
+    if(!gate.ok || btn.dataset.gateOk==='0'){
+      toast(gate.reason || btn.dataset.gateReason || 'Finish channel + IG warm first', true);
+      return;
+    }
     try{
       const res=await api('/api/sales/prospects/'+id+'/promote-ready',{method:'POST',body:{}});
       if(row){
@@ -848,18 +890,39 @@ export function renderContactQueueList(){
       const res=await discoverInstagram(id, { force:true });
       if(res.found && res.instagram){
         const row=state.contactQueueLeads.find(x=>String(x.id)===String(id));
-        if(row) applyDiscoveredIg(row, res.instagram);
-        toast('Instagram found on website');
+        if(row){
+          applyDiscoveredIg(row, res.instagram);
+          // Match manual Add IG: put lead on IG process so warm / Open IG unlock.
+          try{
+            const updated=await api('/api/businesses/'+id,{method:'PATCH',body:{outreach_channel:'instagram'}});
+            if(updated) syncQueueLeadFromBusiness(row, updated);
+            else row.outreach_channel='instagram';
+          }catch(_){
+            row.outreach_channel='instagram';
+          }
+        }
+        toast('Instagram found — IG channel on');
         renderContactQueueList();
         return;
       }
-      toast('No Instagram link on website', true);
+      toast('No Instagram link on website — paste URL in Add IG', true);
       btn.textContent='No IG';
     }catch(e){
       toast(e.message||'IG discover failed', true);
       btn.disabled=false;
       btn.textContent='Find IG';
     }
+  }));
+  list.querySelectorAll('[data-cq-add-ig]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    const id=btn.dataset.cqAddIg;
+    try{
+      if(typeof B.openProspectById==='function'){
+        await B.openProspectById(id, { tab:'contacts', focus:'drawerInstagram' });
+      }else{
+        toast('Open Contacts to add Instagram URL', true);
+      }
+    }catch(e){ toast(e.message||'Could not open Contacts', true); }
   }));
   list.querySelectorAll('article.queue-lead').forEach(row=>row.addEventListener('click',ev=>{
     if(ev.target.closest('button,a,input,label,.actions,.checkcol')) return;

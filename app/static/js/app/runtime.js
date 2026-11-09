@@ -65,6 +65,7 @@ import {
   instagramHandle as composeInstagramHandle,
   instagramOpenUrls,
   instagramProfileWebUrl,
+  validateInstagramInput,
   wireIgWarmCompose,
   syncIgWarmComposeUi,
   refreshIgOutreachQuota,
@@ -275,8 +276,8 @@ async function loadProfileBar(username){
 
 
 
-async function openProspectById(id){
-  try{ await openDrawer(id); }
+async function openProspectById(id, opts={}){
+  try{ await openDrawer(id, opts); }
   catch(e){ toast(e.message,true); }
 }
 
@@ -2580,6 +2581,20 @@ async function openDrawer(id, opts={}){
   paint();
   const scroll=$('drawerBody');
   if(scroll)scroll.scrollTop=0;
+  const focusId=opts.focus||'';
+  if(focusId){
+    const el=$(focusId);
+    if(el){
+      try{ el.focus({ preventScroll:false }); }catch(_){ try{ el.focus(); }catch(__){} }
+      try{ el.scrollIntoView({ block:'center', behavior:'smooth' }); }catch(_){}
+      if(el.readOnly){
+        // Locked IG — unlock briefly so Add IG path can edit, then re-lock on save.
+        el.readOnly=false;
+        const wrap=el.closest('.drawer-ig-field');
+        if(wrap) wrap.classList.remove('drawer-ig-locked');
+      }
+    }
+  }
   await loadActivity(id);
 }
 function closeDrawer(){
@@ -2712,7 +2727,11 @@ function renderDrawer(){
       <div class="field"><label for="drawerPhone">Phone</label><input id="drawerPhone" value="${esc(b.phone||'')}" placeholder="Local phone"></div>
       <div class="field"><label for="drawerIntlPhone">International phone</label><input id="drawerIntlPhone" value="${esc(b.international_phone||'')}" placeholder="+61…"></div>
       <div class="field"><label for="drawerWebsite">Website</label><input id="drawerWebsite" value="${esc(b.website||'')}" placeholder="https://"></div>
-      <div class="field"><label for="drawerInstagram">Instagram URL</label><input id="drawerInstagram" value="${esc(s.instagram||'')}" placeholder="https://instagram.com/…"></div>
+      <div class="field drawer-ig-field${s.instagram?' drawer-ig-locked':''}">
+        <label for="drawerInstagram">Instagram URL</label>
+        <input id="drawerInstagram" value="${esc(s.instagram||'')}" placeholder="@handle or https://instagram.com/…" ${s.instagram?'readonly':''} autocomplete="off" spellcheck="false" title="${s.instagram?'Locked after save — use Change to edit':'Paste @handle or profile URL; validated on save'}">
+        ${s.instagram?`<button type="button" id="unlockDrawerIgBtn" title="Unlock to change Instagram">Change</button>`:''}
+      </div>
       <div class="field"><label for="drawerAddress">Address</label><input id="drawerAddress" value="${esc(b.address||'')}"></div>
       <div class="drawer-actions">
         <button type="button" class="primary" id="saveDrawerBtn">Save contacts & flags</button>
@@ -2899,7 +2918,23 @@ async function saveDrawer(){
     put('drawerPhone','phone',el=>el.value.trim());
     put('drawerIntlPhone','international_phone',el=>el.value.trim());
     put('drawerWebsite','website',el=>el.value.trim());
-    put('drawerInstagram','instagram',el=>el.value.trim());
+    const igEl=$('drawerInstagram');
+    let igJustAdded=false;
+    if(igEl){
+      const igCheck=validateInstagramInput(igEl.value);
+      if(!igCheck.ok){
+        toast(igCheck.reason||'Invalid Instagram URL', true);
+        try{ igEl.focus(); }catch(_){}
+        return;
+      }
+      body.instagram=igCheck.href;
+      const hadIg=!!(((drawerLead.social_links||{}).instagram)||'').trim();
+      igJustAdded=!!(igCheck.href && !hadIg);
+      // Newly valid IG on To contact → route into IG process (channel + unlock Open IG / warm).
+      if(igJustAdded && drawerLead.marked_for_contact && !drawerLead.ready_for_contact){
+        body.outreach_channel='instagram';
+      }
+    }
     put('drawerAddress','address',el=>el.value.trim());
     put('drawerNotes','notes',el=>el.value);
     put('drawerOutcome','outcome',el=>el.value);
@@ -2911,8 +2946,15 @@ async function saveDrawer(){
       if(el && !el.disabled) body[k]=!!el.checked;
     });
     if(!Object.keys(body).length){ toast('Nothing to save on this tab',true); return; }
-    await patchLead(drawerLead.id,body);
-    toast('Lead saved.');
+    const updated=await patchLead(drawerLead.id,body);
+    const qRow=(sharedState.contactQueueLeads||[]).find(x=>String(x.id)===String(drawerLead.id));
+    if(qRow && updated){
+      Object.assign(qRow, updated);
+      const c=composeContactChannels(qRow);
+      qRow.channels={ email:!!c.email, whatsapp:!!c.whatsapp, instagram:!!c.instagram };
+      if(typeof renderContactQueueList==='function') renderContactQueueList();
+    }
+    toast(igJustAdded ? 'Instagram saved — Open IG unlocked' : 'Lead saved.');
   }catch(e){toast(e.message,true)}
 }
 
@@ -3539,6 +3581,16 @@ $('drawerPanel').addEventListener('click',async e=>{
   const snooze=e.target.closest('[data-drawer-snooze]');
   if(snooze){$('drawerFollowUp').value=plusDays(Number(snooze.dataset.drawerSnooze));return}
   if(e.target.id==='saveDrawerBtn'){await saveDrawer();return}
+  if(e.target.id==='unlockDrawerIgBtn'){
+    const ig=$('drawerInstagram');
+    if(ig){
+      ig.readOnly=false;
+      const wrap=ig.closest('.drawer-ig-field');
+      if(wrap) wrap.classList.remove('drawer-ig-locked');
+      try{ ig.focus(); ig.select(); }catch(_){}
+    }
+    return;
+  }
   if(e.target.id==='saveSalesBtn'){
     if(!drawerLead)return;
     try{

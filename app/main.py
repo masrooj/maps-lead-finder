@@ -1131,6 +1131,44 @@ def apply_business_updates(b: Business, data: dict, db=None):
     for field, maxlen in str_fields.items():
         if field in data and data[field] is not None:
             setattr(b, field, str(data[field])[:maxlen])
+    # Persist IG / social_links before outreach_channel so a combined PATCH
+    # (Add IG URL + set channel=instagram) does not fail "No Instagram handle".
+    if "instagram" in data and data["instagram"] is not None:
+        from app.services.automation import normalize_instagram_profile
+
+        try:
+            socials = json.loads(b.social_links_json or "{}")
+        except Exception:
+            socials = {}
+        if not isinstance(socials, dict):
+            socials = {}
+        ig = normalize_instagram_profile(data["instagram"])
+        if ig:
+            socials["instagram"] = ig
+        else:
+            socials.pop("instagram", None)
+        b.social_links_json = json.dumps(socials)
+    if "social_links" in data and isinstance(data["social_links"], dict):
+        from app.services.automation import normalize_instagram_profile
+
+        try:
+            socials = json.loads(b.social_links_json or "{}")
+        except Exception:
+            socials = {}
+        if not isinstance(socials, dict):
+            socials = {}
+        for key, value in data["social_links"].items():
+            if key == "instagram":
+                ig = normalize_instagram_profile(value)
+                if ig:
+                    socials["instagram"] = ig
+                else:
+                    socials.pop("instagram", None)
+            elif value:
+                socials[key] = str(value)
+            elif key in socials:
+                del socials[key]
+        b.social_links_json = json.dumps(socials)
     if "outreach_channel" in data and data["outreach_channel"] is not None:
         from app.services.automation import apply_outreach_channel
 
@@ -1165,32 +1203,6 @@ def apply_business_updates(b: Business, data: dict, db=None):
     if data.get("contacted") is True or data.get("email_sent") is True or data.get("whatsapp_sent") is True or data.get("instagram_sent") is True:
         if getattr(b, "cannot_contact", False) or cannot_contact_payload(b).get("cannot_contact"):
             clear_cannot_contact(b, rematch=False)
-    if "instagram" in data and data["instagram"] is not None:
-        try:
-            socials = json.loads(b.social_links_json or "{}")
-        except Exception:
-            socials = {}
-        if not isinstance(socials, dict):
-            socials = {}
-        ig = str(data["instagram"] or "").strip()
-        if ig:
-            socials["instagram"] = ig
-        else:
-            socials.pop("instagram", None)
-        b.social_links_json = json.dumps(socials)
-    if "social_links" in data and isinstance(data["social_links"], dict):
-        try:
-            socials = json.loads(b.social_links_json or "{}")
-        except Exception:
-            socials = {}
-        if not isinstance(socials, dict):
-            socials = {}
-        for key, value in data["social_links"].items():
-            if value:
-                socials[key] = str(value)
-            elif key in socials:
-                del socials[key]
-        b.social_links_json = json.dumps(socials)
     if "next_follow_up_at" in data:
         follow = parse_follow_up(data["next_follow_up_at"])
         b.next_follow_up_at = follow
