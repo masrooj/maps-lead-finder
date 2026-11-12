@@ -82,6 +82,9 @@ class Business(Base):
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
     cannot_contact: Mapped[bool] = mapped_column(Boolean, default=False)
     cannot_contact_via: Mapped[str] = mapped_column(String(40), default="")  # whatsapp | instagram | both
+    already_connected: Mapped[bool] = mapped_column(Boolean, default=False)
+    already_connected_primary_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    ig_awaiting_follow_back: Mapped[bool] = mapped_column(Boolean, default=False)
     next_follow_up_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_contacted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     outcome: Mapped[str] = mapped_column(String(80), default="")

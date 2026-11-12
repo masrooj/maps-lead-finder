@@ -20,6 +20,7 @@ export const B = {
   loadBeCatalog: null,
   loadMoney: null,
   reloadDiscover: null,
+  markBookingIds: null,
   loadPipeline: null,
   moveProspectStage: null,
   qrUrlFor: null,

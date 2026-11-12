@@ -587,10 +587,11 @@ label.file-btn input[type=file],label.pill input[type=file][hidden]{position:abs
 .pipeline-filters .field{margin:0;min-width:140px;flex:1 1 140px}
 .pipeline-filters .field label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
 .kanban{display:flex;gap:12px;overflow:auto;padding:4px 2px 10px;min-height:360px;align-items:flex-start;-webkit-overflow-scrolling:touch}
-.kanban-col{min-width:220px;max-width:260px;flex:0 0 220px;background:rgba(16,24,43,.92);border:1px solid var(--line-soft);border-radius:14px;padding:12px}
-.kanban-col h3{margin:0 0 4px;font-size:13px;font-weight:750}
-.kanban-meta{color:var(--muted);font-size:11px;margin-bottom:4px}
-.kanban-cq-hint{color:var(--muted);font-size:10px;margin-bottom:10px;opacity:.85}
+.kanban-col{min-width:220px;max-width:260px;flex:0 0 220px;background:rgba(16,24,43,.92);border:1px solid var(--line-soft);border-radius:14px;padding:12px;display:flex;flex-direction:column;max-height:min(70vh,720px)}
+.kanban-col h3{margin:0 0 4px;font-size:13px;font-weight:750;flex:0 0 auto}
+.kanban-meta{color:var(--muted);font-size:11px;margin-bottom:4px;flex:0 0 auto}
+.kanban-cq-hint{color:var(--muted);font-size:10px;margin-bottom:10px;opacity:.85;flex:0 0 auto}
+.kanban-cards{flex:1 1 auto;overflow:auto;min-height:48px;-webkit-overflow-scrolling:touch}
 .kanban-card{background:var(--input);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px;cursor:grab;transition:border-color .15s,transform .12s}
 .kanban-card:hover{border-color:var(--accent);transform:translateY(-1px)}
 .kanban-card.dragging{opacity:.55;cursor:grabbing}

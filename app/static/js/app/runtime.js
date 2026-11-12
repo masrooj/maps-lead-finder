@@ -49,7 +49,8 @@ import {
 import { bindDashKpis, loadDashboard } from '../panels/dashboard.js';
 import { loadReports, renderBars } from '../panels/reports.js';
 import { loadTasks, renderTasksList, createTaskFlow } from '../panels/tasks.js';
-import { DISCOVER_STATUS, isFreshDiscoverLead, resolveDiscoverStatus } from '../panels/discover.js';
+import { DISCOVER_STATUS, isFreshDiscoverLead, resolveDiscoverStatus, toggleDiscoverMark, setDiscoverBooking } from '../panels/discover.js';
+import { canMessageLead } from '../features/lead-workflow.js';
 import { loadDemos, renderDemosTable, loadDemoAssets, addDemoAssetFlow, uploadDemoAssetFile, createDemoFlow } from '../panels/demos.js';
 import { loadProspects, renderProspectsTable, fillProspectsLocationFilters, prospectsScopeLabel, mergeProspectsLocCache } from '../panels/prospects.js';
 import { showDrawerLoading, resolveDrawerMode, clampDrawerTab } from '../features/drawer.js';
@@ -2092,10 +2093,7 @@ async function toggleMark(id){
   const row=rowsData.find(x=>String(x.id)===String(id));
   if(!row)return;
   try{
-    const nextMarked=!row.marked_for_contact;
-    await patchLead(id,{marked_for_contact:nextMarked});
-    if(nextMarked) toast('Marked for contact — left Discover.');
-    else toast('Unmarked — back in Discover.');
+    await toggleDiscoverMark(id, row, { patchLead });
   }catch(e){toast(e.message,true)}
 }
 
@@ -2292,9 +2290,12 @@ async function openCompose(b,preferred,opts={}){
   if(b.opt_out){showMessage('Prospect is opted out — outreach blocked.',true);return}
   // Cold outreach only from Ready (invoice/pay flows pass allowUnready)
   const alreadyTouched=!!(b.contacted || b.email_sent || b.whatsapp_sent || b.instagram_sent);
-  if(!opts.allowUnready && !alreadyTouched && !b.ready_for_contact){
-    showMessage('Move this lead to Ready to contact first (pick channel + IG warm on To contact).',true);
-    return;
+  if(!opts.allowUnready && !alreadyTouched){
+    const gate=canMessageLead(b);
+    if(!gate.ok){
+      showMessage(gate.reason||'Move this lead to Ready to contact first (pick channel + IG warm on To contact).',true);
+      return;
+    }
   }
   // Website may link IG even when social_links is empty — discover before gating channels
   if(preferred==='instagram' || leadNeedsIgDiscover(b)){
@@ -3456,13 +3457,8 @@ $('rows').addEventListener('click',async e=>{
   if(booking){
     try{
       const on=booking.dataset.bookingOn==='1';
-      await markBookingIds([booking.dataset.booking], on);
       const row=rowsData.find(x=>String(x.id)===String(booking.dataset.booking));
-      if(row){
-        row.current_booking_software=on?'Has booking':'';
-        row.has_booking=!!on;
-        if(on){ row.marked_for_contact=false; row.ready_for_contact=false; }
-      }
+      await setDiscoverBooking(booking.dataset.booking, on, row);
       if(on){
         pruneFreshDiscoverRows();
         paint();
@@ -3977,6 +3973,7 @@ B.qrUrlFor = typeof qrUrlFor === 'function' ? qrUrlFor : null;
 B.closeTopMenus = closeTopMenus;
 B.availableComposeChannels = availableComposeChannels;
 B.reloadDiscover = typeof load === 'function' ? load : null;
+B.markBookingIds = typeof markBookingIds === 'function' ? markBookingIds : null;
 B.appPanel = appPanel;
 
 /* --- Panel registry (SOLID Open/Closed) --- */

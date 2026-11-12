@@ -20,6 +20,8 @@ import './panels/index.js';
 import './features/drawer.js';
 import './features/compose.js';
 import './features/cannot-contact.js';
+import './features/already-connected.js';
+import './features/lead-workflow.js';
 import './features/instagram-discover.js';
 import './features/scoring.js';
 import './features/be-bridge.js';

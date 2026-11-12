@@ -46,3 +46,17 @@ def test_bearer_feature_groups(client):
         else:
             r = client.request(method, path, headers=h)
         assert r.status_code == 200, f"{method} {path} -> {r.status_code} {r.text[:300]}"
+
+    cq = client.get("/api/sales/contact-queue?product_line=STANDALONE&limit=5", headers=h)
+    assert cq.status_code == 200, cq.text
+    leads = cq.json().get("leads") or []
+    if leads:
+        sample = leads[0]
+        for key in (
+            "already_connected",
+            "already_connected_primary_id",
+            "ig_awaiting_follow_back",
+            "can_message",
+            "can_message_reason",
+        ):
+            assert key in sample, f"CQ lead missing {key}"

@@ -105,8 +105,9 @@ def board_column_slug(b: Business, stage: Optional[PipelineStage], *, available_
     if stage and stage.slug not in _EARLY_BOARD_SLUGS:
         return stage.slug
     has_booking = bool((getattr(b, "current_booking_software", None) or "").strip())
-    # Contact queue parks Has booking off To contact / Ready — keep them off those columns.
-    if has_booking and not _contacted_like(b) and not b.lost:
+    already_connected = bool(getattr(b, "already_connected", False))
+    # Contact queue parks (booking / already-connected) stay off To contact / Ready.
+    if (has_booking or already_connected) and not _contacted_like(b) and not b.lost:
         return "identified"
     slug = infer_slug_from_flags(b)
     # Self-heal when DB still has legacy single follow_up only.

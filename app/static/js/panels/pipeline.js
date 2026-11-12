@@ -1,7 +1,7 @@
 /** Panel owner: `pipeline` (Pipeline).
  * Stages align with Contact queue early tabs:
  *   To contact → Ready to contact → Contacted
- * Then Follow-up +3 / +7 → Engaged → … → Won/Lost.
+ * Then Follow-up +3 / +7 → Engaged (explicit mark-engaged / stage move) → … → Won/Lost.
  */
 import { $ } from '../core/dom.js';
 import { esc, api, toast } from '../core/api.js';
@@ -9,18 +9,23 @@ import { uiForm } from '../core/dialog.js';
 import { registerPanel } from './registry.js';
 import { safeRefresh } from '../shell/router.js';
 import { B } from '../app/bridge.js';
+import { markEngaged } from '../features/already-connected.js';
 
 let lastPipelineStages = [];
 let pipelineLocations = {};
 let pipelineCategories = [];
 
 const CQ_HINT = {
+  identified: 'Discover / parks (booking · already connected)',
   to_contact: 'Contact queue · To contact',
   ready_to_contact: 'Contact queue · Ready',
   contacted: 'Contact queue · Contacted',
   follow_up_3: 'Due ≤ +3 days',
   follow_up_7: 'Due +7 days or later',
+  engaged: 'Explicit Engaged (reply / interest)',
 };
+
+const ENGAGED_FROM = new Set(['contacted', 'follow_up_3', 'follow_up_7', 'follow_up']);
 
 function pipelineQuery() {
   const line = ($('pipelineLine') && $('pipelineLine').value) || 'STANDALONE';
@@ -75,10 +80,25 @@ function cardChannels(p) {
   if (p.outreach_channel) bits.push(`<span class="ch-tag">${esc(p.outreach_channel)}</span>`);
   if (p.email) bits.push('<span class="ch-tag">email</span>');
   if (p.phone || p.international_phone) bits.push('<span class="ch-tag">WA</span>');
+  if (p.instagram_sent || (p.social_links && p.social_links.instagram)) bits.push('<span class="ch-tag">IG</span>');
   return bits.join('');
 }
 
-function renderKanbanCard(p, stageId) {
+function cardParkBadges(p) {
+  const bits = [];
+  if (p.already_connected) bits.push('<span class="ch-tag" title="Already connected">Connected</span>');
+  if (p.has_booking || (p.current_booking_software || '').trim()) bits.push('<span class="ch-tag">Booking</span>');
+  if (p.cannot_contact) bits.push('<span class="ch-tag">Can\'t contact</span>');
+  if (p.ig_awaiting_follow_back) bits.push('<span class="ch-tag">Follow-back</span>');
+  if (p.ready_for_contact && !p.contacted) bits.push('<span class="ch-tag">Ready</span>');
+  return bits.join('');
+}
+
+function canMarkEngagedFromSlug(slug) {
+  return ENGAGED_FROM.has(String(slug || ''));
+}
+
+function renderKanbanCard(p, stageId, stageSlug) {
   const badge =
     p.follow_up_badge && p.follow_up_badge.label
       ? `<span class="ch-tag" title="Follow-up timing">${esc(p.follow_up_badge.label)}</span>`
@@ -96,14 +116,20 @@ function renderKanbanCard(p, stageId) {
   const finPill = fin ? `<span class="status-pill" title="Financial status">${esc(fin)}</span>` : '';
   const delPill = del ? `<span class="status-pill" title="Delivery status">${esc(del)}</span>` : '';
   const ch = cardChannels(p);
+  const parks = cardParkBadges(p);
+  const slug = stageSlug || p.board_slug || (p.stage && p.stage.slug) || '';
+  const engagedBtn = canMarkEngagedFromSlug(slug)
+    ? `<button type="button" class="primary pipeline-engaged" data-id="${p.id}">Engaged</button>`
+    : '';
   return `
-    <div class="kanban-card" draggable="true" data-id="${p.id}" data-stage-id="${stageId}">
+    <div class="kanban-card" draggable="true" data-id="${p.id}" data-stage-id="${stageId}" data-slug="${esc(slug)}">
       <strong>${esc(p.name || 'Unnamed')}</strong>
       <span>${esc(place || '—')} · ${esc(val)}</span>
       ${cat}
       ${finPill || delPill ? `<div class="kanban-card-tags">${finPill}${delPill}</div>` : ''}
-      ${badge || ch ? `<div class="kanban-card-tags">${badge}${ch}</div>` : ''}
+      ${badge || ch || parks ? `<div class="kanban-card-tags">${badge}${ch}${parks}</div>` : ''}
       <div class="actions" style="margin-top:6px">
+        ${engagedBtn}
         <button type="button" class="stage-move" data-id="${p.id}" data-stage-id="${stageId}">Move</button>
         ${
           typeof B.openProspectById === 'function'
@@ -252,13 +278,13 @@ export async function loadPipeline() {
         : '—';
       const hint = CQ_HINT[s.slug] || '';
       const cards =
-        (col.prospects || []).map((p) => renderKanbanCard(p, s.id)).join('') ||
+        (col.prospects || []).map((p) => renderKanbanCard(p, s.id, s.slug)).join('') ||
         '<div class="hint">Empty — drag a card here</div>';
       return `<div class="kanban-col" data-stage-id="${s.id}" data-slug="${esc(s.slug || '')}">
         <h3>${esc(s.name || '')}</h3>
         <div class="kanban-meta">${col.count || 0} · ${esc(valStr)} · ${Math.round((s.probability || 0) * 100)}%</div>
         ${hint ? `<div class="kanban-cq-hint">${esc(hint)}</div>` : ''}
-        ${cards}
+        <div class="kanban-cards">${cards}</div>
       </div>`;
     })
     .join('');
@@ -268,6 +294,26 @@ export async function loadPipeline() {
       ev.stopPropagation();
       try {
         await openStageMoveDialog(btn.dataset.id, btn.dataset.stageId);
+      } catch (e) {
+        toast(e.message || String(e), true);
+      }
+    }),
+  );
+  board.querySelectorAll('.pipeline-engaged').forEach((btn) =>
+    btn.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const id = btn.dataset.id;
+      try {
+        const form = await uiForm({
+          title: 'Mark Engaged',
+          message: 'Use when they reply or show real interest.',
+          confirmLabel: 'Engaged',
+          fields: [{ name: 'note', label: 'Note (optional)', type: 'text' }],
+        });
+        if (!form) return;
+        await markEngaged(id, form.note || '');
+        toast('Marked Engaged');
+        await loadPipeline();
       } catch (e) {
         toast(e.message || String(e), true);
       }

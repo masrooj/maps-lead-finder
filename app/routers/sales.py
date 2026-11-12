@@ -76,7 +76,10 @@ def _iso(dt) -> str:
     return dt.isoformat()
 
 
-def prospect_sales_dict(b: Business, stage=None) -> dict:
+def prospect_sales_dict(b: Business, stage=None, db=None) -> dict:
+    from app.services.already_connected import already_connected_payload
+    from app.services.cannot_contact import cannot_contact_payload
+
     try:
         criteria = json.loads(b.score_criteria_json or "{}")
     except Exception:
@@ -85,7 +88,7 @@ def prospect_sales_dict(b: Business, stage=None) -> dict:
         attachments = json.loads(b.attachment_links_json or "[]")
     except Exception:
         attachments = []
-    return {
+    out = {
         "id": b.id,
         "name": b.name,
         "country": b.country,
@@ -115,12 +118,31 @@ def prospect_sales_dict(b: Business, stage=None) -> dict:
         "be_installation_id": getattr(b, "be_installation_id", "") or "",
         "be_customer_ref": getattr(b, "be_customer_ref", "") or "",
         "current_booking_software": getattr(b, "current_booking_software", "") or "",
+        "has_booking": bool((getattr(b, "current_booking_software", None) or "").strip()),
         "google_maps_url": getattr(b, "google_maps_url", "") or "",
         "email": getattr(b, "email", "") or "",
         "website": getattr(b, "website", "") or "",
         "phone": getattr(b, "phone", "") or "",
         "international_phone": getattr(b, "international_phone", "") or "",
+        "contacted": bool(getattr(b, "contacted", False)),
+        "email_sent": bool(getattr(b, "email_sent", False)),
+        "whatsapp_sent": bool(getattr(b, "whatsapp_sent", False)),
+        "instagram_sent": bool(getattr(b, "instagram_sent", False)),
+        "marked_for_contact": bool(getattr(b, "marked_for_contact", False)),
+        "ready_for_contact": bool(getattr(b, "ready_for_contact", False)),
+        "outreach_channel": (getattr(b, "outreach_channel", None) or "").strip(),
+        "ig_awaiting_follow_back": bool(getattr(b, "ig_awaiting_follow_back", False)),
+        **cannot_contact_payload(b),
+        **already_connected_payload(b),
     }
+    if db is not None:
+        from app.services.automation import messaging_gate_payload
+
+        gate = messaging_gate_payload(db, b)
+        out["can_message"] = bool(gate.get("can_message"))
+        out["can_message_reason"] = gate.get("can_message_reason") or ""
+        out["ig_ready_wait"] = gate.get("ig_ready_wait") or {}
+    return out
 
 
 class StageMoveBody(BaseModel):
@@ -381,16 +403,15 @@ def sales_pipeline(
                 }.get(s.slug),
                 "prospects": [
                     {
+                        # No db= here — avoid N× messaging_gate/settings hits on board load.
                         **prospect_sales_dict(p, s),
                         "category": (p.category or "").strip(),
                         "country": (p.country or "").strip(),
                         "city": (p.city or "").strip(),
-                        "marked_for_contact": bool(getattr(p, "marked_for_contact", False)),
+                        "board_slug": s.slug,
                         "follow_up_kind": (getattr(p, "follow_up_kind", None) or "").strip(),
                         "follow_up_badge": follow_up_badge(p),
                         "next_follow_up_at": _iso(getattr(p, "next_follow_up_at", None)),
-                        "ready_for_contact": bool(getattr(p, "ready_for_contact", False)),
-                        "outreach_channel": (getattr(p, "outreach_channel", None) or "").strip(),
                         "be_commercial": be_status.get(p.id) or {},
                         "financial_status": (be_status.get(p.id) or {}).get("financial_status") or "",
                         "delivery_status": (be_status.get(p.id) or {}).get("delivery_status") or "",
@@ -523,10 +544,12 @@ def sales_promote_ready(business_id: int, _user: str = Depends(require_user), db
 @router.get("/prospects/{business_id}/ready-status", tags=["pipeline"])
 def sales_ready_status(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
     """Mobile/web: Ready + IG warm + Ready-wait + soft-DM quota for messaging gates."""
+    from app.services.already_connected import already_connected_payload
     from app.services.automation import (
         ig_outreach_quota,
         ig_ready_wait_payload,
         ig_warm_payload,
+        messaging_gate_payload,
         normalize_outreach_channel,
     )
 
@@ -537,6 +560,7 @@ def sales_ready_status(business_id: int, _user: str = Depends(require_user), db=
     warm = ig_warm_payload(b)
     wait = ig_ready_wait_payload(db, b)
     quota = ig_outreach_quota(db)
+    gate = messaging_gate_payload(db, b)
     ready = bool(getattr(b, "ready_for_contact", False))
     contacted = bool(
         getattr(b, "contacted", False)
@@ -545,12 +569,9 @@ def sales_ready_status(business_id: int, _user: str = Depends(require_user), db=
         or getattr(b, "instagram_sent", False)
     )
     already_ig = bool(getattr(b, "instagram_sent", False))
-    block_reason = ""
-    can_confirm = True
-    if not ready and not contacted:
-        can_confirm = False
-        block_reason = "Move to Ready to contact first"
-    elif ch == "instagram":
+    block_reason = gate.get("can_message_reason") or ""
+    can_confirm = bool(gate.get("can_message"))
+    if can_confirm and ch == "instagram":
         if not warm.get("ig_warm_complete"):
             can_confirm = False
             block_reason = (
@@ -566,6 +587,9 @@ def sales_ready_status(business_id: int, _user: str = Depends(require_user), db=
             block_reason = (
                 f"IG soft DM daily cap reached ({quota['used']}/{quota['cap']} in {quota['timezone']})"
             )
+    elif not can_confirm and not block_reason:
+        if not ready and not contacted:
+            block_reason = "Move to Ready to contact first"
     return {
         "ok": True,
         "id": b.id,
@@ -578,6 +602,10 @@ def sales_ready_status(business_id: int, _user: str = Depends(require_user), db=
         "ig_warm": warm,
         "ig_outreach_quota": quota,
         "instagram_sent": already_ig,
+        "ig_awaiting_follow_back": bool(getattr(b, "ig_awaiting_follow_back", False)),
+        **already_connected_payload(b),
+        "can_message": can_confirm,
+        "can_message_reason": block_reason,
         "can_confirm_sent": can_confirm,
         "can_open_message": can_confirm,
         "block_reason": block_reason,
@@ -599,6 +627,290 @@ def sales_demote_to_contact(business_id: int, _user: str = Depends(require_user)
     result = demote_to_to_contact(db, b, actor_id=actor.id if actor else None)
     stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
     return {"ok": True, **result, "prospect": prospect_sales_dict(b, stage)}
+
+
+class AlreadyConnectedBody(BaseModel):
+    primary_id: int
+    notes: str = ""
+
+
+class IgAwaitingFollowBackBody(BaseModel):
+    awaiting: bool = True
+
+
+class MarkEngagedBody(BaseModel):
+    note: str = ""
+
+
+class ConfirmSentBody(BaseModel):
+    channel: str
+    next_follow_up_at: Optional[str] = None
+    notes: Optional[str] = None
+    outcome: Optional[str] = None
+    message: Optional[str] = None
+    allow_unready: bool = False
+
+
+@router.get("/prospects/{business_id}/same-contact-siblings", tags=["pipeline"])
+def sales_same_contact_siblings(
+    business_id: int,
+    limit: int = 25,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Suggest other locations sharing IG / phone / email (Already connected picker)."""
+    from app.services.already_connected import find_same_contact_siblings
+
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    siblings = find_same_contact_siblings(db, b, limit=limit)
+    return {"ok": True, "id": b.id, "count": len(siblings), "siblings": siblings}
+
+
+@router.post("/prospects/{business_id}/already-connected", tags=["pipeline"])
+def sales_mark_already_connected(
+    business_id: int,
+    body: AlreadyConnectedBody,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Park Ready lead as already connected (shared IG/WA/email other location)."""
+    from app.models import Activity, PipelineStage
+    from app.services.already_connected import apply_already_connected, already_connected_payload
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.automation import clear_ig_ready_at
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    primary = db.get(Business, int(body.primary_id))
+    if not primary or primary.archived:
+        raise HTTPException(422, "primary_id not found")
+    try:
+        apply_already_connected(b, primary_id=int(body.primary_id), notes=body.notes or "")
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    clear_ig_ready_at(b)
+    db.add(
+        Activity(
+            business_id=b.id,
+            activity_type="already_connected",
+            summary=f"Already connected → primary #{body.primary_id}",
+            outcome=(body.notes or "")[:500],
+            created_by=actor.id if actor else None,
+        )
+    )
+    db.commit()
+    db.refresh(b)
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    return {
+        "ok": True,
+        **already_connected_payload(b),
+        "prospect": prospect_sales_dict(b, stage),
+    }
+
+
+@router.post("/prospects/{business_id}/clear-already-connected", tags=["pipeline"])
+def sales_clear_already_connected(
+    business_id: int,
+    rematch: bool = True,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Clear Already connected park; by default rematch to To contact."""
+    from app.models import Activity, PipelineStage
+    from app.services.already_connected import already_connected_payload, clear_already_connected
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.automation import advance_at_least
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    clear_already_connected(b, rematch=rematch)
+    if rematch:
+        advance_at_least(
+            db,
+            b,
+            "to_contact",
+            actor_id=actor.id if actor else None,
+            note="Cleared already connected → To contact",
+        )
+    db.add(
+        Activity(
+            business_id=b.id,
+            activity_type="clear_already_connected",
+            summary="Cleared already connected",
+            outcome="rematch" if rematch else "",
+            created_by=actor.id if actor else None,
+        )
+    )
+    db.commit()
+    db.refresh(b)
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    return {"ok": True, **already_connected_payload(b), "prospect": prospect_sales_dict(b, stage)}
+
+
+@router.post("/prospects/{business_id}/ig-awaiting-follow-back", tags=["pipeline"])
+def sales_ig_awaiting_follow_back(
+    business_id: int,
+    body: IgAwaitingFollowBackBody,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Hold Ready IG lead until they follow back (not Cannot contact)."""
+    from app.models import Activity, PipelineStage
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.automation import messaging_gate_payload, set_ig_awaiting_follow_back
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    set_ig_awaiting_follow_back(b, bool(body.awaiting))
+    db.add(
+        Activity(
+            business_id=b.id,
+            activity_type="ig_awaiting_follow_back",
+            summary="IG awaiting follow-back" if body.awaiting else "Cleared IG follow-back hold",
+            created_by=actor.id if actor else None,
+        )
+    )
+    db.commit()
+    db.refresh(b)
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    gate = messaging_gate_payload(db, b)
+    return {
+        "ok": True,
+        "ig_awaiting_follow_back": bool(b.ig_awaiting_follow_back),
+        **gate,
+        "prospect": prospect_sales_dict(b, stage),
+    }
+
+
+@router.post("/prospects/{business_id}/mark-engaged", tags=["pipeline"])
+def sales_mark_engaged(
+    business_id: int,
+    body: MarkEngagedBody,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Explicit Engaged — reply / human signal (not auto from discovery/score)."""
+    from app.models import PipelineStage
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.automation import mark_engaged
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    try:
+        result = mark_engaged(db, b, actor_id=actor.id if actor else None, note=body.note or "")
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    return {"ok": True, **result, "prospect": prospect_sales_dict(b, stage)}
+
+
+@router.post("/prospects/{business_id}/confirm-sent", tags=["pipeline"])
+def sales_confirm_sent(
+    business_id: int,
+    body: ConfirmSentBody,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Sales alias of POST /api/businesses/{id}/confirm-sent (mobile-friendly prefix)."""
+    from app.models import PipelineStage
+    from app.services.authz import get_user_by_email
+    from app.services.automation import (
+        assert_confirm_sent_ready,
+        assert_ig_soft_send_allowed,
+        maybe_promote_follow_up,
+        on_outreach_confirmed,
+    )
+    from app.services.cannot_contact import cannot_contact_payload, clear_cannot_contact
+
+    channel = str(body.channel or "").strip().lower()
+    if channel not in ("email", "whatsapp", "instagram"):
+        raise HTTPException(422, "channel must be email, whatsapp, or instagram")
+    field = f"{channel}_sent"
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    already_sent = bool(getattr(b, field, False))
+    try:
+        assert_confirm_sent_ready(b, allow_unready=bool(body.allow_unready))
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
+    if channel == "instagram":
+        try:
+            assert_ig_soft_send_allowed(db, b, skip_cap=already_sent)
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from e
+    now = datetime.now(timezone.utc)
+    setattr(b, field, True)
+    b.contacted = True
+    b.last_contacted_at = now
+    if getattr(b, "cannot_contact", False) or cannot_contact_payload(b).get("cannot_contact"):
+        clear_cannot_contact(b, rematch=False)
+    follow = None
+    if body.next_follow_up_at is not None:
+        raw = str(body.next_follow_up_at or "").strip()
+        if raw:
+            try:
+                if len(raw) == 10:
+                    from datetime import date as date_cls
+
+                    d = date_cls.fromisoformat(raw)
+                    follow = datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+                else:
+                    follow = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                    if follow.tzinfo is None:
+                        follow = follow.replace(tzinfo=timezone.utc)
+            except ValueError as e:
+                raise HTTPException(422, "Invalid next_follow_up_at") from e
+            b.next_follow_up_at = follow
+        else:
+            b.next_follow_up_at = None
+    if body.notes is not None and str(body.notes).strip():
+        note = str(body.notes).strip()
+        existing = (b.notes or "").strip()
+        b.notes = (f"{note}\n{existing}" if existing else note)[:5000]
+    if body.outcome is not None:
+        b.outcome = str(body.outcome)[:80]
+    b.updated_at = now
+    actor = get_user_by_email(db, _user)
+    on_outreach_confirmed(
+        db,
+        b,
+        channel=channel,
+        actor_id=actor.id if actor else None,
+        follow_up_at=follow,
+        outcome=str(body.outcome or ""),
+        notes=str(body.notes or ""),
+        message=str(body.message or ""),
+        record_send=not already_sent,
+    )
+    maybe_promote_follow_up(db, b, actor_id=actor.id if actor else None)
+    db.commit()
+    db.refresh(b)
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    return {
+        "ok": True,
+        "id": b.id,
+        "contacted": True,
+        "channel": channel,
+        f"{channel}_sent": True,
+        "next_follow_up_at": b.next_follow_up_at.isoformat() if b.next_follow_up_at else "",
+        "last_contacted_at": b.last_contacted_at.isoformat() if b.last_contacted_at else "",
+        "prospect": prospect_sales_dict(b, stage),
+    }
 
 
 @router.post("/prospects/{business_id}/link", tags=["pipeline"])
@@ -686,7 +998,7 @@ def sales_get_prospect(business_id: int, _user: str = Depends(require_user), db=
     from app.models import PipelineStage
 
     stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
-    return prospect_sales_dict(b, stage)
+    return prospect_sales_dict(b, stage, db=db)
 
 
 @router.patch("/prospects/{business_id}", tags=["pipeline"])
@@ -720,7 +1032,7 @@ def sales_patch_prospect(business_id: int, body: ProspectPatch, _user: str = Dep
     from app.models import PipelineStage
 
     stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
-    return prospect_sales_dict(b, stage)
+    return prospect_sales_dict(b, stage, db=db)
 
 
 @router.post("/prospects/{business_id}/score", tags=["pipeline"])

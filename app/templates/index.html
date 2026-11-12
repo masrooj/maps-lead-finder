@@ -146,8 +146,8 @@
       <p class="hint" style="margin-top:0">Use this loop for every city. Click a step to jump there.</p>
       <div class="guide-steps" id="guideSteps">
         <button type="button" class="guide-step" data-goto="leads"><strong>1. Discover</strong><span>Search Places (Fetch: All for city scan). Star ★ leads. Prospects auto-setup on import.</span></button>
-        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → mark to contact → WA / Email / IG → Confirm sent (stay on To contact). Can't contact tab for unreachable.</span></button>
-        <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>To contact → Ready → Contacted match Contact queue tabs; then Follow-up +3/+7 → Engaged → Won/Lost.</span></button>
+        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → To contact (channel + IG warm) → Ready → Message + Confirm sent. Parks: Has booking · Can't contact · Already connected. IG follow-back hold on Ready.</span></button>
+        <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>To contact → Ready → Contacted match Contact queue; Follow-up +3/+7 → Engaged (explicit) → Won/Lost.</span></button>
         <button type="button" class="guide-step" data-goto="tasks"><strong>4. Tasks</strong><span>Follow-ups auto-create when you confirm email/WA/IG sent. Complete or reschedule.</span></button>
         <button type="button" class="guide-step" data-goto="activities"><strong>5. Communication</strong><span>Outreach + invoices grouped by lead. Closing stays under Deals.</span></button>
         <button type="button" class="guide-step" data-goto="demos"><strong>6. Demos</strong><span>Record demo outcome; positive demos auto-advance toward proposal.</span></button>
@@ -223,7 +223,7 @@
       <button type="button" data-view="queue">Global queue</button>
       <button type="button" data-view="due">Due / overdue</button>
     </section>
-    <p class="view-hint" id="viewHint">Fresh Discover: not To contact, not Contacted, not Has booking. Unmark returns them here.</p>
+    <p class="view-hint" id="viewHint">Fresh Discover: not To contact, not Contacted, not Has booking, not Already connected. Unmark returns them here.</p>
 
     <section class="toolbar">
       <input id="filterText" placeholder="Search name, phone, email, notes…">
@@ -311,7 +311,7 @@
           <select id="pipelineCategory" aria-label="Filter by category"><option value="">All categories</option></select>
         </div>
       </div>
-      <p class="hint" id="pipelineMeta" style="margin-top:0">To contact · Ready to contact · Contacted match Contact queue tabs. Follow-up +3 / +7 after due. Engaged → Won or Lost.</p>
+      <p class="hint" id="pipelineMeta" style="margin-top:0">All stages show cards. Discovered · To contact · Ready · Contacted match Contact queue; Follow-up +3/+7; Engaged (explicit) → Won/Lost.</p>
       <div class="kanban" id="kanban" aria-label="Pipeline board"></div>
       <div class="empty hidden" id="pipelineEmpty">No prospects match these filters. Mark leads in Contact queue, or clear filters.</div>
     </section>
@@ -361,6 +361,7 @@
         <button type="button" role="tab" data-cq-tab="contacted" aria-selected="false">Contacted <span class="tab-count" id="contactQueueContactedCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="booking" aria-selected="false">Has booking <span class="tab-count" id="contactQueueBookingCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="cannot" aria-selected="false">Can't contact <span class="tab-count" id="contactQueueCannotCount">0</span></button>
+        <button type="button" role="tab" data-cq-tab="connected" aria-selected="false">Already connected <span class="tab-count" id="contactQueueConnectedCount">0</span></button>
       </div>
       <div class="fields filter-bar" style="margin-bottom:10px">
         <div class="field">

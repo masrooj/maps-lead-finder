@@ -107,8 +107,9 @@ SAAS_STAGES = [
 # Legacy slug kept inactive after seed migration (prospects remapped to follow_up_3).
 LEGACY_FOLLOW_UP_SLUG = "follow_up"
 
-# Pipeline board hides Discover-only column (unmarked leads).
-PIPELINE_BOARD_HIDDEN_SLUGS = frozenset({"identified"})
+# Pipeline board shows all active stages including Discovered (identified)
+# so every column can render business cards. Empty columns still appear.
+PIPELINE_BOARD_HIDDEN_SLUGS = frozenset()
 
 CURRENCY_BY_COUNTRY = {
     "AU": "AUD",

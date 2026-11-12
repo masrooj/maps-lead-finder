@@ -70,6 +70,15 @@ def test_board_column_slug_mirrors_contact_queue_flags():
     engaged_stage = PipelineStage(id=9, product_line="STANDALONE", slug="engaged", name="Engaged", sort_order=9)
     engaged = Business(marked_for_contact=True, contacted=True, lost=False)
     assert board_column_slug(engaged, engaged_stage, available_slugs=avail) == "engaged"
+    # Parks leave To contact / Ready (surface on Discovered when not contacted)
+    parked = Business(
+        marked_for_contact=True,
+        ready_for_contact=True,
+        already_connected=True,
+        contacted=False,
+        lost=False,
+    )
+    assert board_column_slug(parked, stale, available_slugs=avail) == "identified"
 
 
 def test_email_channel_can_ready():
@@ -167,7 +176,8 @@ def test_scheduled_plus7_promotes_follow_up_7(auth_client):
         assert stage is not None and stage.slug == "follow_up_7"
 
 
-def test_pipeline_filters_and_hides_discovered(auth_client):
+def test_pipeline_filters_and_shows_all_stage_columns(auth_client):
+    """Board shows every stage column (incl. Discovered) so cards can land on each."""
     bid = _lead(
         ready_for_contact=False,
         marked_for_contact=True,
@@ -189,13 +199,17 @@ def test_pipeline_filters_and_hides_discovered(auth_client):
     data = r.json()
     assert "locations" in data and "categories" in data
     slugs = [c["stage"]["slug"] for c in data.get("columns") or []]
-    assert "identified" not in slugs
+    assert "identified" in slugs  # Discovered visible for parks / unmarked
     assert "to_contact" in slugs
     assert "follow_up_3" in slugs and "follow_up_7" in slugs
     col = next(c for c in data["columns"] if c["stage"]["slug"] == "to_contact")
     assert col["stage"]["name"] == "To contact"
     assert any(p["id"] == bid for p in col["prospects"])
     assert col["cq_tab"] == "selected"
+    # Card payload carries park/hold fields for mobile + web board
+    card = next(p for p in col["prospects"] if p["id"] == bid)
+    assert "already_connected" in card
+    assert "ig_awaiting_follow_back" in card
 
 
 def test_revert_goes_to_ready(auth_client):

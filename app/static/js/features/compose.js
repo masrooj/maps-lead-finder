@@ -264,7 +264,12 @@ export function setIgOutreachQuota(q) {
  * @returns {string|null} error message or null if allowed
  */
 export function igSoftSendBlockReason(lead, channel) {
-  if (String(channel || '').toLowerCase() !== 'instagram') return null;
+  if (lead?.already_connected) return 'Already connected — do not message this location';
+  if (lead?.ig_awaiting_follow_back) return 'Awaiting IG follow-back — clear hold before messaging';
+  if (String(channel || '').toLowerCase() !== 'instagram') {
+    if (lead?.can_message === false) return lead.can_message_reason || 'Cannot message yet';
+    return null;
+  }
   if (!igWarmComplete(lead)) {
     if (igWarmFollowOnly(lead)) return 'IG warm incomplete: follow';
     const missing = [];

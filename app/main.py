@@ -942,6 +942,9 @@ def business_dict(b: Business, db=None) -> dict:
         "follow_up_kind": (getattr(b, "follow_up_kind", None) or "").strip(),
         "archived": bool(getattr(b, "archived", False)),
         **cannot_contact_payload(b),
+        "already_connected": bool(getattr(b, "already_connected", False)),
+        "already_connected_primary_id": getattr(b, "already_connected_primary_id", None),
+        "ig_awaiting_follow_back": bool(getattr(b, "ig_awaiting_follow_back", False)),
         "next_follow_up_at": iso_or_empty(getattr(b, "next_follow_up_at", None)),
         "last_contacted_at": iso_or_empty(getattr(b, "last_contacted_at", None)),
         "outcome": getattr(b, "outcome", "") or "",
@@ -1267,7 +1270,7 @@ def businesses_query(
     elif status == "uncontacted":
         stmt = stmt.where(Business.contacted.is_(False), Business.lost.is_(False))
     elif status in ("fresh", "discover"):
-        # Discover pool: not To contact, not Contacted, not Has booking.
+        # Discover pool: not To contact, not Contacted, not Has booking, not already-connected.
         # Unmarking from To contact returns the lead here when still fresh.
         stmt = stmt.where(
             or_(Business.marked_for_contact.is_(False), Business.marked_for_contact.is_(None)),
@@ -1277,6 +1280,7 @@ def businesses_query(
                 Business.current_booking_software.is_(None),
                 Business.current_booking_software == "",
             ),
+            or_(Business.already_connected.is_(False), Business.already_connected.is_(None)),
         )
     elif status == "marked":
         stmt = stmt.where(Business.marked_for_contact.is_(True))

@@ -20,6 +20,15 @@ def test_openapi_has_bearer_and_feature_tags(client):
     assert "/api/auth/refresh" in paths
     assert "/api/sales/contact-queue" in paths
     assert "/api/businesses" in paths
+    for needed in (
+        "/api/sales/prospects/{business_id}/already-connected",
+        "/api/sales/prospects/{business_id}/clear-already-connected",
+        "/api/sales/prospects/{business_id}/same-contact-siblings",
+        "/api/sales/prospects/{business_id}/ig-awaiting-follow-back",
+        "/api/sales/prospects/{business_id}/mark-engaged",
+        "/api/sales/prospects/{business_id}/confirm-sent",
+    ):
+        assert needed in paths, f"missing OpenAPI path {needed}"
 
     # Public login has empty security
     login_post = paths["/api/login"].get("post") or {}
