@@ -1271,7 +1271,7 @@ def businesses_query(
     elif status == "uncontacted":
         stmt = stmt.where(Business.contacted.is_(False), Business.lost.is_(False))
     elif status in ("fresh", "discover"):
-        # Discover pool: not To contact, not Contacted, not Has booking, not already-connected.
+        # Discover pool: not marked, contacted, booking, already-connected, or can't-contact.
         # Unmarking from To contact returns the lead here when still fresh.
         stmt = stmt.where(
             or_(Business.marked_for_contact.is_(False), Business.marked_for_contact.is_(None)),
@@ -1282,6 +1282,7 @@ def businesses_query(
                 Business.current_booking_software == "",
             ),
             or_(Business.already_connected.is_(False), Business.already_connected.is_(None)),
+            or_(Business.cannot_contact.is_(False), Business.cannot_contact.is_(None)),
         )
     elif status == "marked":
         stmt = stmt.where(Business.marked_for_contact.is_(True))
