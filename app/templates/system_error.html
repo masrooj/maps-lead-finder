@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{title}} · AppointHive Sales OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/css/tokens.css">
+<style>
+  *,*::before,*::after{box-sizing:border-box}
+  body{
+    margin:0;min-height:100vh;font-family:var(--font);
+    color:var(--text);background:
+      radial-gradient(1200px 600px at 12% -10%,rgba(126,162,255,.18),transparent 55%),
+      radial-gradient(900px 500px at 90% 0%,rgba(92,224,192,.10),transparent 50%),
+      var(--bg);
+    display:flex;align-items:center;justify-content:center;padding:32px 20px;
+  }
+  .wrap{width:min(720px,100%)}
+  .brand{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+  .mark{
+    width:40px;height:40px;border-radius:12px;display:grid;place-items:center;
+    background:linear-gradient(145deg,var(--accent),#4f7dff);color:#061018;font-weight:800;font-size:18px;
+  }
+  .brand h1{margin:0;font-size:1.05rem;letter-spacing:-.02em}
+  .brand p{margin:2px 0 0;color:var(--muted);font-size:.82rem}
+  .panel{
+    background:linear-gradient(180deg,rgba(22,33,54,.92),rgba(16,24,43,.96));
+    border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+    padding:28px 28px 24px;
+  }
+  .status{
+    display:inline-flex;align-items:center;gap:8px;margin:0 0 14px;
+    padding:6px 10px;border-radius:999px;border:1px solid rgba(255,123,139,.35);
+    background:rgba(255,123,139,.10);color:#ffc0c8;font-size:.78rem;font-weight:700;letter-spacing:.02em;
+  }
+  .status i{width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block}
+  h2{margin:0 0 10px;font-size:1.55rem;letter-spacing:-.03em;line-height:1.25}
+  .lead{margin:0 0 18px;color:var(--muted);font-size:1rem;line-height:1.55}
+  .hint{
+    margin:0 0 22px;padding:14px 16px;border-radius:var(--radius-sm);
+    background:rgba(126,162,255,.08);border:1px solid rgba(126,162,255,.22);
+    color:var(--label);font-size:.92rem;line-height:1.5;
+  }
+  .hint strong{color:var(--text);font-weight:700}
+  .meta{
+    display:grid;gap:10px;margin:0 0 18px;
+    grid-template-columns:repeat(auto-fit,minmax(160px,1fr));
+  }
+  .meta div{
+    padding:12px 14px;border-radius:var(--radius-xs);background:rgba(7,11,22,.45);
+    border:1px solid var(--line-soft);
+  }
+  .meta dt{margin:0;color:var(--muted);font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .meta dd{margin:6px 0 0;font-size:.88rem;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  details{
+    border:1px solid var(--line-soft);border-radius:var(--radius-sm);background:rgba(7,11,22,.35);
+    padding:12px 14px;
+  }
+  summary{cursor:pointer;color:var(--label);font-weight:700;font-size:.88rem}
+  pre{
+    margin:12px 0 0;white-space:pre-wrap;word-break:break-word;color:#d7e0f5;
+    font-size:.8rem;line-height:1.45;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  .actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+  a.btn,button.btn{
+    appearance:none;border:0;cursor:pointer;text-decoration:none;
+    display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:0 16px;
+    border-radius:var(--control-radius);font:inherit;font-weight:700;font-size:.9rem;
+  }
+  a.btn-primary,button.btn-primary{background:var(--accent);color:#071018}
+  a.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--line)}
+  .foot{margin-top:16px;color:var(--muted);font-size:.8rem}
+</style>
+</head>
+<body>
+  <main class="wrap" role="main">
+    <div class="brand">
+      <div class="mark" aria-hidden="true">A</div>
+      <div>
+        <h1>AppointHive</h1>
+        <p>Sales OS</p>
+      </div>
+    </div>
+    <section class="panel" aria-labelledby="err-title">
+      <p class="status"><i aria-hidden="true"></i> System unavailable · HTTP {{status}}</p>
+      <h2 id="err-title">{{title}}</h2>
+      <p class="lead">{{message}}</p>
+      <p class="hint"><strong>What to do:</strong> {{hint}}</p>
+      <dl class="meta">
+        <div><dt>Error code</dt><dd>{{code}}</dd></div>
+        <div><dt>Database</dt><dd>{{db_host}}</dd></div>
+        <div><dt>DB ready</dt><dd>{{db_ready}}</dd></div>
+      </dl>
+      <details open>
+        <summary>Technical detail</summary>
+        <pre>{{detail}}</pre>
+      </details>
+      <div class="actions">
+        <button type="button" class="btn btn-primary" onclick="location.reload()">Retry</button>
+        <a class="btn btn-secondary" href="/api/health">Health JSON</a>
+      </div>
+      <p class="foot">This page is shown when Sales OS cannot reach PostgreSQL at boot or during a request. Static assets still load so operators can diagnose without a blank crash.</p>
+    </section>
+  </main>
+</body>
+</html>

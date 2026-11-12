@@ -14,11 +14,12 @@ from urllib.parse import unquote, urlparse
 import requests
 from fastapi import Depends, FastAPI, File, HTTPException, Request, Response, Security, UploadFile
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select, and_
+from sqlalchemy import or_, select, and_, text
+from sqlalchemy.exc import OperationalError
 
 from app.config import (
     ENABLE_API_DOCS,
@@ -50,6 +51,15 @@ from app.services.cannot_contact import (
 from app.services.pipeline import backfill_prospect_stages, init_new_prospect
 from app.services.seed import seed_sales_os
 from app.services.storage import uploads_root
+from app.system_status import (
+    boot_state,
+    classify_db_error,
+    current_issue,
+    mark_boot_ok,
+    render_system_error_html,
+    set_boot_issue,
+    wants_html,
+)
 
 _LOGIN_FAILS: list[tuple[float, str]] = []  # (timestamp, key)
 
@@ -131,21 +141,28 @@ SOFT_OPENER_TEMPLATES = [
     },
 ]
 
-Base.metadata.create_all(engine)
-apply_migrations()
+# Schema/migrations must not crash the process — otherwise Vercel/Lambda cannot
+# serve a system error page when the DB provider rejects connections (e.g. Neon quota).
+try:
+    Base.metadata.create_all(engine)
+    apply_migrations()
+    mark_boot_ok()
+except Exception as _boot_exc:
+    set_boot_issue(_boot_exc)
 
 # Seed Sales OS catalog/stages/owner (idempotent) + remap marked→to_contact
-with SessionLocal() as _seed_db:
-    try:
-        seed_sales_os(_seed_db)
-        backfill_prospect_stages(_seed_db)
-        from app.services.automation import promote_due_follow_ups
+if boot_state.db_ready:
+    with SessionLocal() as _seed_db:
+        try:
+            seed_sales_os(_seed_db)
+            backfill_prospect_stages(_seed_db)
+            from app.services.automation import promote_due_follow_ups
 
-        promote_due_follow_ups(_seed_db)
-        _seed_db.commit()
-    except Exception:
-        # Do not block app boot if seed races; APIs can re-run backfill
-        pass
+            promote_due_follow_ups(_seed_db)
+            _seed_db.commit()
+        except Exception:
+            # Do not block app boot if seed races; APIs can re-run backfill
+            pass
 
 _API_DESCRIPTION = (
     "Web + mobile AppointHive Sales OS API.\n\n"
@@ -180,6 +197,28 @@ STATIC_DIR = BASE_DIR / "app" / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+def _system_error_template() -> str:
+    return (TEMPLATE_DIR / "system_error.html").read_text(encoding="utf-8")
+
+
+def system_error_response(request: Request, issue=None):
+    issue = issue or current_issue() or classify_db_error(RuntimeError("Database unavailable"))
+    path = request.url.path or ""
+    prefer_html = path == "/" or (not path.startswith("/api/") and wants_html(request.headers))
+    if prefer_html:
+        return HTMLResponse(
+            render_system_error_html(_system_error_template(), issue),
+            status_code=issue.status,
+        )
+    return JSONResponse(
+        {
+            "ok": False,
+            "error": issue.as_public_dict(),
+        },
+        status_code=issue.status,
+    )
+
+
 @app.middleware("http")
 async def _static_asset_revalidate(request: Request, call_next):
     """Avoid stale ES-module/CSS caches after solid frontend peels (etag alone is not enough)."""
@@ -188,6 +227,33 @@ async def _static_asset_revalidate(request: Request, call_next):
     if path.startswith("/static/js/") or path.startswith("/static/css/"):
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
+
+
+@app.middleware("http")
+async def _degraded_db_gate(request: Request, call_next):
+    """When boot failed to reach Postgres, keep health/static alive and surface a system page."""
+    path = request.url.path or ""
+    if (
+        not boot_state.db_ready
+        and not path.startswith("/static/")
+        and path not in {"/api/health", "/favicon.ico"}
+    ):
+        return system_error_response(request, current_issue())
+    try:
+        return await call_next(request)
+    except OperationalError as exc:
+        issue = classify_db_error(exc)
+        boot_state.db_ready = False
+        boot_state.issue = issue
+        return system_error_response(request, issue)
+
+
+@app.exception_handler(OperationalError)
+async def _operational_error_handler(request: Request, exc: OperationalError):
+    issue = classify_db_error(exc)
+    boot_state.db_ready = False
+    boot_state.issue = issue
+    return system_error_response(request, issue)
 
 
 def custom_openapi():
@@ -1348,14 +1414,30 @@ def businesses_query(
 
 
 @app.get("/", response_class=HTMLResponse)
-def home():
+def home(request: Request):
+    if not boot_state.db_ready:
+        return system_error_response(request, current_issue())
     with open(TEMPLATE_DIR / "index.html", encoding="utf-8") as f:
         return f.read()
 
 
 @app.get("/api/health", tags=["system"])
 def health():
-    return {"ok": True}
+    payload = boot_state.as_public_dict()
+    payload["service"] = "appointhive-sales-os"
+    if not boot_state.db_ready:
+        return JSONResponse(payload, status_code=503)
+    # Live ping so a mid-flight outage shows up even if boot succeeded.
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as exc:
+        issue = set_boot_issue(exc)
+        payload = boot_state.as_public_dict()
+        payload["service"] = "appointhive-sales-os"
+        payload["error"] = issue.as_public_dict()
+        return JSONResponse(payload, status_code=issue.status)
+    return payload
 
 
 @app.post("/api/login", tags=["auth"], response_model=LoginResponse)
