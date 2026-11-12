@@ -43,6 +43,35 @@ def test_fresh_status_excludes_queue_contacted_booking(auth_client):
     assert booking_id not in ids
 
 
+def test_mark_for_contact_leaves_fresh_discover(auth_client):
+    bid = _seed(place_id="fresh/mark-1", name="Mark Me Out")
+
+    before = auth_client.get(
+        "/api/businesses",
+        params={"status": "fresh", "scope": "city", "country": "Australia", "city": "Sydney"},
+    )
+    assert before.status_code == 200
+    assert bid in {row["id"] for row in before.json()["results"]}
+
+    patch = auth_client.patch(f"/api/businesses/{bid}", json={"marked_for_contact": True})
+    assert patch.status_code == 200
+    assert patch.json()["marked_for_contact"] is True
+
+    after = auth_client.get(
+        "/api/businesses",
+        params={"status": "fresh", "scope": "city", "country": "Australia", "city": "Sydney"},
+    )
+    assert after.status_code == 200
+    assert bid not in {row["id"] for row in after.json()["results"]}
+
+    queue = auth_client.get(
+        "/api/businesses",
+        params={"status": "queue", "scope": "global"},
+    )
+    assert queue.status_code == 200
+    assert bid in {row["id"] for row in queue.json()["results"]}
+
+
 def test_unmark_returns_lead_to_fresh_discover(auth_client):
     bid = _seed(place_id="fresh/unmark-1", name="Unmark Me", marked_for_contact=True)
 

@@ -30,12 +30,20 @@ export function resolveDiscoverStatus(status){
   return s;
 }
 
-/** Toggle ★ mark for contact — Discover owner. */
+/** Toggle ★ mark for contact — Discover owner.
+ * Mark: leaves Discover → Contact queue To contact (runtime navigates).
+ * Unmark: returns to Discover when still fresh.
+ */
 export async function toggleDiscoverMark(id, row, { patchLead } = {}) {
   if (!row || typeof patchLead !== 'function') throw new Error('patchLead required');
   const nextMarked = !row.marked_for_contact;
-  await patchLead(id, { marked_for_contact: nextMarked });
-  toast(nextMarked ? 'Marked for contact — left Discover.' : 'Unmarked — back in Discover.');
+  const updated = await patchLead(id, { marked_for_contact: nextMarked });
+  if (row) {
+    if (updated && typeof updated === 'object') Object.assign(row, updated);
+    row.marked_for_contact = nextMarked;
+    if (nextMarked) row.ready_for_contact = false;
+  }
+  toast(nextMarked ? 'Moved to To contact' : 'Unmarked — back in Discover.');
   return nextMarked;
 }
 

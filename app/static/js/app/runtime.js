@@ -2076,33 +2076,54 @@ function undoToast(message, undoFn){
 async function patchLead(id,body){
   const updated=await api('/api/businesses/'+id,{method:'PATCH',body});
   const idx=rowsData.findIndex(x=>String(x.id)===String(id));
-  if(idx>=0)rowsData[idx]=updated;
+  // Prefer API payload; force mark flag when PATCH asked for it (UI prune depends on it).
+  const merged=updated&&typeof updated==='object'?{...updated}:updated;
+  if(merged&&body&&body.marked_for_contact===true) merged.marked_for_contact=true;
+  if(merged&&body&&body.marked_for_contact===false) merged.marked_for_contact=false;
+  if(idx>=0)rowsData[idx]=merged;
   if(drawerLead&&String(drawerLead.id)===String(id)){
-    drawerLead=updated;
+    drawerLead=merged;
     renderDrawer();
     loadActivity(id); // renderDrawer resets Activity to Loading — refill it
   }
   // Unmark / clear booking can return a lead to Discover — reload so it lands in the fresh list.
   const keys=Object.keys(body||{});
   const mayReturnToDiscover=keys.some(k=>['marked_for_contact','contacted','lost'].includes(k))
-    && isFreshDiscoverLead(updated)
+    && isFreshDiscoverLead(merged)
     && discoverShowingFresh()
     && idx<0;
   if(mayReturnToDiscover){
     await load();
+  }else if(body&&body.marked_for_contact===true){
+    // Marked → never stay on Discover rows (Fresh or other city filters).
+    rowsData=rowsData.filter(b=>String(b.id)!==String(id));
+    selectedIds.delete(String(id));
+    paint();
+    loadStats();
   }else{
     pruneFreshDiscoverRows();
     paint();
     loadStats();
   }
-  return updated;
+  return merged;
 }
 
 async function toggleMark(id){
   const row=rowsData.find(x=>String(x.id)===String(id));
   if(!row)return;
   try{
-    await toggleDiscoverMark(id, row, { patchLead });
+    const nextMarked=await toggleDiscoverMark(id, row, { patchLead });
+    if(nextMarked){
+      // Always drop from Discover list (even if status filter is not Fresh).
+      rowsData=rowsData.filter(b=>String(b.id)!==String(id));
+      selectedIds.delete(String(id));
+      paint();
+      loadStats();
+      setAppPanel('contactQueue');
+      setContactQueueTab('selected');
+      await loadContactQueue({keepTab:true});
+      renderContactQueueList();
+    }
   }catch(e){toast(e.message,true)}
 }
 
@@ -3022,7 +3043,19 @@ $('selectAll').addEventListener('change',()=>{
   updateSelectedCount();
 });
 $('clearSelection').addEventListener('click',()=>{selectedIds.clear();paint()});
-$('bulkMark').addEventListener('click',()=>bulk({marked_for_contact:true}));
+$('bulkMark').addEventListener('click',async()=>{
+  const ids=await bulk({marked_for_contact:true});
+  if(!ids.length) return;
+  // Drop marked rows from Discover immediately, then open To contact.
+  const idSet=new Set(ids.map(String));
+  rowsData=rowsData.filter(b=>!idSet.has(String(b.id)));
+  paint();
+  loadStats();
+  setAppPanel('contactQueue');
+  setContactQueueTab('selected');
+  await loadContactQueue({keepTab:true});
+  renderContactQueueList();
+});
 $('bulkUnmark').addEventListener('click',()=>bulk({marked_for_contact:false}));
 $('bulkContacted').addEventListener('click',()=>bulk({contacted:true}));
 $('bulkLost').addEventListener('click',()=>bulk({lost:true}));

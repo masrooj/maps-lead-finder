@@ -958,10 +958,7 @@ def on_proposal_sent(db, b: Business, *, actor_id: Optional[int] = None) -> None
     advance_at_least(db, b, "proposal_sent", actor_id=actor_id, note="Auto: proposal/invoice created")
 
 
-def _discovery_boost(db, business_id: int) -> float:
-    notes = db.scalars(
-        select(DiscoveryNote).where(DiscoveryNote.business_id == business_id).order_by(DiscoveryNote.id.desc()).limit(3)
-    ).all()
+def _discovery_boost_from_notes(notes: list) -> float:
     if not notes:
         return 0.0
     boost = 1.5
@@ -981,6 +978,33 @@ def _discovery_boost(db, business_id: int) -> float:
     if (latest.painful_issue or "").strip():
         boost += min(2.0, len(latest.painful_issue.strip()) / 80.0)
     return boost
+
+
+def _discovery_boost(db, business_id: int) -> float:
+    notes = db.scalars(
+        select(DiscoveryNote).where(DiscoveryNote.business_id == business_id).order_by(DiscoveryNote.id.desc()).limit(3)
+    ).all()
+    return _discovery_boost_from_notes(list(notes))
+
+
+def _discovery_boost_map(db, business_ids: list[int]) -> dict[int, float]:
+    """One query for discovery-note boosts (avoids N+1 in contact-queue ranking)."""
+    ids = [int(i) for i in business_ids if i is not None]
+    if not ids:
+        return {}
+    # Newest notes first; keep ≤3 per business in Python.
+    rows = db.scalars(
+        select(DiscoveryNote)
+        .where(DiscoveryNote.business_id.in_(ids))
+        .order_by(DiscoveryNote.id.desc())
+    ).all()
+    by_biz: dict[int, list] = {}
+    for note in rows:
+        bid = int(note.business_id)
+        bucket = by_biz.setdefault(bid, [])
+        if len(bucket) < 3:
+            bucket.append(note)
+    return {bid: _discovery_boost_from_notes(notes) for bid, notes in by_biz.items()}
 
 
 _IG_BLOCKED_PATHS = frozenset(
@@ -1133,6 +1157,7 @@ def rank_contact_queue(
             if (not country_f or (b.country or "").strip().lower() == country_f.lower())
             and (not city_f or (b.city or "").strip().lower() == city_f.lower())
         ]
+    disc_map = _discovery_boost_map(db, [b.id for b in rows])
     ranked = []
     for b in rows:
         stage = stages.get(b.pipeline_stage_id) if b.pipeline_stage_id else None
@@ -1161,7 +1186,7 @@ def rank_contact_queue(
         if not rm.match_filter(filt, ch=ch, b_flags=flags) and not keep_for_tab:
             continue
         base = float(b.score_override if b.score_override is not None else (b.qualification_score or 0) or 0)
-        disc = _discovery_boost(db, b.id)
+        disc = float(disc_map.get(int(b.id), 0.0))
         marked = 2.0 if b.marked_for_contact else 0.0
         contacted_penalty = -1.5 if b.contacted and not b.next_follow_up_at else 0.0
         stage_bonus = 0.0
@@ -1203,6 +1228,7 @@ def rank_contact_queue(
         if stage:
             why.append(stage.name)
         why.extend(mode_tags)
+        gate = messaging_gate_payload(db, b)
         ranked.append(
             {
                 "id": b.id,
@@ -1235,12 +1261,9 @@ def rank_contact_queue(
                 "instagram_sent": bool(b.instagram_sent),
                 **ig_warm_payload(b),
                 "ig_ready_at": b.ig_ready_at.isoformat() if getattr(b, "ig_ready_at", None) else "",
-                "ig_ready_wait": ig_ready_wait_payload(db, b),
-                **{
-                    k: v
-                    for k, v in messaging_gate_payload(db, b).items()
-                    if k in ("can_message", "can_message_reason")
-                },
+                "ig_ready_wait": gate.get("ig_ready_wait") or {},
+                "can_message": gate.get("can_message"),
+                "can_message_reason": gate.get("can_message_reason") or "",
                 "last_contacted_at": b.last_contacted_at.isoformat() if getattr(b, "last_contacted_at", None) else "",
                 "channels": {
                     "email": ch["has_email"],
