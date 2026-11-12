@@ -20,8 +20,8 @@ const CQ_HINT = {
   to_contact: 'Contact queue · To contact',
   ready_to_contact: 'Contact queue · Ready',
   contacted: 'Contact queue · Contacted',
-  follow_up_3: 'Due ≤ +3 days',
-  follow_up_7: 'Due +7 days or later',
+  follow_up_3: 'Contacted filter · +3 days passed',
+  follow_up_7: 'Contacted filter · +7 days passed',
   engaged: 'Explicit Engaged (reply / interest)',
 };
 

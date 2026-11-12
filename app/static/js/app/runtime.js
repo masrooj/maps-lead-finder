@@ -786,6 +786,13 @@ async function loadSettings(){
     const waitRaw=(settingsPayload.settings&&settingsPayload.settings.ig_ready_wait_days);
     const waitParsed=parseInt(waitRaw,10);
     if($('igReadyWaitDays')) $('igReadyWaitDays').value=String(Number.isFinite(waitParsed)&&waitParsed>=0&&waitParsed<=14?waitParsed:1);
+    const s=settingsPayload.settings||{};
+    const truthy=(raw)=>{
+      const v=String(raw??'').trim().toLowerCase();
+      return v==='1'||v==='true'||v==='yes'||v==='on';
+    };
+    if($('followUpEmailReminders')) $('followUpEmailReminders').checked=truthy(s['follow_up_reminders.email_enabled']);
+    if($('followUpPushReminders')) $('followUpPushReminders').checked=truthy(s['follow_up_reminders.push_enabled']);
   }catch(_){}
   try{
     const wp=await api('/api/sales/be/won-policy');

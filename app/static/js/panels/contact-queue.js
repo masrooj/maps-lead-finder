@@ -90,13 +90,14 @@ export function contactQueueFollowBucket(b){
   if(last===today) return 'today';
   if(kind==='call_today' && !duePassed) return 'today';
 
-  // 7+ days since last contact, or plus7 kind that is due/overdue
-  if(since>=7 || (kind==='plus7' && duePassed)) return 'plus7';
+  // Future due → Sent/waiting (Pipeline Contacted) — matches promote-when-due
+  if(due && !duePassed) return 'sent';
 
-  // Due/overdue or 3–6 days since → +3 (default horizon)
+  // Due/overdue or no-due with elapsed days → Pipeline Follow-up +3 / +7
+  if(since>=7 || (kind==='plus7' && duePassed)) return 'plus7';
   if(duePassed || since>=3) return 'plus3';
 
-  // Future follow-up still waiting, or 1–2 days since send with no due yet
+  // 1–2 days since send with no due yet
   return 'sent';
 }
 

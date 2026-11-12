@@ -70,13 +70,18 @@ def infer_slug_from_flags(b: Business) -> str:
         return "lost"
     if _contacted_like(b):
         kind = (getattr(b, "follow_up_kind", None) or "").strip()
+        if kind == "call_today":
+            return "contacted"
         due = getattr(b, "next_follow_up_at", None)
-        if due and kind != "call_today":
+        from app.services.automation import days_since_last_contact, follow_up_target_slug
+
+        if due:
             due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
             if due_aware <= _utcnow():
-                from app.services.automation import follow_up_target_slug
-
                 return follow_up_target_slug(b)
+        elif days_since_last_contact(b) >= 3:
+            # Match Contacted +3/+7 passed when no due was set
+            return follow_up_target_slug(b)
         return "contacted"
     if getattr(b, "ready_for_contact", False) and b.marked_for_contact:
         return "ready_to_contact"

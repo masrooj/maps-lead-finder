@@ -1602,6 +1602,8 @@ _SETTINGS_PUT_ALLOW = frozenset(
         "tax_label_AU",
         "ig_soft_dm_daily_cap",
         "ig_ready_wait_days",
+        "follow_up_reminders.email_enabled",
+        "follow_up_reminders.push_enabled",
     }
 )
 
@@ -1634,6 +1636,8 @@ def sales_put_setting(key: str, value: str, _user: str = Depends(require_user), 
         if n < 0 or n > 14:
             raise HTTPException(422, "ig_ready_wait_days must be an integer 0–14")
         store_value = str(n)
+    if key in ("follow_up_reminders.email_enabled", "follow_up_reminders.push_enabled"):
+        store_value = "true" if str(value).strip().lower() in ("1", "true", "yes", "on") else "false"
     row = db.scalar(select(AppSetting).where(AppSetting.key == key))
     if not row:
         row = AppSetting(key=key, value=store_value)

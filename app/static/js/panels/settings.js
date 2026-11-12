@@ -19,6 +19,12 @@ import { refreshIgOutreachQuota, setIgOutreachQuota } from '../features/compose.
 
 let wired = false;
 
+/** Reminder toggles default off when unset. */
+function settingTruthy(raw) {
+  const v = String(raw ?? '').trim().toLowerCase();
+  return v === '1' || v === 'true' || v === 'yes' || v === 'on';
+}
+
 export async function loadIgSoftDmCapSetting() {
   try {
     const data = await api('/api/sales/settings');
@@ -34,6 +40,13 @@ export async function loadIgSoftDmCapSetting() {
       $('igReadyWaitDays').value = String(
         Number.isFinite(waitParsed) && waitParsed >= 0 && waitParsed <= 14 ? waitParsed : 1
       );
+    }
+    const s = data.settings || {};
+    if ($('followUpEmailReminders')) {
+      $('followUpEmailReminders').checked = settingTruthy(s['follow_up_reminders.email_enabled']);
+    }
+    if ($('followUpPushReminders')) {
+      $('followUpPushReminders').checked = settingTruthy(s['follow_up_reminders.push_enabled']);
     }
   } catch (_) { /* settings may be owner-gated elsewhere */ }
 }
@@ -107,6 +120,24 @@ function wireSettingsOnce() {
       if ($('igReadyWaitDays')) $('igReadyWaitDays').value = String(waitN);
       await refreshIgOutreachQuota().catch(() => {});
       toast(`IG soft DM saved (cap ${n}, Ready wait ${waitN}d)`);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
+
+  $('saveFollowUpReminders') && $('saveFollowUpReminders').addEventListener('click', async () => {
+    try {
+      const emailOn = !!($('followUpEmailReminders') && $('followUpEmailReminders').checked);
+      const pushOn = !!($('followUpPushReminders') && $('followUpPushReminders').checked);
+      await api(
+        `/api/sales/settings/follow_up_reminders.email_enabled?value=${encodeURIComponent(emailOn ? 'true' : 'false')}`,
+        { method: 'PUT' },
+      );
+      await api(
+        `/api/sales/settings/follow_up_reminders.push_enabled?value=${encodeURIComponent(pushOn ? 'true' : 'false')}`,
+        { method: 'PUT' },
+      );
+      toast(`Reminders saved · email ${emailOn ? 'on' : 'off'} · push ${pushOn ? 'on' : 'off'}`);
     } catch (e) {
       toast(e.message, true);
     }

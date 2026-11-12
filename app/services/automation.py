@@ -81,17 +81,32 @@ def _stage_index(slug: str, product_line: str = "STANDALONE") -> int:
         return -1
 
 
+def days_since_last_contact(b: Business) -> int:
+    """Calendar days since last_contacted_at (0 = today). -1 if unknown."""
+    last = getattr(b, "last_contacted_at", None)
+    if not last:
+        return -1
+    last_aware = last if last.tzinfo else last.replace(tzinfo=timezone.utc)
+    return (_utcnow().date() - last_aware.date()).days
+
+
 def follow_up_target_slug(b: Business) -> str:
-    """Pick Follow-up +3 vs +7 from kind or scheduled horizon."""
+    """Pick Follow-up +3 vs +7 from kind, days since contact, or scheduled horizon.
+
+    Aligned with Contacted timing buckets: 7+ days since → +7; else +3 default.
+    """
     kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
     if kind in ("plus7", "plus_7", "+7"):
         return "follow_up_7"
     if kind in ("plus3", "plus_3", "+3", "call_today"):
         return "follow_up_3"
+    since = days_since_last_contact(b)
+    if since >= 7:
+        return "follow_up_7"
     due = getattr(b, "next_follow_up_at", None)
     if due:
         due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
-        # Horizon when due was still ahead; overdue defaults to +3.
+        # Horizon when due was still ahead; overdue defaults to +3 unless since≥7.
         delta_days = (due_aware.date() - _utcnow().date()).days
         if delta_days > 3:
             return "follow_up_7"
@@ -447,17 +462,26 @@ def demote_to_to_contact(db, b: Business, *, actor_id: Optional[int] = None, not
 
 
 def maybe_promote_follow_up(db, b: Business, *, actor_id: Optional[int] = None) -> bool:
-    """Move contacted → follow_up_3 / follow_up_7 when scheduled due is due/past (not call_today)."""
+    """Move contacted → follow_up_3 / follow_up_7 when due/past or days-since gap (not call_today).
+
+    Syncs Pipeline Follow-up columns with Contacted +3/+7 passed buckets.
+    """
     if not b.contacted or b.lost:
         return False
     kind = (getattr(b, "follow_up_kind", None) or "").strip()
     if kind == "call_today":
         return False
     due = getattr(b, "next_follow_up_at", None)
-    if not due:
-        return False
-    due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
-    if due_aware > _utcnow():
+    since = days_since_last_contact(b)
+    ready = False
+    if due:
+        due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
+        if due_aware <= _utcnow():
+            ready = True
+    elif since >= 3:
+        # No due date but Contacted filter already shows +3/+7 passed
+        ready = True
+    if not ready:
         return False
     target = follow_up_target_slug(b)
     current = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None

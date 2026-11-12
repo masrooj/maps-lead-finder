@@ -236,6 +236,7 @@ def custom_openapi():
         "/api/webhooks/booking-engine",
         "/api/cron/unpaid-invoices",
         "/api/cron/be-heartbeat",
+        "/api/cron/follow-up-reminders",
     }
     for path, methods in (schema.get("paths") or {}).items():
         for op in methods.values():

@@ -158,6 +158,29 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
         or 0
     )
 
+    # Pipeline Follow-up columns (synced with Contacted +3/+7 passed)
+    from app.services.follow_up_reminders import due_follow_up_leads
+    from app.services.automation import follow_up_target_slug
+
+    due_leads = due_follow_up_leads(db, limit=2000)
+    follow_up_3 = sum(1 for b in due_leads if follow_up_target_slug(b) == "follow_up_3")
+    follow_up_7 = sum(1 for b in due_leads if follow_up_target_slug(b) == "follow_up_7")
+
+    from app.services.mail import smtp_configured
+    from app.services.follow_up_reminders import email_reminders_enabled, push_reminders_enabled
+
+    smtp_ok = smtp_configured(db=db)
+    email_on = email_reminders_enabled(db)
+    push_on = push_reminders_enabled(db)
+    if email_on and smtp_ok:
+        mail_bit = "Email digest on (cron /api/cron/follow-up-reminders)."
+    elif email_on:
+        mail_bit = "Email digest on — configure SMTP to send."
+    else:
+        mail_bit = "Email digest off (Settings → Follow-up reminders)."
+    push_bit = "Browser push on." if push_on else "Browser push off."
+    note = f"In-app bell + Pipeline Follow-up columns. {mail_bit} {push_bit}"
+
     return {
         "overdue_task_ids": overdue,
         "due_today_task_ids": due_today,
@@ -168,7 +191,13 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
         "due_soon_count": len(due_soon),
         "to_contact_count": int(to_contact),
         "contact_queue_count": int(to_contact),
-        "notifications_note": "In-app follow-ups only. Email/push reminders are not enabled unless Cron + email provider are configured.",
+        "follow_up_due_count": len(due_leads),
+        "follow_up_3_count": int(follow_up_3),
+        "follow_up_7_count": int(follow_up_7),
+        "smtp_ready": smtp_ok,
+        "follow_up_email_reminders_enabled": email_on,
+        "follow_up_push_reminders_enabled": push_on,
+        "notifications_note": note,
     }
 
 

@@ -164,7 +164,7 @@
 
   <div class="panel-page hidden" id="dashboardPanel">
     <section class="panel card">
-      <div class="sectionhead"><h2>Dashboard</h2><span>In-app follow-ups only — email/push reminders not enabled</span></div>
+      <div class="sectionhead"><h2>Dashboard</h2><span>Follow-ups: in-app bell · Pipeline +3/+7 · email/push digests off until enabled in Settings</span></div>
       <div class="fields filter-bar" id="dashFilters" style="margin:0 0 12px;flex-wrap:wrap;gap:8px">
         <div class="field"><label for="dashDateFrom">From</label><input type="date" id="dashDateFrom"></div>
         <div class="field"><label for="dashDateTo">To</label><input type="date" id="dashDateTo"></div>
@@ -562,6 +562,13 @@
           </div>
           <button type="button" class="primary" id="saveIgSoftDmCap" style="margin-top:4px">Save IG soft DM settings</button>
         </div>
+        <h3 class="panel-title">Follow-up reminders</h3>
+        <p class="hint" style="margin-top:0">Off by default. Email needs SMTP + daily <code>POST /api/cron/follow-up-reminders</code>. Browser push uses the OS notification permission when the app is open.</p>
+        <div class="fields" style="max-width:520px;margin-top:8px">
+          <label class="flag"><input type="checkbox" id="followUpEmailReminders"> Email digest reminders</label>
+          <label class="flag"><input type="checkbox" id="followUpPushReminders"> Browser push reminders</label>
+          <button type="button" class="primary" id="saveFollowUpReminders" style="margin-top:8px">Save reminder settings</button>
+        </div>
         <h3 class="panel-title">Prospect auto-setup</h3>
         <p class="hint" style="margin-top:0">Assign product line, currency, pipeline stage, and follow-up tasks for leads missing Sales OS fields.</p>
         <button type="button" class="primary" id="autoSetupProspectsBtn">Run auto-setup now</button>
@@ -658,7 +665,7 @@
         <p class="hint" style="margin-top:0">Enrich selected Discover leads in batches (avoids long request timeouts).</p>
         <button type="button" id="enrichJobBtn">Start enrich job for starred / selected</button>
         <h3 class="panel-title">Audit (Owner)</h3>
-        <p class="hint" style="margin-top:0">Recent Owner/ops actions. Cron: <code>POST /api/cron/unpaid-invoices</code> with header <code>X-Cron-Secret</code> (or Owner session).</p>
+        <p class="hint" style="margin-top:0">Recent Owner/ops actions. Cron: <code>POST /api/cron/unpaid-invoices</code> · <code>POST /api/cron/follow-up-reminders</code> with header <code>X-Cron-Secret</code> (or Owner session when secret unset). Follow-up cron always promotes Pipeline +3/+7; email digest only when enabled in Follow-up reminders + SMTP.</p>
         <div class="sales-table-wrap" style="max-height:360px"><table class="sales-table" id="auditTable"><thead><tr><th>When</th><th>Action</th><th>Entity</th></tr></thead><tbody></tbody></table></div>
       </div>
 

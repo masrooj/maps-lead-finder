@@ -445,6 +445,25 @@ def cron_be_heartbeat(request: Request, x_cron_secret: str = Header(default=""),
     return run_heartbeat(db)
 
 
+@router.post("/api/cron/follow-up-reminders", tags=["ops"])
+def cron_follow_up_reminders(
+    request: Request,
+    x_cron_secret: str = Header(default=""),
+    force_email: bool = False,
+    dry_run: bool = False,
+    db=Depends(get_db),
+):
+    """Promote due Contacted → Follow-up +3/+7 and email a once-per-day digest (SMTP).
+
+    Schedule daily (e.g. morning). Header X-Cron-Secret when CRON_SECRET is set;
+    otherwise Owner session may run manually. force_email=1 re-sends same day.
+    """
+    _authorize_cron(request, x_cron_secret, db)
+    from app.services.follow_up_reminders import run_follow_up_reminders
+
+    return run_follow_up_reminders(db, force_email=force_email, dry_run=dry_run)
+
+
 @router.post("/api/webhooks/stripe", tags=["ops"])
 async def stripe_webhook(request: Request, db=Depends(get_db)):
     payload = await request.body()
