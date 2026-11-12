@@ -55,6 +55,7 @@ def test_set_default_whatsapp_overrides_soft_opener_in_ui_helper(auth_client):
     src = frontend_source()
     assert "pickDefaultTemplate" in src
     assert "if (marked) return marked" in src
+    assert "preferFollowUp" in src
     # Soft must not win before isDefault (old bug).
     assert "Prefer soft_opener for IG/WA cold ask; else channel default." not in src
     # Compose dropdown must sort marked default ahead of soft openers.

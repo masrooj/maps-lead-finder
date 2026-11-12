@@ -176,6 +176,48 @@ def test_scheduled_plus7_promotes_follow_up_7(auth_client):
         assert stage is not None and stage.slug == "follow_up_7"
 
 
+def test_reconfirm_followup_plus7_reflags(auth_client):
+    """Contacted Follow-up +7 compose path: second confirm-sent re-flags kind + due."""
+    bid = _lead(ready_for_contact=True, outreach_channel="email")
+    r1 = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "email", "message": "first", "next_follow_up_at": "2099-01-01"},
+    )
+    assert r1.status_code == 200, r1.text
+    body1 = r1.json()
+    assert body1.get("contacted") is True
+    assert body1.get("follow_up_kind") == "plus7"
+    plus7 = (datetime.now(timezone.utc) + timedelta(days=7)).date().isoformat()
+    r2 = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "email", "message": "follow-up", "next_follow_up_at": plus7},
+    )
+    assert r2.status_code == 200, r2.text
+    body2 = r2.json()
+    assert body2.get("contacted") is True
+    assert body2.get("email_sent") is True
+    assert body2.get("follow_up_kind") == "plus7"
+    assert (body2.get("next_follow_up_at") or "")[:10] == plus7
+    assert (body2.get("last_contacted_at") or "")[:10] == datetime.now(timezone.utc).date().isoformat()
+
+
+def test_contact_queue_follow_filter_markup():
+    """Contacted timing filter + CSS hidden override ship with the UI."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    html = (root / "app/templates/index.html").read_text(encoding="utf-8")
+    css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
+    js = (root / "app/static/js/panels/contact-queue.js").read_text(encoding="utf-8")
+    assert 'id="contactQueueFollowFilter"' in html
+    assert 'id="contactQueueFollowField"' in html
+    assert ".field[hidden]" in css
+    assert "contactQueueFollowMatch" in js
+    assert "contactQueueFollowBucket" in js
+    assert "data-cq-follow-send" in js
+    assert "Message" in js
+
+
 def test_pipeline_filters_and_shows_all_stage_columns(auth_client):
     """Board shows every stage column (incl. Discovered) so cards can land on each."""
     bid = _lead(

@@ -385,6 +385,16 @@
             <option value="ig_only">IG only</option>
           </select>
         </div>
+        <div class="field" id="contactQueueFollowField" hidden>
+          <label for="contactQueueFollowFilter">Follow-up timing</label>
+          <select id="contactQueueFollowFilter" aria-label="Filter Contacted by follow-up timing">
+            <option value="">All contacted</option>
+            <option value="today">Today's messages</option>
+            <option value="sent">Sent / waiting</option>
+            <option value="plus3">+3 days passed</option>
+            <option value="plus7">+7 days passed</option>
+          </select>
+        </div>
         <div class="field">
           <label for="contactQueueMode">Ranking mode</label>
           <select id="contactQueueMode" aria-describedby="contactQueueDef"></select>

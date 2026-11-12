@@ -1,6 +1,6 @@
 import { $ } from '../core/dom.js';
 
-import { esc, api, toast, fmtMoney, fmtDateTime } from '../core/api.js';
+import { esc, api, toast, fmtMoney, fmtDateTime, dateOnly } from '../core/api.js';
 
 import { pageSlice, renderPager, ensurePagerHost, pagerState } from '../core/pager.js';
 
@@ -53,8 +53,57 @@ let contactQueueModes = [];
 let contactQueuePick = new Set();
 let contactQueueQuery = '';
 let contactQueueChannel = '';
+/** Contacted-tab only: '' | today | sent | plus3 | plus7 */
+let contactQueueFollowFilter = '';
 let contactQueueLocations = {};
 let igDiscoverStarted = new Set();
+
+function cqLocalDay(){
+  const d=new Date();
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,'0');
+  const day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Days since last contact (0 = today). -1 if unknown. */
+function daysSinceLastContact(b){
+  const last=dateOnly(b&&b.last_contacted_at);
+  if(!last) return -1;
+  const a=new Date(last+'T12:00:00');
+  const bDay=new Date(cqLocalDay()+'T12:00:00');
+  return Math.floor((bDay-a)/(24*60*60*1000));
+}
+
+/**
+ * Exclusive Contacted timing bucket (every contacted lead lands in exactly one):
+ * today → sent/waiting (incl. 1–2d gap) → plus3 (due or 3–6d) → plus7 (due or 7d+).
+ */
+export function contactQueueFollowBucket(b){
+  const today=cqLocalDay();
+  const last=dateOnly(b&&b.last_contacted_at);
+  const due=dateOnly(b&&b.next_follow_up_at);
+  const kind=String((b&&b.follow_up_kind)||'').trim().toLowerCase();
+  const since=daysSinceLastContact(b);
+  const duePassed=!!due && due<=today;
+
+  if(last===today) return 'today';
+  if(kind==='call_today' && !duePassed) return 'today';
+
+  // 7+ days since last contact, or plus7 kind that is due/overdue
+  if(since>=7 || (kind==='plus7' && duePassed)) return 'plus7';
+
+  // Due/overdue or 3–6 days since → +3 (default horizon)
+  if(duePassed || since>=3) return 'plus3';
+
+  // Future follow-up still waiting, or 1–2 days since send with no due yet
+  return 'sent';
+}
+
+export function contactQueueFollowMatch(b, filter){
+  if(!filter) return true;
+  return contactQueueFollowBucket(b)===filter;
+}
 
 export function getContactQueuePick() { return contactQueuePick; }
 export function clearContactQueuePick() { contactQueuePick.clear(); }
@@ -112,6 +161,11 @@ function refreshPipelineAfterQueueMove(){
 }
 export function setContactQueueQuery(q) { contactQueueQuery = q || ''; }
 export function setContactQueueChannel(ch) { contactQueueChannel = ch || ''; }
+export function setContactQueueFollowFilter(v) {
+  const allowed = new Set(['', 'today', 'sent', 'plus3', 'plus7']);
+  contactQueueFollowFilter = allowed.has(v || '') ? (v || '') : '';
+}
+export function getContactQueueFollowFilter() { return contactQueueFollowFilter; }
 export function getContactQueueLocations() { return contactQueueLocations; }
 
 function availableComposeChannels(b) {
@@ -285,6 +339,9 @@ export function contactQueueVisibleLeads(){
   }
   const ch=contactQueueChannel||(($('contactQueueChannel')&&$('contactQueueChannel').value)||'');
   if(ch) base=base.filter(b=>contactQueueChannelMatch(b,ch));
+  if(state.contactQueueTab==='contacted' && contactQueueFollowFilter){
+    base=base.filter(b=>contactQueueFollowMatch(b, contactQueueFollowFilter));
+  }
   const q=(contactQueueQuery||'').trim().toLowerCase();
   if(!q) return base;
   return base.filter(b=>contactQueueMatchQuery(b,q));
@@ -346,8 +403,10 @@ export function syncContactQueueSearchUi(){
 export function syncContactQueueTabs(){
   const q=(contactQueueQuery||'').trim().toLowerCase();
   const ch=contactQueueChannel||(($('contactQueueChannel')&&$('contactQueueChannel').value)||'');
-  const pass=(list)=>list.filter(b=>{
+  const follow=contactQueueFollowFilter||(($('contactQueueFollowFilter')&&$('contactQueueFollowFilter').value)||'');
+  const pass=(list, {applyFollow=false}={})=>list.filter(b=>{
     if(ch && !contactQueueChannelMatch(b,ch)) return false;
+    if(applyFollow && follow && !contactQueueFollowMatch(b, follow)) return false;
     if(q && !contactQueueMatchQuery(b,q)) return false;
     return true;
   });
@@ -362,9 +421,11 @@ export function syncContactQueueTabs(){
   if($('contactQueueSelectedCount')) $('contactQueueSelectedCount').textContent=String(pass(selBase).length);
   if($('contactQueueReadyCount')) $('contactQueueReadyCount').textContent=String(pass(readyBase).length);
   if($('contactQueueBookingCount')) $('contactQueueBookingCount').textContent=String(pass(bookBase).length);
-  if($('contactQueueContactedCount')) $('contactQueueContactedCount').textContent=String(pass(contactedBase).length);
+  if($('contactQueueContactedCount')) $('contactQueueContactedCount').textContent=String(pass(contactedBase, {applyFollow:true}).length);
   if($('contactQueueCannotCount')) $('contactQueueCannotCount').textContent=String(pass(cannotBase).length);
   if($('contactQueueConnectedCount')) $('contactQueueConnectedCount').textContent=String(pass(connectedBase).length);
+  const followField=$('contactQueueFollowField');
+  if(followField) followField.hidden=state.contactQueueTab!=='contacted';
   document.querySelectorAll('#contactQueueTabs [data-cq-tab]').forEach(btn=>{
     const on=btn.dataset.cqTab===state.contactQueueTab;
     btn.classList.toggle('active',on);
@@ -641,7 +702,7 @@ export function renderContactQueueList(){
   const pagerHost=ensurePagerHost(list,'contactQueuePager');
   const tabLabel=isSelected?'To contact':(isReady?'Ready to contact':(isBooking?'Has booking':(isContacted?'Contacted':(isCannot?"Can't contact":(isConnected?'Already connected':'All')))));
   if(!leads.length){
-    if(q || contactQueueChannel){
+    if(q || contactQueueChannel || (isContacted && contactQueueFollowFilter)){
       list.innerHTML=`<div class="empty-card">No matches on <strong>${tabLabel}</strong> for this search/filter.</div>`;
     }else{
       list.innerHTML=isSelected
@@ -651,7 +712,7 @@ export function renderContactQueueList(){
         : isBooking
           ? '<div class="empty-card">No leads marked as already having booking. Use <strong>Has booking</strong> on Discover or All.</div>'
           : isContacted
-            ? '<div class="empty-card">No confirmed sends yet. From <strong>Ready to contact</strong>, message then <strong>Confirm sent</strong>.</div>'
+            ? '<div class="empty-card">No confirmed sends yet. From <strong>Ready to contact</strong>, message then <strong>Confirm sent</strong>. Use <strong>Follow-up +3 / +7</strong> here after first send.</div>'
           : isCannot
             ? '<div class="empty-card">No parked leads. On <strong>To contact</strong> or <strong>Ready</strong>, use <strong>Can\'t contact</strong> when unreachable.</div>'
           : isConnected
@@ -691,6 +752,7 @@ export function renderContactQueueList(){
         ${composeChosenChannelButtonHtml(b)}
         <button type="button" data-cq-already-connected="${b.id}">Already connected</button>
         <button type="button" data-cq-ig-hold="${b.id}" data-awaiting="${holdOn?'0':'1'}">${holdOn?'Clear follow-back hold':'Awaiting follow-back'}</button>
+        <button type="button" data-cq-booking="${b.id}" data-booking-on="1">Has booking</button>
         <button type="button" data-cq-demote="${b.id}">Demote</button>
         <button type="button" data-cq-cannot="${b.id}">Can't contact</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>`;
@@ -702,9 +764,13 @@ export function renderContactQueueList(){
       const badge=b.follow_up_badge&&b.follow_up_badge.label
         ?`<span class="ch-tag" title="Follow-up">${esc(b.follow_up_badge.label)}</span>`
         :'';
+      const preferredCh=esc((b.outreach_channel||'').trim()||preferredColdChannel(b)||'');
       actions=`
         ${badge}
-        <button type="button" class="primary" data-cq-engaged="${b.id}">Engaged</button>
+        <button type="button" class="primary" data-compose-queue="${b.id}" data-compose-channel="${preferredCh}" title="Open compose (keeps current follow-up date)">Message</button>
+        <button type="button" data-cq-follow-send="${b.id}" data-follow-days="3" title="Compose follow-up and schedule +3 days — Confirm sent re-flags automatically">Follow-up +3</button>
+        <button type="button" data-cq-follow-send="${b.id}" data-follow-days="7" title="Compose follow-up and schedule +7 days — Confirm sent re-flags automatically">Follow-up +7</button>
+        <button type="button" data-cq-engaged="${b.id}">Engaged</button>
         <button type="button" data-cq-revert="${b.id}">Back to Ready</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>`;
     }else if(isCannot){
@@ -782,6 +848,19 @@ export function renderContactQueueList(){
     const preferred=preferredColdChannel(lead, btn.dataset.composeChannel||'');
     try{
       await B.openCompose(lead, preferred);
+    }catch(e){ toast(e.message,true); }
+  }));
+  list.querySelectorAll('[data-cq-follow-send]').forEach(btn=>btn.addEventListener('click',async ev=>{
+    ev.stopPropagation();
+    const id=btn.dataset.cqFollowSend;
+    const days=Number(btn.dataset.followDays||3);
+    const lead=state.contactQueueLeads.find(x=>String(x.id)===String(id));
+    if(!lead){ toast('Lead not in queue',true); return; }
+    if(typeof B.openCompose!=='function'){ toast('Compose unavailable',true); return; }
+    const preferred=(lead.outreach_channel||'').trim()||preferredColdChannel(lead);
+    try{
+      await B.openCompose(lead, preferred, { followUpDays: days, preferFollowUp: true });
+      toast(`Follow-up +${days} preset — Confirm sent re-flags and schedules automatically`);
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('[data-cq-open-wa]').forEach(btn=>btn.addEventListener('click',ev=>{

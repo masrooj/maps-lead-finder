@@ -25,12 +25,24 @@ export function getTemplatesStore() {
   return templatesStore;
 }
 
+function looksLikeFollowUpTemplate(t) {
+  if (!t) return false;
+  const purpose = String(t.purpose || '').toLowerCase();
+  const name = String(t.name || '').toLowerCase();
+  return /follow/.test(purpose) || /follow/.test(name);
+}
+
 /**
  * Resolve which template compose / the editor should treat as default.
  * Marked isDefault always wins (Set default). Soft openers are fallback for IG/WA only.
+ * When preferFollowUp, prefer name/purpose containing "follow" (Contacted follow-up send).
  */
-export function pickDefaultTemplate(list, channel) {
+export function pickDefaultTemplate(list, channel, opts = {}) {
   const items = Array.isArray(list) ? list : [];
+  if (opts.preferFollowUp) {
+    const follow = items.find(looksLikeFollowUpTemplate);
+    if (follow) return follow;
+  }
   const marked = items.find((t) => t && t.isDefault);
   if (marked) return marked;
   if (channel === 'instagram' || channel === 'whatsapp') {
@@ -40,8 +52,8 @@ export function pickDefaultTemplate(list, channel) {
   return items[0] || null;
 }
 
-export function defaultTemplate(channel) {
-  return pickDefaultTemplate(templatesFor(channel), channel);
+export function defaultTemplate(channel, opts = {}) {
+  return pickDefaultTemplate(templatesFor(channel), channel, opts);
 }
 
 export function getTemplate(channel, id) {

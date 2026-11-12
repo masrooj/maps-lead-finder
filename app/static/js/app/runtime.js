@@ -33,7 +33,7 @@ import {
   syncContactQueueSearchUi, syncContactQueueTabs, mapsUrlFor, channelTagsHtml,
   renderContactQueueList, markContactQueueIds, markBookingIds, loadContactQueue,
   saveContactQueueMode, getContactQueuePick, clearContactQueuePick, setContactQueueTab,
-  setContactQueueQuery, setContactQueueChannel, getContactQueueLocations
+  setContactQueueQuery, setContactQueueChannel, setContactQueueFollowFilter, getContactQueueLocations
 } from '../panels/contact-queue.js';
 import {
   brandLogoAbsoluteUrl, emailSignaturePlain, withEmailSignature,
@@ -95,6 +95,8 @@ let composeLead=null;
 let composePreferred='email';
 /** True when compose opened via invoice/pay (API confirm may skip Ready gate). */
 let composeAllowUnready=false;
+/** Prefer templates named/purposed as follow-up (Contacted Follow-up +3/+7). */
+let composePreferFollowUp=false;
 let drawerLead=null;
 let drawerTab='overview';
 let drawerMode='crm'; // outreach (Discover/CQ) | crm (Prospects + money flows)
@@ -2156,14 +2158,20 @@ function composeContactInfo(b,channel){
 
 function fillComposeTemplates(channel){
   const list=templatesFor(channel);
-  const def=defaultTemplate(channel);
+  const def=defaultTemplate(channel, {preferFollowUp: composePreferFollowUp});
   if(!list.length){
     $('composeTemplate').innerHTML='<option value="">No templates — open Templates in the top menu and save one</option>';
     $('composeSubject').value='';
     $('composeBody').value='';
   }else{
     // Marked default first so the dropdown matches the message pane; soft openers next for IG/WA.
+    // Follow-up compose: surface follow-named templates near the top.
     const ordered=[...list].sort((a,b)=>{
+      if(composePreferFollowUp){
+        const af=/follow/i.test(String(a.purpose||'')+String(a.name||''))?0:1;
+        const bf=/follow/i.test(String(b.purpose||'')+String(b.name||''))?0:1;
+        if(af!==bf) return af-bf;
+      }
       const ad=a&&a.isDefault?0:1;
       const bd=b&&b.isDefault?0:1;
       if(ad!==bd) return ad-bd;
@@ -2286,6 +2294,7 @@ async function copyComposeMessage(){
 }
 async function openCompose(b,preferred,opts={}){
   composeLead=b;openedChannel=null;composeAllowUnready=!!opts.allowUnready;
+  composePreferFollowUp=!!(opts.preferFollowUp || (opts.followUpDays!=null && opts.followUpDays!==''));
   wireIgWarmCompose();
   if(b.opt_out){showMessage('Prospect is opted out — outreach blocked.',true);return}
   // Cold outreach only from Ready (invoice/pay flows pass allowUnready)
@@ -2324,8 +2333,16 @@ async function openCompose(b,preferred,opts={}){
   $('composeChannel').innerHTML=channels.map(ch=>`<option value="${ch}" ${ch===composePreferred?'selected':''}>${channelLabel(ch)}</option>`).join('');
   $('composeOutcome').value=b.outcome||'';
   $('composeNotes').value='';
-  $('composeFollowUp').value=dateOnly(b.next_follow_up_at)||'';
-  $('composeFollowUp').dataset.touched='0';
+  if(opts.followUpDays!=null && opts.followUpDays!==''){
+    $('composeFollowUp').value=plusDays(Number(opts.followUpDays));
+    $('composeFollowUp').dataset.touched='1';
+  }else if(opts.followUpAt){
+    $('composeFollowUp').value=dateOnly(opts.followUpAt)||'';
+    $('composeFollowUp').dataset.touched='1';
+  }else{
+    $('composeFollowUp').value=dateOnly(b.next_follow_up_at)||'';
+    $('composeFollowUp').dataset.touched='0';
+  }
   $('igCopyBox').classList.add('hidden');
   clearComposeConfirmReturn();
   fillComposeTemplates(composePreferred);
@@ -2361,7 +2378,7 @@ function syncComposeMarkBtn(){
 function closeCompose(){
   clearComposeConfirmReturn();
   $('composeModal').classList.add('hidden');
-  composeLead=null;openedChannel=null;composeAllowUnready=false;
+  composeLead=null;openedChannel=null;composeAllowUnready=false;composePreferFollowUp=false;
   $('igCopyBox').classList.add('hidden');
   if($('drawer').classList.contains('hidden'))document.body.style.overflow='';
 }
@@ -2495,6 +2512,7 @@ async function confirmSent(opts={}){
       ig_warm_follow_only:!!updated.ig_warm_follow_only,
       ig_warm_complete:!!updated.ig_warm_complete,
       next_follow_up_at:updated.next_follow_up_at||'',
+      follow_up_kind:updated.follow_up_kind||'',
       outcome:updated.outcome||'',
     };
     const row=rowsData.find(x=>String(x.id)===String(currentId));
@@ -3205,6 +3223,10 @@ $('contactQueueTabs')&&$('contactQueueTabs').addEventListener('click',e=>{
 });
 $('contactQueueChannel')&&$('contactQueueChannel').addEventListener('change',()=>{
   setContactQueueChannel(($('contactQueueChannel').value||''));
+  renderContactQueueList();
+});
+$('contactQueueFollowFilter')&&$('contactQueueFollowFilter').addEventListener('change',()=>{
+  setContactQueueFollowFilter(($('contactQueueFollowFilter').value||''));
   renderContactQueueList();
 });
 $('contactQueueSearch')&&$('contactQueueSearch').addEventListener('input',()=>{
