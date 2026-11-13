@@ -87,7 +87,7 @@ export async function refreshNotifications(){
   const badge=$('notifBadge');
   if(!list) return;
   try{
-    const d=await api('/api/sales/dashboard?product_line=STANDALONE');
+    const d=await api('/api/sales/dashboard/queues?product_line=STANDALONE');
     const all=buildNotificationItems(d);
     _notifLastItems=all;
     const items=all.filter(i=>!isNotifDismissed(i.id, i.count));

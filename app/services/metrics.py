@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.models import Business, Invoice, Payment, PipelineStage, Task
 
@@ -114,34 +114,53 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
     tomorrow = today + timedelta(days=1)
     week = today + timedelta(days=7)
 
-    open_tasks = db.scalars(select(Task).where(Task.status == "open")).all()
-
-    def aware(dt):
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt
-
-    overdue, due_today, due_soon = [], [], []
-    for t in open_tasks:
-        due = aware(t.due_at)
-        if not due:
-            continue
-        if due < today:
-            overdue.append(t.id)
-        elif due < tomorrow:
-            due_today.append(t.id)
-        elif due < week:
-            due_soon.append(t.id)
-
-    no_next = db.scalars(
-        select(Business).where(
-            Business.archived.is_(False),
-            Business.lost.is_(False),
-            (Business.next_action == "") | (Business.next_action.is_(None)),
+    overdue_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(Task)
+            .where(Task.status == "open", Task.due_at.is_not(None), Task.due_at < today)
         )
-    ).all()
+        or 0
+    )
+    due_today_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(Task)
+            .where(
+                Task.status == "open",
+                Task.due_at.is_not(None),
+                Task.due_at >= today,
+                Task.due_at < tomorrow,
+            )
+        )
+        or 0
+    )
+    due_soon_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(Task)
+            .where(
+                Task.status == "open",
+                Task.due_at.is_not(None),
+                Task.due_at >= tomorrow,
+                Task.due_at < week,
+            )
+        )
+        or 0
+    )
+
+    no_next_action_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(Business)
+            .where(
+                or_(Business.archived.is_(False), Business.archived.is_(None)),
+                or_(Business.lost.is_(False), Business.lost.is_(None)),
+                or_(Business.next_action == "", Business.next_action.is_(None)),
+            )
+        )
+        or 0
+    )
 
     to_contact = (
         db.scalar(
@@ -182,13 +201,13 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
     note = f"In-app bell + Pipeline Follow-up columns. {mail_bit} {push_bit}"
 
     return {
-        "overdue_task_ids": overdue,
-        "due_today_task_ids": due_today,
-        "due_soon_task_ids": due_soon,
-        "no_next_action_count": len(no_next),
-        "overdue_count": len(overdue),
-        "due_today_count": len(due_today),
-        "due_soon_count": len(due_soon),
+        "overdue_task_ids": [],
+        "due_today_task_ids": [],
+        "due_soon_task_ids": [],
+        "no_next_action_count": int(no_next_action_count),
+        "overdue_count": int(overdue_count),
+        "due_today_count": int(due_today_count),
+        "due_soon_count": int(due_soon_count),
         "to_contact_count": int(to_contact),
         "contact_queue_count": int(to_contact),
         "follow_up_due_count": len(due_leads),
@@ -198,6 +217,22 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
         "follow_up_email_reminders_enabled": email_on,
         "follow_up_push_reminders_enabled": push_on,
         "notifications_note": note,
+    }
+
+
+def open_invoice_count(db, *, include_test: bool = False) -> int:
+    stmt = select(func.count()).select_from(Invoice).where(Invoice.status == "open")
+    if not include_test:
+        stmt = stmt.where(Invoice.is_test_mode.is_(False))
+    return int(db.scalar(stmt) or 0)
+
+
+def notification_queues_bundle(db, product_line: str = "STANDALONE") -> dict:
+    """Bell/notifications payload without full dashboard scans."""
+    _ = product_line  # reserved for future product-line-scoped queue filters
+    return {
+        "queues": task_queues(db),
+        "invoiced_outstanding": {"sample_size": open_invoice_count(db)},
     }
 
 

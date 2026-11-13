@@ -13,6 +13,7 @@ import { registerPanel } from './registry.js';
 import { B } from '../app/bridge.js';
 
 import { state } from '../core/state.js';
+import { refreshIfChanged, invalidateListCache } from '../core/list-cache.js';
 
 import {
   availableComposeChannels as composeChannels,
@@ -142,7 +143,7 @@ async function goContactQueueTab(tab){
   if(state.appPanel!=='contactQueue' && typeof B.setAppPanel==='function'){
     B.setAppPanel('contactQueue');
   }
-  await loadContactQueue({keepTab:true});
+  await loadContactQueue({keepTab:true, force:true});
   renderContactQueueList();
 }
 
@@ -587,7 +588,7 @@ async function promptCannotContact(id){
       row.marked_for_contact=true;
       row.contacted=false;
     }
-    await loadContactQueue({keepTab:true});
+    await loadContactQueue({keepTab:true, force:true});
     toast(`Can't contact · ${cannotViaLabel(form.via)}`);
   }catch(e){ toast(e.message,true); }
 }
@@ -893,7 +894,7 @@ export function renderContactQueueList(){
     if(btn.disabled) return;
     try{
       await markContactQueueIds([btn.dataset.cqMark], true);
-      await loadContactQueue({keepTab:true});
+      await loadContactQueue({keepTab:true, force:true});
       toast('Added to To contact — staying on All');
     }catch(e){ toast(e.message,true); }
   }));
@@ -903,7 +904,7 @@ export function renderContactQueueList(){
       const id=btn.dataset.cqUnmark;
       const before=state.contactQueueLeads.find(x=>String(x.id)===String(id));
       await markContactQueueIds([id], false);
-      await loadContactQueue({keepTab:true});
+      await loadContactQueue({keepTab:true, force:true});
       const back=isFreshDiscoverLead({...(before||{}), marked_for_contact:false});
       toast(back?'Removed from To contact — back in Discover':'Removed from To contact');
       if(back && typeof B.reloadDiscover==='function') B.reloadDiscover().catch(()=>{});
@@ -920,7 +921,7 @@ export function renderContactQueueList(){
     if(!ok) return;
     try{
       await api('/api/sales/prospects/'+btn.dataset.cqRevert+'/revert-to-contact',{method:'POST',body:{}});
-      await loadContactQueue({keepTab:true});
+      await loadContactQueue({keepTab:true, force:true});
       toast('Moved back to Ready to contact');
     }catch(e){ toast(e.message,true); }
   }));
@@ -1037,7 +1038,7 @@ export function renderContactQueueList(){
         await goContactQueueTab('booking');
         toast('Moved to Has booking');
       }else{
-        await loadContactQueue({keepTab:true});
+        await loadContactQueue({keepTab:true, force:true});
         renderContactQueueList();
         const back=isFreshDiscoverLead({
           ...(before||{}),
@@ -1066,7 +1067,7 @@ export function renderContactQueueList(){
       const updated=await clearCannotContact(btn.dataset.cqClearCannot, true);
       const row=state.contactQueueLeads.find(x=>String(x.id)===String(btn.dataset.cqClearCannot));
       if(row && updated) Object.assign(row, updated);
-      await loadContactQueue({keepTab:true});
+      await loadContactQueue({keepTab:true, force:true});
       toast('Moved back to To contact');
     }catch(e){ toast(e.message,true); }
   }));
@@ -1119,7 +1120,7 @@ export function renderContactQueueList(){
       });
       if(!form) return;
       await markEngaged(id, form.note||'');
-      await loadContactQueue({keepTab:true});
+      await loadContactQueue({keepTab:true, force:true});
       refreshPipelineAfterQueueMove();
       toast('Marked Engaged');
     }catch(e){ toast(e.message,true); }
@@ -1179,6 +1180,7 @@ export async function markContactQueueIds(ids, marked){
   const list=(ids||[]).map(Number).filter(Boolean);
   if(!list.length) return;
   await api('/api/businesses/bulk',{method:'POST',body:{ids:list, marked_for_contact:!!marked}});
+  invalidateListCache('all');
   list.forEach(id=>{
     const row=state.contactQueueLeads.find(x=>Number(x.id)===Number(id));
     if(row) row.marked_for_contact=!!marked;
@@ -1203,25 +1205,10 @@ export async function markBookingIds(ids, hasBooking){
       }
     }
   }
+  invalidateListCache('all');
 }
 
-export async function loadContactQueue(opts={}){
-  if(!opts.keepTab){ /* preserve tab when refreshing after mark */ }
-  const list=$('contactQueueList');
-  const pagerHost=list&&ensurePagerHost(list,'contactQueuePager');
-  if(list){
-    list.innerHTML=listSkeletonHtml({rows:5, label:'Loading contact queue…'});
-    if(pagerHost) pagerHost.innerHTML='';
-  }
-  const mode=($('contactQueueMode')&&$('contactQueueMode').value)||'';
-  const country=($('contactQueueCountry')&&$('contactQueueCountry').value)||'';
-  const city=($('contactQueueCity')&&$('contactQueueCity').value)||'';
-  const qs=new URLSearchParams({product_line:'STANDALONE',limit:'0'});
-  if(mode) qs.set('mode', mode);
-  if(country) qs.set('country', country);
-  if(city) qs.set('city', city);
-  const data=await api('/api/sales/contact-queue?'+qs.toString());
-  await refreshIgOutreachQuota().catch(()=>{});
+function applyContactQueuePayload(data, country, city){
   fillContactQueueModes(data.modes||[], data.mode||'default');
   fillContactQueueLocationFilters(data.locations||{}, country, city);
   const scope=[country,city].filter(Boolean).join(' · ');
@@ -1233,7 +1220,6 @@ export async function loadContactQueue(opts={}){
   renderContactQueueExplain(data);
   state.contactQueueLeads=data.leads||[];
   igDiscoverStarted.clear();
-  // Drop picks that are no longer in the ranked list
   const alive=new Set(state.contactQueueLeads.map(b=>String(b.id)));
   [...contactQueuePick].forEach(id=>{ if(!alive.has(id)) contactQueuePick.delete(id); });
   if($('contactQueueSearch') && contactQueueQuery && $('contactQueueSearch').value!==contactQueueQuery){
@@ -1244,13 +1230,52 @@ export async function loadContactQueue(opts={}){
   renderContactQueueList();
 }
 
+export async function loadContactQueue(opts={}){
+  if(!opts.keepTab){ /* preserve tab when refreshing after mark */ }
+  const force=!!opts.force;
+  const mode=($('contactQueueMode')&&$('contactQueueMode').value)||'';
+  const country=($('contactQueueCountry')&&$('contactQueueCountry').value)||'';
+  const city=($('contactQueueCity')&&$('contactQueueCity').value)||'';
+  const cacheKey=`cq:STANDALONE:${mode||'default'}:${country}:${city}`;
+  const metaParams={product_line:'STANDALONE'};
+  if(mode) metaParams.mode=mode;
+  if(country) metaParams.country=country;
+  if(city) metaParams.city=city;
+
+  const list=$('contactQueueList');
+  const pagerHost=list&&ensurePagerHost(list,'contactQueuePager');
+
+  const result=await refreshIfChanged({
+    key:cacheKey,
+    metaUrl:'/api/sales/contact-queue/meta',
+    metaParams,
+    force,
+    fullFetch:async ()=>{
+      if(list){
+        list.innerHTML=listSkeletonHtml({rows:5, label:'Loading contact queue…'});
+        if(pagerHost) pagerHost.innerHTML='';
+      }
+      const qs=new URLSearchParams({product_line:'STANDALONE',limit:'0'});
+      if(mode) qs.set('mode', mode);
+      if(country) qs.set('country', country);
+      if(city) qs.set('city', city);
+      return api('/api/sales/contact-queue?'+qs.toString());
+    },
+  });
+
+  await refreshIgOutreachQuota().catch(()=>{});
+  if(result.stale) return;
+  applyContactQueuePayload(result.payload||{}, country, city);
+}
+
 export async function saveContactQueueMode(){
   const mode=($('contactQueueMode')&&$('contactQueueMode').value)||'default';
   await api('/api/sales/settings/contact_queue_mode?value='+encodeURIComponent(mode),{method:'PUT'});
   toast('Ranking mode saved');
-  await loadContactQueue({keepTab:true});
+  invalidateListCache('all');
+  await loadContactQueue({keepTab:true, force:true});
 }
 
 
-registerPanel({ id: 'contactQueue', refresh: async () => { await loadContactQueue(); } });
+registerPanel({ id: 'contactQueue', refresh: async () => { await loadContactQueue({force:true}); } });
 

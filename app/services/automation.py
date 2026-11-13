@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
-from sqlalchemy import or_, select
+from sqlalchemy import and_, func, or_, select
 
 from app.models import Activity, AppSetting, Business, DiscoveryNote, PipelineStage, Task
 from app.services.already_connected import (
@@ -113,7 +113,15 @@ def classify_follow_up_kind(follow_up_at: Optional[datetime], *, same_day_call: 
     return "plus3"
 
 
-def advance_at_least(db, b: Business, target_slug: str, *, actor_id: Optional[int] = None, note: str = "") -> bool:
+def advance_at_least(
+    db,
+    b: Business,
+    target_slug: str,
+    *,
+    actor_id: Optional[int] = None,
+    note: str = "",
+    commit: bool = True,
+) -> bool:
     """Move forward only (never regress). Returns True if stage changed."""
     pl = (b.product_line or "STANDALONE").upper()
     if pl == "SAAS":
@@ -127,7 +135,15 @@ def advance_at_least(db, b: Business, target_slug: str, *, actor_id: Optional[in
         return False
     if current and _stage_index(current.slug, pl) >= _stage_index(target_slug, pl):
         return False
-    move_stage(db, b, target.id, actor_id=actor_id, note=note or f"Auto → {target_slug}", force=True)
+    move_stage(
+        db,
+        b,
+        target.id,
+        actor_id=actor_id,
+        note=note or f"Auto → {target_slug}",
+        force=True,
+        commit=commit,
+    )
     return True
 
 
@@ -271,13 +287,24 @@ def ig_ready_wait_days(db) -> int:
         return 1
 
 
-def ig_ready_wait_payload(db, b: Business) -> dict:
+def ig_ready_wait_payload(
+    db,
+    b: Business,
+    *,
+    wait_days: Optional[int] = None,
+    tz_pair: Optional[tuple] = None,
+) -> dict:
     """IG soft-ask unlock after N calendar days in Settings timezone (promote stamp).
 
     Missing stamp → grandfather (unlocked). WA/Email and already-contacted/IG-sent skip wait.
+    Pass wait_days / tz_pair to avoid per-lead AppSetting SELECTs (e.g. contact-queue rank).
     """
-    wait_days = ig_ready_wait_days(db)
-    tz, tz_name = _timezone_for_quota(db)
+    if wait_days is None:
+        wait_days = ig_ready_wait_days(db)
+    if tz_pair is None:
+        tz, tz_name = _timezone_for_quota(db)
+    else:
+        tz, tz_name = tz_pair
     ch = normalize_outreach_channel(getattr(b, "outreach_channel", ""))
     stamp = getattr(b, "ig_ready_at", None)
     stamp_iso = stamp.isoformat() if stamp else ""
@@ -354,9 +381,15 @@ def assert_ig_ready_wait_elapsed(db, b: Business) -> None:
         raise ValueError(payload.get("reason") or "IG Ready wait not elapsed")
 
 
-def messaging_gate_payload(db, b: Business) -> dict:
+def messaging_gate_payload(
+    db,
+    b: Business,
+    *,
+    wait_days: Optional[int] = None,
+    tz_pair: Optional[tuple] = None,
+) -> dict:
     """Unified can_message for CQ / ready-status / mobile."""
-    wait = ig_ready_wait_payload(db, b)
+    wait = ig_ready_wait_payload(db, b, wait_days=wait_days, tz_pair=tz_pair)
     reason = ""
     can = True
     if is_already_connected(b):
@@ -449,7 +482,9 @@ def demote_to_to_contact(db, b: Business, *, actor_id: Optional[int] = None, not
     return {"ok": True, "ready_for_contact": False, "stage_moved": moved, "ig_ready_at": ""}
 
 
-def maybe_promote_follow_up(db, b: Business, *, actor_id: Optional[int] = None) -> bool:
+def maybe_promote_follow_up(
+    db, b: Business, *, actor_id: Optional[int] = None, commit: bool = True
+) -> bool:
     """Move contacted → follow_up_3 / follow_up_7 when due/past or days-since gap (not call_today).
 
     Syncs Pipeline Follow-up columns with Contacted +3/+7 passed buckets.
@@ -485,7 +520,12 @@ def maybe_promote_follow_up(db, b: Business, *, actor_id: Optional[int] = None) 
         ):
             return False
     return advance_at_least(
-        db, b, target, actor_id=actor_id, note=f"Auto: scheduled follow-up due → {target}"
+        db,
+        b,
+        target,
+        actor_id=actor_id,
+        note=f"Auto: scheduled follow-up due → {target}",
+        commit=commit,
     )
 
 
@@ -644,7 +684,9 @@ def maybe_log_ig_warm_complete(db, b: Business, *, actor_id: Optional[int] = Non
     )
 
 
-def remap_legacy_follow_up_stages(db, *, product_line: Optional[str] = None, limit: int = 2000) -> int:
+def remap_legacy_follow_up_stages(
+    db, *, product_line: Optional[str] = None, limit: int = 2000, commit: bool = True
+) -> int:
     """Move prospects still on inactive legacy follow_up → follow_up_3 / follow_up_7."""
     stages = list(db.scalars(select(PipelineStage).where(PipelineStage.slug == "follow_up")).all())
     if product_line:
@@ -670,14 +712,18 @@ def remap_legacy_follow_up_stages(db, *, product_line: Optional[str] = None, lim
             target.id,
             note=f"Auto: legacy follow_up → {target_slug}",
             force=True,
+            commit=commit,
         )
         moved += 1
     return moved
 
 
 def promote_due_follow_ups(db, *, product_line: Optional[str] = None, actor_id: Optional[int] = None, limit: int = 500) -> int:
-    """Batch promote contacted → follow_up_3/7 when scheduled due is due/past."""
-    remap_legacy_follow_up_stages(db, product_line=product_line, limit=limit)
+    """Batch promote contacted → follow_up_3/7 when scheduled due is due/past.
+
+    Uses a single commit at the end (stage moves flush without per-row commits).
+    """
+    remap_legacy_follow_up_stages(db, product_line=product_line, limit=limit, commit=False)
     q = select(Business).where(
         Business.contacted.is_(True),
         or_(Business.lost.is_(False), Business.lost.is_(None)),
@@ -688,8 +734,9 @@ def promote_due_follow_ups(db, *, product_line: Optional[str] = None, actor_id: 
     rows = db.scalars(q.limit(max(1, min(int(limit), 2000)))).all()
     moved = 0
     for b in rows:
-        if maybe_promote_follow_up(db, b, actor_id=actor_id):
+        if maybe_promote_follow_up(db, b, actor_id=actor_id, commit=False):
             moved += 1
+    db.commit()
     return moved
 
 
@@ -1105,6 +1152,70 @@ def _get_queue_mode(db, mode: Optional[str] = None) -> dict:
     return modes[0] if modes else {"slug": "default", "name": "Balanced", "description": "", "filter": {}, "boost": {}}
 
 
+def contact_queue_meta(
+    db,
+    *,
+    product_line: str = "STANDALONE",
+    mode: Optional[str] = None,
+    country: Optional[str] = None,
+    city: Optional[str] = None,
+) -> dict:
+    """Cheap fingerprint for contact-queue cache gating (no ranking / promote / gates)."""
+    mode_meta = _get_queue_mode(db, mode)
+    active = mode_meta.get("slug") or "default"
+    pl = (product_line or "STANDALONE").upper()
+    country_f = (country or "").strip()
+    city_f = (city or "").strip()
+
+    terminal_ids = list(
+        db.scalars(
+            select(PipelineStage.id).where(
+                PipelineStage.product_line == pl,
+                or_(
+                    PipelineStage.is_won.is_(True),
+                    PipelineStage.is_lost.is_(True),
+                    PipelineStage.slug.in_(("won", "lost", "churned")),
+                ),
+            )
+        ).all()
+    )
+
+    clauses = [
+        or_(Business.archived.is_(False), Business.archived.is_(None)),
+        or_(Business.opt_out.is_(False), Business.opt_out.is_(None)),
+        Business.product_line == pl,
+        or_(Business.lost.is_(False), Business.lost.is_(None)),
+    ]
+    if terminal_ids:
+        clauses.append(
+            or_(Business.pipeline_stage_id.is_(None), Business.pipeline_stage_id.notin_(terminal_ids))
+        )
+    if country_f:
+        clauses.append(func.lower(Business.country) == country_f.lower())
+    if city_f:
+        clauses.append(func.lower(Business.city) == city_f.lower())
+
+    row = db.execute(
+        select(func.count(), func.max(Business.updated_at)).where(and_(*clauses))
+    ).one()
+    count = int(row[0] or 0)
+    max_updated = row[1]
+    max_iso = ""
+    if max_updated is not None:
+        if getattr(max_updated, "tzinfo", None) is None:
+            max_updated = max_updated.replace(tzinfo=timezone.utc)
+        max_iso = max_updated.isoformat()
+
+    return {
+        "count": count,
+        "max_updated_at": max_iso,
+        "mode": active,
+        "product_line": pl,
+        "country": country_f,
+        "city": city_f,
+    }
+
+
 def rank_contact_queue(
     db,
     *,
@@ -1122,6 +1233,9 @@ def rank_contact_queue(
     filt = mode_meta.get("filter") or {}
     boost_cfg = mode_meta.get("boost") or {}
     stages = {s.id: s for s in list_stages(db, product_line)}
+    # Hoist settings once — messaging_gate / ig_ready_wait used to SELECT AppSetting per lead.
+    wait_days = ig_ready_wait_days(db)
+    tz_pair = _timezone_for_quota(db)
     country_f = (country or "").strip()
     city_f = (city or "").strip()
     base_clauses = [
@@ -1221,7 +1335,7 @@ def rank_contact_queue(
         if stage:
             why.append(stage.name)
         why.extend(mode_tags)
-        gate = messaging_gate_payload(db, b)
+        gate = messaging_gate_payload(db, b, wait_days=wait_days, tz_pair=tz_pair)
         ranked.append(
             {
                 "id": b.id,

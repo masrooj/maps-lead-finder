@@ -277,6 +277,18 @@ def sales_dashboard(
     )
 
 
+@router.get("/dashboard/queues", tags=["pipeline"])
+def sales_dashboard_queues(
+    product_line: str = "STANDALONE",
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Light notification/bell counts — no pipeline/monitor/payment scans."""
+    from app.services.metrics import notification_queues_bundle
+
+    return notification_queues_bundle(db, product_line=product_line.upper())
+
+
 @router.get("/providers", tags=["money"])
 def sales_providers(_user: str = Depends(require_user)):
     return provider_status()
@@ -303,7 +315,7 @@ def sales_pipeline(
 ):
     from app.config import PIPELINE_BOARD_HIDDEN_SLUGS
     from app.services.authz import can_view_business, get_user_by_email
-    from app.services.automation import follow_up_badge, promote_due_follow_ups
+    from app.services.automation import follow_up_badge
     from app.services.pipeline import board_column_slug
     from app.services.seed import seed_stages
 
@@ -322,16 +334,8 @@ def sales_pipeline(
             db.rollback()
         stages = list_stages(db, product_line.upper())
 
+    # Due follow-up promotions run via cron / startup — not on every board GET.
     actor = get_user_by_email(db, _user)
-    try:
-        promote_due_follow_ups(
-            db,
-            product_line=product_line.upper(),
-            actor_id=actor.id if actor else None,
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
     all_prospects = [
         p
         for p in db.scalars(
@@ -2016,6 +2020,27 @@ def sales_reports(product_line: str = "STANDALONE", _user: str = Depends(require
     }
 
 
+@router.get("/contact-queue/meta", tags=["pipeline"])
+def sales_contact_queue_meta(
+    product_line: str = "STANDALONE",
+    mode: str = "",
+    country: str = "",
+    city: str = "",
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Cheap count + max_updated_at fingerprint for client list-cache gating."""
+    from app.services.automation import contact_queue_meta
+
+    return contact_queue_meta(
+        db,
+        product_line=product_line.upper(),
+        mode=(mode or "").strip() or None,
+        country=(country or "").strip() or None,
+        city=(city or "").strip() or None,
+    )
+
+
 @router.get("/contact-queue", tags=["pipeline"])
 def sales_contact_queue(
     product_line: str = "STANDALONE",
@@ -2026,20 +2051,9 @@ def sales_contact_queue(
     _user: str = Depends(require_user),
     db=Depends(get_db),
 ):
-    from app.services.authz import get_user_by_email
-    from app.services.automation import promote_due_follow_ups, rank_contact_queue
+    from app.services.automation import rank_contact_queue
 
-    actor = get_user_by_email(db, _user)
-    try:
-        promote_due_follow_ups(
-            db,
-            product_line=product_line.upper(),
-            actor_id=actor.id if actor else None,
-        )
-        db.commit()
-    except Exception:
-        db.rollback()
-
+    # Due follow-up promotions run via cron / startup — not on every queue GET.
     return rank_contact_queue(
         db,
         product_line=product_line.upper(),

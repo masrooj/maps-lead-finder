@@ -239,6 +239,7 @@ def move_stage(
     note: str = "",
     lost_reason: str = "",
     force: bool = False,
+    commit: bool = True,
 ) -> Business:
     to_stage = stage_by_id(db, to_stage_id)
     if not to_stage:
@@ -333,8 +334,11 @@ def move_stage(
         )
     )
     # Never delete tasks on stage change
-    db.commit()
-    db.refresh(business)
+    if commit:
+        db.commit()
+        db.refresh(business)
+    else:
+        db.flush()
     return business
 
 

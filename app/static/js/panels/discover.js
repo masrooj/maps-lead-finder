@@ -115,6 +115,6 @@ export const setDiscoverCannotContact = markDiscoverCannotContact;
 registerPanel({
   id: panelId,
   refresh() {
-    if (typeof B.reloadDiscover === 'function') return B.reloadDiscover();
+    if (typeof B.reloadDiscover === 'function') return B.reloadDiscover({ force: true });
   },
 });

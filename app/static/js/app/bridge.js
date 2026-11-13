@@ -1,4 +1,6 @@
 /** Late-bound cross-module callbacks + shared caches. */
+import { invalidateListCache } from '../core/list-cache.js';
+
 export const B = {
   setAppPanel: null,
   openProspectById: null,
@@ -26,6 +28,7 @@ export const B = {
   qrUrlFor: null,
   closeTopMenus: null,
   availableComposeChannels: null,
+  invalidateListCache,
   appPanel: 'leads',
   moneyInvoicesCache: [],
   commsInvoicesCache: [],

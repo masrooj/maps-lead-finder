@@ -19,7 +19,10 @@ def test_openapi_has_bearer_and_feature_tags(client):
     assert "/api/login" in paths
     assert "/api/auth/refresh" in paths
     assert "/api/sales/contact-queue" in paths
+    assert "/api/sales/contact-queue/meta" in paths
+    assert "/api/sales/dashboard/queues" in paths
     assert "/api/businesses" in paths
+    assert "/api/stats" in paths
     for needed in (
         "/api/sales/prospects/{business_id}/already-connected",
         "/api/sales/prospects/{business_id}/clear-already-connected",

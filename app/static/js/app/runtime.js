@@ -55,6 +55,7 @@ import { loadDemos, renderDemosTable, loadDemoAssets, addDemoAssetFlow, uploadDe
 import { loadProspects, renderProspectsTable, fillProspectsLocationFilters, prospectsScopeLabel, mergeProspectsLocCache } from '../panels/prospects.js';
 import { showDrawerLoading, resolveDrawerMode, clampDrawerTab } from '../features/drawer.js';
 import { listSkeletonHtml } from '../core/skeleton.js';
+import { refreshIfChanged, invalidateListCache } from '../core/list-cache.js';
 import {
   channelLabel as composeChannelLabel,
   firstEmail as composeFirstEmail,
@@ -1976,7 +1977,7 @@ function paint(){
   updateSelectedCount();
 }
 
-async function load(){
+async function load(opts={}){
   const seq=++loadSeq;
   if(viewMode==='city'&&(!$('country').value.trim()||!$('city').value.trim())){
     if(seq!==loadSeq)return;
@@ -1986,15 +1987,26 @@ async function load(){
   }
   const body=$('rows');
   const pagerHost=body&&ensurePagerHost($('leads'),'leadsPager');
-  if(body){
-    body.innerHTML=listSkeletonHtml({rows:6, label:'Loading leads…'});
-    if(pagerHost) pagerHost.innerHTML='';
-  }
+  const q=queryParams();
+  const cacheKey='discover:'+q.toString();
+  const metaParams=Object.fromEntries(new URLSearchParams(statsParams()).entries());
   try{
-    const data=await api('/api/businesses?'+queryParams());
-    if(seq!==loadSeq)return; // a newer load() won the race
-    rowsData=data.results||[];
-    if(pagerState.discover) pagerState.discover.page=1;
+    const result=await refreshIfChanged({
+      key:cacheKey,
+      metaUrl:'/api/stats',
+      metaParams,
+      force:!!opts.force,
+      fullFetch:async ()=>{
+        if(body){
+          body.innerHTML=listSkeletonHtml({rows:6, label:'Loading leads…'});
+          if(pagerHost) pagerHost.innerHTML='';
+        }
+        return api('/api/businesses?'+q.toString());
+      },
+    });
+    if(seq!==loadSeq || result.stale)return;
+    rowsData=(result.payload&&result.payload.results)||[];
+    if(!result.hit && pagerState.discover) pagerState.discover.page=1;
     paint();
     await Promise.all([loadStats(),loadCategories()]);
   }catch(e){
@@ -2115,13 +2127,14 @@ async function toggleMark(id){
     const nextMarked=await toggleDiscoverMark(id, row, { patchLead });
     if(nextMarked){
       // Always drop from Discover list (even if status filter is not Fresh).
+      invalidateListCache('all');
       rowsData=rowsData.filter(b=>String(b.id)!==String(id));
       selectedIds.delete(String(id));
       paint();
       loadStats();
       setAppPanel('contactQueue');
       setContactQueueTab('selected');
-      await loadContactQueue({keepTab:true});
+      await loadContactQueue({keepTab:true, force:true});
       renderContactQueueList();
     }
   }catch(e){toast(e.message,true)}
@@ -2561,7 +2574,7 @@ async function confirmSent(opts={}){
     if(appPanel==='contactQueue' || sharedState.appPanel==='contactQueue'){
       try{
         // Stay on Ready/current tab — lead drops out of Ready into Contacted.
-        await loadContactQueue({keepTab:true});
+        await loadContactQueue({keepTab:true, force:true});
         if(!opts.next){
           if(sharedState.contactQueueTab==='ready' || sharedState.contactQueueTab==='selected' || sharedState.contactQueueTab==='all'){
             setContactQueueTab(sharedState.contactQueueTab||'ready');
@@ -3053,7 +3066,7 @@ $('bulkMark').addEventListener('click',async()=>{
   loadStats();
   setAppPanel('contactQueue');
   setContactQueueTab('selected');
-  await loadContactQueue({keepTab:true});
+  await loadContactQueue({keepTab:true, force:true});
   renderContactQueueList();
 });
 $('bulkUnmark').addEventListener('click',()=>bulk({marked_for_contact:false}));
@@ -3245,14 +3258,14 @@ $('paySetupTabs')&&$('paySetupTabs').addEventListener('click',e=>{
 });
 $('settingsRefresh')&&$('settingsRefresh').addEventListener('click',()=>loadSettings().catch(e=>toast(e.message,true)));
 document.querySelectorAll('#settingsTabs [data-settings-tab]').forEach(btn=>btn.addEventListener('click',()=>setSettingsTab(btn.dataset.settingsTab)));
-$('contactQueueRefresh')&&$('contactQueueRefresh').addEventListener('click',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
-$('contactQueueMode')&&$('contactQueueMode').addEventListener('change',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
+$('contactQueueRefresh')&&$('contactQueueRefresh').addEventListener('click',()=>loadContactQueue({keepTab:true, force:true}).catch(e=>toast(e.message,true)));
+$('contactQueueMode')&&$('contactQueueMode').addEventListener('change',()=>loadContactQueue({keepTab:true, force:true}).catch(e=>toast(e.message,true)));
 $('contactQueueCountry')&&$('contactQueueCountry').addEventListener('change',()=>{
   if($('contactQueueCity')) $('contactQueueCity').value='';
   fillContactQueueLocationFilters(getContactQueueLocations(), ($('contactQueueCountry')&&$('contactQueueCountry').value)||'', '');
-  loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true));
+  loadContactQueue({keepTab:true, force:true}).catch(e=>toast(e.message,true));
 });
-$('contactQueueCity')&&$('contactQueueCity').addEventListener('change',()=>loadContactQueue({keepTab:true}).catch(e=>toast(e.message,true)));
+$('contactQueueCity')&&$('contactQueueCity').addEventListener('change',()=>loadContactQueue({keepTab:true, force:true}).catch(e=>toast(e.message,true)));
 $('contactQueueSaveMode')&&$('contactQueueSaveMode').addEventListener('click',()=>saveContactQueueMode().catch(e=>toast(e.message,true)));
 $('contactQueueTabs')&&$('contactQueueTabs').addEventListener('click',e=>{
   const btn=e.target.closest('[data-cq-tab]');
@@ -3286,7 +3299,7 @@ $('contactQueueMarkBtn')&&$('contactQueueMarkBtn').addEventListener('click',asyn
   if(!ids.length){ toast('Pick leads on All first',true); return; }
   try{
     await markContactQueueIds(ids, true);
-    await loadContactQueue({keepTab:true});
+    await loadContactQueue({keepTab:true, force:true});
     toast(ids.length+' added to To contact — staying on All');
   }catch(e){ toast(e.message,true); }
 });
@@ -3311,7 +3324,7 @@ $('contactQueueClearReady')&&$('contactQueueClearReady').addEventListener('click
     for(const id of ids){
       await api('/api/sales/prospects/'+id+'/demote-to-contact',{method:'POST',body:{}});
     }
-    await loadContactQueue({keepTab:true});
+    await loadContactQueue({keepTab:true, force:true});
     if(typeof B.loadPipeline==='function') B.loadPipeline().catch(()=>{});
     toast('Demoted to To contact');
   }catch(e){ toast(e.message,true); }
@@ -3526,7 +3539,7 @@ $('rows').addEventListener('click',async e=>{
         paint();
         setAppPanel('contactQueue');
         setContactQueueTab('booking');
-        await loadContactQueue({keepTab:true});
+        await loadContactQueue({keepTab:true, force:true});
         renderContactQueueList();
         toast('Moved to Has booking');
       }else if(row && isFreshDiscoverLead(row) && discoverShowingFresh()){

@@ -18,7 +18,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select, and_, text
+from sqlalchemy import or_, select, and_, case, func, text
 from sqlalchemy.exc import OperationalError
 
 from app.config import (
@@ -1729,47 +1729,154 @@ def stats(
     _user: str = Depends(require_login),
 ):
     with SessionLocal() as db:
-        stmt = businesses_query(db, country=country, city=city, category=category, scope=scope, status="all", day=day)
-        rows = db.scalars(stmt).all()
         today = parse_day_start(day or None)
         tomorrow = today + timedelta(days=1)
-        total = len(rows)
-        uncontacted = sum(1 for b in rows if not b.contacted and not b.lost)
-        contacted = sum(1 for b in rows if b.contacted and not b.lost)
-        lost = sum(1 for b in rows if b.lost)
-        marked = sum(1 for b in rows if b.marked_for_contact and not b.archived)
-        queue = sum(1 for b in rows if b.marked_for_contact and not b.contacted and not b.lost and not b.archived)
-        fresh = sum(
-            1
-            for b in rows
-            if not b.marked_for_contact
-            and not b.contacted
-            and not b.lost
-            and not (getattr(b, "current_booking_software", None) or "").strip()
-            and not b.archived
+        base = businesses_query(
+            db, country=country, city=city, category=category, scope=scope, status="all", day=day
+        ).subquery()
+
+        def _truthy(col):
+            return col.is_(True)
+
+        def _falsey(col):
+            return or_(col.is_(False), col.is_(None))
+
+        booking_empty = or_(
+            base.c.current_booking_software.is_(None),
+            base.c.current_booking_software == "",
         )
-        due = sum(
-            1 for b in rows
-            if b.next_follow_up_at and ensure_aware(b.next_follow_up_at) < tomorrow and not b.lost and not b.archived
+        not_archived = or_(base.c.archived.is_(False), base.c.archived.is_(None))
+
+        agg = db.execute(
+            select(
+                func.count(),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (and_(_falsey(base.c.contacted), _falsey(base.c.lost)), 1),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (and_(_truthy(base.c.contacted), _falsey(base.c.lost)), 1),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+                func.coalesce(func.sum(case((_truthy(base.c.lost), 1), else_=0)), 0),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (and_(_truthy(base.c.marked_for_contact), not_archived), 1),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                and_(
+                                    _truthy(base.c.marked_for_contact),
+                                    _falsey(base.c.contacted),
+                                    _falsey(base.c.lost),
+                                    not_archived,
+                                ),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                and_(
+                                    _falsey(base.c.marked_for_contact),
+                                    _falsey(base.c.contacted),
+                                    _falsey(base.c.lost),
+                                    booking_empty,
+                                    not_archived,
+                                ),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                and_(
+                                    base.c.next_follow_up_at.is_not(None),
+                                    base.c.next_follow_up_at < tomorrow,
+                                    _falsey(base.c.lost),
+                                    not_archived,
+                                ),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (
+                                and_(
+                                    base.c.next_follow_up_at.is_not(None),
+                                    base.c.next_follow_up_at < today,
+                                    _falsey(base.c.lost),
+                                    not_archived,
+                                ),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    0,
+                ),
+                func.max(base.c.updated_at),
+            )
+        ).one()
+
+        global_queue = (
+            db.scalar(
+                select(func.count()).select_from(
+                    businesses_query(db, status="queue", scope="global").subquery()
+                )
+            )
+            or 0
         )
-        overdue = sum(
-            1 for b in rows
-            if b.next_follow_up_at and ensure_aware(b.next_follow_up_at) < today and not b.lost and not b.archived
-        )
-        # Global queue ignores city scope for the dedicated counter
-        global_queue_stmt = businesses_query(db, status="queue", scope="global")
-        global_queue = len(db.scalars(global_queue_stmt).all())
+        max_updated = agg[9]
+        max_iso = ""
+        if max_updated is not None:
+            aware = ensure_aware(max_updated) if max_updated else None
+            max_iso = aware.isoformat() if aware else ""
+
         return {
-            "total": total,
-            "fresh": fresh,
-            "uncontacted": uncontacted,
-            "contacted": contacted,
-            "lost": lost,
-            "marked": marked,
-            "queue": queue,
-            "due": due,
-            "overdue": overdue,
-            "global_queue": global_queue,
+            "total": int(agg[0] or 0),
+            "fresh": int(agg[6] or 0),
+            "uncontacted": int(agg[1] or 0),
+            "contacted": int(agg[2] or 0),
+            "lost": int(agg[3] or 0),
+            "marked": int(agg[4] or 0),
+            "queue": int(agg[5] or 0),
+            "due": int(agg[7] or 0),
+            "overdue": int(agg[8] or 0),
+            "global_queue": int(global_queue),
+            "max_updated_at": max_iso,
         }
 
 
