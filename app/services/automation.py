@@ -91,25 +91,13 @@ def days_since_last_contact(b: Business) -> int:
 
 
 def follow_up_target_slug(b: Business) -> str:
-    """Pick Follow-up +3 vs +7 from kind, days since contact, or scheduled horizon.
+    """Pick Follow-up +3 vs +7 from follow_up_kind only.
 
-    Aligned with Contacted timing buckets: 7+ days since → +7; else +3 default.
+    +7 requires kind graduated by a follow-up confirm-sent — never calendar days alone.
     """
     kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
     if kind in ("plus7", "plus_7", "+7"):
         return "follow_up_7"
-    if kind in ("plus3", "plus_3", "+3", "call_today"):
-        return "follow_up_3"
-    since = days_since_last_contact(b)
-    if since >= 7:
-        return "follow_up_7"
-    due = getattr(b, "next_follow_up_at", None)
-    if due:
-        due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
-        # Horizon when due was still ahead; overdue defaults to +3 unless since≥7.
-        delta_days = (due_aware.date() - _utcnow().date()).days
-        if delta_days > 3:
-            return "follow_up_7"
     return "follow_up_3"
 
 
@@ -716,11 +704,15 @@ def on_outreach_confirmed(
     notes: str = "",
     message: str = "",
     record_send: bool = True,
+    already_contacted: bool = False,
 ) -> dict:
     """Email/WA/IG confirm-sent: activity + follow-up task + auto stage advance.
 
     record_send=False skips a new outreach_sent row (re-confirm / note-only) so IG
     daily cap is not burned twice for the same lead.
+
+    already_contacted=True (follow-up re-confirm) graduates to plus7 and schedules +7 days.
+    Client next_follow_up_at is ignored — ladder dates are system-decided.
     """
     biz_name = (b.name or f"#{b.id}").strip()
     msg = (message or "").strip()
@@ -752,23 +744,24 @@ def on_outreach_confirmed(
                 created_by=actor_id,
             )
         )
-    # Same-day call nudge when lead has a phone and operator did not set a follow-up.
-    # Stays in Contacted with Call-today badge — does NOT auto-jump to Follow-up.
+    # Ladder is system-owned (ignore compose due): cold → +3 first; follow-up send → +7.
+    # Optional same-day call nudge for WA/IG with phone on first cold touch only.
     same_day_call = False
-    if follow_up_at is None:
+    if already_contacted:
+        follow_up_at = _utcnow() + timedelta(days=7)
+        b.next_follow_up_at = follow_up_at
+        b.follow_up_kind = "plus7"
+    else:
         facts = _channel_facts(b)
         if facts.get("has_phone") and channel in ("instagram", "whatsapp"):
             follow_up_at = _utcnow()
             same_day_call = True
-            if not getattr(b, "next_follow_up_at", None):
-                b.next_follow_up_at = follow_up_at
+            b.next_follow_up_at = follow_up_at
+            b.follow_up_kind = "call_today"
         else:
             follow_up_at = _utcnow() + timedelta(days=3)
-            if not getattr(b, "next_follow_up_at", None):
-                b.next_follow_up_at = follow_up_at
-    else:
-        b.next_follow_up_at = follow_up_at
-    b.follow_up_kind = classify_follow_up_kind(follow_up_at, same_day_call=same_day_call)
+            b.next_follow_up_at = follow_up_at
+            b.follow_up_kind = "plus3"
     due = follow_up_at
     title = (
         f"{biz_name} · Call today after {channel}"

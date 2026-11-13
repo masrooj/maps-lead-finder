@@ -2137,6 +2137,12 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
         if not b:
             raise HTTPException(404, "Business not found")
         already_sent = bool(getattr(b, field, False))
+        already_contacted = bool(
+            getattr(b, "contacted", False)
+            or getattr(b, "email_sent", False)
+            or getattr(b, "whatsapp_sent", False)
+            or getattr(b, "instagram_sent", False)
+        )
         try:
             assert_confirm_sent_ready(b, allow_unready=bool(payload.allow_unready))
         except ValueError as e:
@@ -2174,6 +2180,7 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
             notes=str(payload.notes or ""),
             message=str(payload.message or ""),
             record_send=not already_sent,
+            already_contacted=already_contacted,
         )
         from app.services.automation import maybe_promote_follow_up
 

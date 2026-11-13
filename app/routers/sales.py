@@ -844,6 +844,12 @@ def sales_confirm_sent(
     if not b:
         raise HTTPException(404, "Prospect not found")
     already_sent = bool(getattr(b, field, False))
+    already_contacted = bool(
+        getattr(b, "contacted", False)
+        or getattr(b, "email_sent", False)
+        or getattr(b, "whatsapp_sent", False)
+        or getattr(b, "instagram_sent", False)
+    )
     try:
         assert_confirm_sent_ready(b, allow_unready=bool(body.allow_unready))
     except ValueError as e:
@@ -896,6 +902,7 @@ def sales_confirm_sent(
         notes=str(body.notes or ""),
         message=str(body.message or ""),
         record_send=not already_sent,
+        already_contacted=already_contacted,
     )
     maybe_promote_follow_up(db, b, actor_id=actor.id if actor else None)
     db.commit()

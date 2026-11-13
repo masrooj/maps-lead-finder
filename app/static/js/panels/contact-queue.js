@@ -77,7 +77,8 @@ function daysSinceLastContact(b){
 
 /**
  * Exclusive Contacted timing bucket (every contacted lead lands in exactly one):
- * today → sent/waiting (incl. 1–2d gap) → plus3 (due or 3–6d) → plus7 (due or 7d+).
+ * today → sent/waiting → plus3 (calendar: due or 3d+, until follow-up sent)
+ * → plus7 only after follow-up confirm sets kind=plus7 (never calendar-only).
  */
 export function contactQueueFollowBucket(b){
   const today=cqLocalDay();
@@ -86,6 +87,7 @@ export function contactQueueFollowBucket(b){
   const kind=String((b&&b.follow_up_kind)||'').trim().toLowerCase();
   const since=daysSinceLastContact(b);
   const duePassed=!!due && due<=today;
+  const isPlus7Kind=kind==='plus7'||kind==='plus_7'||kind==='+7';
 
   if(last===today) return 'today';
   if(kind==='call_today' && !duePassed) return 'today';
@@ -93,8 +95,8 @@ export function contactQueueFollowBucket(b){
   // Future due → Sent/waiting (Pipeline Contacted) — matches promote-when-due
   if(due && !duePassed) return 'sent';
 
-  // Due/overdue or no-due with elapsed days → Pipeline Follow-up +3 / +7
-  if(since>=7 || (kind==='plus7' && duePassed)) return 'plus7';
+  // +7 only when graduated by follow-up confirm-sent (kind), never since>=7 alone
+  if(isPlus7Kind && (duePassed || since>=3)) return 'plus7';
   if(duePassed || since>=3) return 'plus3';
 
   // 1–2 days since send with no due yet
@@ -713,7 +715,7 @@ export function renderContactQueueList(){
         : isBooking
           ? '<div class="empty-card">No leads marked as already having booking. Use <strong>Has booking</strong> on Discover or All.</div>'
           : isContacted
-            ? '<div class="empty-card">No confirmed sends yet. From <strong>Ready to contact</strong>, message then <strong>Confirm sent</strong>. Use <strong>Follow-up +3 / +7</strong> here after first send.</div>'
+            ? '<div class="empty-card">No confirmed sends yet. From <strong>Ready to contact</strong>, message then <strong>Confirm sent</strong>. System moves leads to Follow-up +3 then +7 after each send.</div>'
           : isCannot
             ? '<div class="empty-card">No parked leads. On <strong>To contact</strong> or <strong>Ready</strong>, use <strong>Can\'t contact</strong> when unreachable.</div>'
           : isConnected
@@ -766,13 +768,15 @@ export function renderContactQueueList(){
         ?`<span class="ch-tag" title="Follow-up">${esc(b.follow_up_badge.label)}</span>`
         :'';
       const preferredCh=esc((b.outreach_channel||'').trim()||preferredColdChannel(b)||'');
+      const fuBucket=contactQueueFollowBucket(b);
+      const fuBtn=(fuBucket==='plus3'||fuBucket==='plus7')
+        ?`<button type="button" data-cq-follow-send="${b.id}" title="Compose follow-up — Confirm sent; system schedules the next step (+3 then +7)">Follow-up</button>`
+        :'';
       actions=`
         ${badge}
-        <button type="button" class="primary" data-compose-queue="${b.id}" data-compose-channel="${preferredCh}" title="Open compose (keeps current follow-up date)">Message</button>
-        <button type="button" data-cq-follow-send="${b.id}" data-follow-days="3" title="Compose follow-up and schedule +3 days — Confirm sent re-flags automatically">Follow-up +3</button>
-        <button type="button" data-cq-follow-send="${b.id}" data-follow-days="7" title="Compose follow-up and schedule +7 days — Confirm sent re-flags automatically">Follow-up +7</button>
+        <button type="button" class="primary" data-compose-queue="${b.id}" data-compose-channel="${preferredCh}" title="Open compose">Message</button>
+        ${fuBtn}
         <button type="button" data-cq-engaged="${b.id}">Engaged</button>
-        <button type="button" data-cq-revert="${b.id}">Back to Ready</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>`;
     }else if(isCannot){
       const via=cannotViaLabel(cannotContactVia(b));
@@ -854,14 +858,14 @@ export function renderContactQueueList(){
   list.querySelectorAll('[data-cq-follow-send]').forEach(btn=>btn.addEventListener('click',async ev=>{
     ev.stopPropagation();
     const id=btn.dataset.cqFollowSend;
-    const days=Number(btn.dataset.followDays||3);
     const lead=state.contactQueueLeads.find(x=>String(x.id)===String(id));
     if(!lead){ toast('Lead not in queue',true); return; }
     if(typeof B.openCompose!=='function'){ toast('Compose unavailable',true); return; }
     const preferred=(lead.outreach_channel||'').trim()||preferredColdChannel(lead);
     try{
-      await B.openCompose(lead, preferred, { followUpDays: days, preferFollowUp: true });
-      toast(`Follow-up +${days} preset — Confirm sent re-flags and schedules automatically`);
+      // Date is system-owned on confirm-sent; compose only prefers follow-up templates.
+      await B.openCompose(lead, preferred, { preferFollowUp: true });
+      toast('Follow-up compose — Confirm sent; system schedules the next step');
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('[data-cq-open-wa]').forEach(btn=>btn.addEventListener('click',ev=>{

@@ -50,11 +50,27 @@ def test_no_due_days_since_promotes_follow_up_3():
         assert stage is not None and stage.slug == "follow_up_3"
 
 
-def test_no_due_days_since_7_promotes_follow_up_7():
+def test_no_due_days_since_10_stays_follow_up_3_without_kind():
+    """Calendar alone never promotes to +7 — stay on +3 until follow-up confirm graduates kind."""
+    bid = _lead(
+        last_contacted_at=datetime.now(timezone.utc) - timedelta(days=10),
+        next_follow_up_at=None,
+        follow_up_kind="plus3",
+    )
+    with SessionLocal() as db:
+        b = db.get(Business, bid)
+        assert infer_slug_from_flags(b) == "follow_up_3"
+        assert maybe_promote_follow_up(db, b) is True
+        db.refresh(b)
+        stage = db.get(PipelineStage, b.pipeline_stage_id)
+        assert stage is not None and stage.slug == "follow_up_3"
+
+
+def test_plus7_kind_promotes_follow_up_7():
     bid = _lead(
         last_contacted_at=datetime.now(timezone.utc) - timedelta(days=8),
         next_follow_up_at=None,
-        follow_up_kind="",
+        follow_up_kind="plus7",
     )
     with SessionLocal() as db:
         b = db.get(Business, bid)

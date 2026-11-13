@@ -138,33 +138,41 @@ def test_confirm_stays_contacted_not_follow_up(auth_client):
         assert stage is None or stage.slug == "contacted"
 
 
-def test_scheduled_due_promotes_follow_up(auth_client):
+def test_cold_confirm_system_schedules_plus3_ignores_client_due(auth_client):
+    """Cold confirm always +3 first — client due (past or far) is ignored."""
     bid = _lead(ready_for_contact=True, outreach_channel="email")
     r = auth_client.post(
         f"/api/businesses/{bid}/confirm-sent",
         json={"channel": "email", "next_follow_up_at": "2020-01-01", "message": "hi"},
     )
     assert r.status_code == 200, r.text
+    expect_due = (datetime.now(timezone.utc) + timedelta(days=3)).date().isoformat()
     with SessionLocal() as db:
         b = db.get(Business, bid)
         assert b.follow_up_kind == "plus3"
-        # confirm-sent promotes immediately when due is already past
+        assert (b.next_follow_up_at.date().isoformat() if b.next_follow_up_at else "") == expect_due
         stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
-        assert stage is not None and stage.slug == "follow_up_3"
-        # idempotent — already on follow_up_3
+        assert stage is None or stage.slug == "contacted"
         assert maybe_promote_follow_up(db, b) is False
 
 
-def test_scheduled_plus7_promotes_follow_up_7(auth_client):
+def test_due_plus3_then_kind_plus7_promotes_follow_up_7(auth_client):
     bid = _lead(ready_for_contact=True, outreach_channel="email")
-    due = (datetime.now(timezone.utc) - timedelta(days=1)).date().isoformat()
     r = auth_client.post(
         f"/api/businesses/{bid}/confirm-sent",
-        json={"channel": "email", "next_follow_up_at": due, "message": "hi"},
+        json={"channel": "email", "message": "hi"},
     )
     assert r.status_code == 200, r.text
+    past = datetime.now(timezone.utc) - timedelta(days=1)
     with SessionLocal() as db:
         b = db.get(Business, bid)
+        assert b.follow_up_kind == "plus3"
+        b.next_follow_up_at = past
+        b.last_contacted_at = past - timedelta(days=3)
+        db.commit()
+        db.refresh(b)
+        assert maybe_promote_follow_up(db, b) is True
+        db.refresh(b)
         stage0 = db.get(PipelineStage, b.pipeline_stage_id)
         assert stage0 is not None and stage0.slug == "follow_up_3"
         b.follow_up_kind = "plus7"
@@ -176,8 +184,8 @@ def test_scheduled_plus7_promotes_follow_up_7(auth_client):
         assert stage is not None and stage.slug == "follow_up_7"
 
 
-def test_reconfirm_followup_plus7_reflags(auth_client):
-    """Contacted Follow-up +7 compose path: second confirm-sent re-flags kind + due."""
+def test_reconfirm_followup_system_schedules_plus7(auth_client):
+    """Second confirm-sent graduates to plus7 and system-schedules +7 days (ignores client due)."""
     bid = _lead(ready_for_contact=True, outreach_channel="email")
     r1 = auth_client.post(
         f"/api/businesses/{bid}/confirm-sent",
@@ -186,18 +194,20 @@ def test_reconfirm_followup_plus7_reflags(auth_client):
     assert r1.status_code == 200, r1.text
     body1 = r1.json()
     assert body1.get("contacted") is True
-    assert body1.get("follow_up_kind") == "plus7"
-    plus7 = (datetime.now(timezone.utc) + timedelta(days=7)).date().isoformat()
+    assert body1.get("follow_up_kind") == "plus3"
+    expect_plus3 = (datetime.now(timezone.utc) + timedelta(days=3)).date().isoformat()
+    assert (body1.get("next_follow_up_at") or "")[:10] == expect_plus3
     r2 = auth_client.post(
         f"/api/businesses/{bid}/confirm-sent",
-        json={"channel": "email", "message": "follow-up", "next_follow_up_at": plus7},
+        json={"channel": "email", "message": "follow-up", "next_follow_up_at": "2020-01-01"},
     )
     assert r2.status_code == 200, r2.text
     body2 = r2.json()
+    expect_plus7 = (datetime.now(timezone.utc) + timedelta(days=7)).date().isoformat()
     assert body2.get("contacted") is True
     assert body2.get("email_sent") is True
     assert body2.get("follow_up_kind") == "plus7"
-    assert (body2.get("next_follow_up_at") or "")[:10] == plus7
+    assert (body2.get("next_follow_up_at") or "")[:10] == expect_plus7
     assert (body2.get("last_contacted_at") or "")[:10] == datetime.now(timezone.utc).date().isoformat()
 
 
@@ -216,6 +226,15 @@ def test_contact_queue_follow_filter_markup():
     assert "contactQueueFollowBucket" in js
     assert "data-cq-follow-send" in js
     assert "Message" in js
+    assert "Engaged" in js
+    assert "never since>=7 alone" in js or "never calendar-only" in js
+    # Follow-up cards: single system Follow-up (no manual +3/+7 choice / Back to Ready)
+    contacted_branch = js.split("}else if(isContacted){")[1].split("}else if(isCannot){")[0]
+    assert "data-cq-revert" not in contacted_branch
+    assert "Back to Ready" not in contacted_branch
+    assert "data-cq-engaged" in contacted_branch
+    assert "data-follow-days" not in contacted_branch
+    assert ">Follow-up<" in contacted_branch or "Follow-up</button>" in contacted_branch
 
 
 def test_pipeline_filters_and_shows_all_stage_columns(auth_client):
