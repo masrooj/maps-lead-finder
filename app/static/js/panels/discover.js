@@ -31,7 +31,7 @@ export function resolveDiscoverStatus(status){
 }
 
 /** Toggle ★ mark for contact — Discover owner.
- * Mark: leaves Discover → Contact queue To contact (runtime navigates).
+ * Mark: drops from Discover list; stays on Discover (no panel/tab jump).
  * Unmark: returns to Discover when still fresh.
  */
 export async function toggleDiscoverMark(id, row, { patchLead } = {}) {
@@ -43,7 +43,7 @@ export async function toggleDiscoverMark(id, row, { patchLead } = {}) {
     row.marked_for_contact = nextMarked;
     if (nextMarked) row.ready_for_contact = false;
   }
-  toast(nextMarked ? 'Moved to To contact' : 'Unmarked — back in Discover.');
+  toast(nextMarked ? 'Marked for To contact' : 'Unmarked — back in Discover.');
   return nextMarked;
 }
 

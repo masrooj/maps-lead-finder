@@ -137,12 +137,8 @@ export function setContactQueueTab(tab) {
   });
 }
 
-/** Ensure Contact queue panel is open on the given tab (after Ready / Has booking). */
-async function goContactQueueTab(tab){
-  setContactQueueTab(tab);
-  if(state.appPanel!=='contactQueue' && typeof B.setAppPanel==='function'){
-    B.setAppPanel('contactQueue');
-  }
+/** Reload CQ list without changing panel or tab (mark / ready / booking stay put). */
+async function refreshContactQueueStay(){
   await loadContactQueue({keepTab:true, force:true});
   renderContactQueueList();
 }
@@ -657,7 +653,7 @@ async function promptAlreadyConnected(id){
         ready_for_contact:false,
       });
     }
-    await goContactQueueTab('connected');
+    await refreshContactQueueStay();
     toast(`Already connected → primary #${primaryId}`);
   }catch(e){ toast(e.message,true); }
 }
@@ -1001,17 +997,17 @@ export function renderContactQueueList(){
         if(res&&res.ig_ready_wait) row.ig_ready_wait=res.ig_ready_wait;
         if(res&&res.prospect) patchQueueLeadStage(row, res.prospect);
       }
-      await goContactQueueTab('ready');
+      await refreshContactQueueStay();
       refreshPipelineAfterQueueMove();
       const wait=res&&res.ig_ready_wait;
       const ch=((row&&row.outreach_channel)||(res&&res.outreach_channel)||'').toLowerCase();
       const q=getIgOutreachQuota();
       if(wait&&wait.applies&&wait.unlocked===false){
-        toast(wait.reason||'On Ready — soft ask unlocks after wait');
+        toast(wait.reason||'Marked Ready — soft ask unlocks after wait');
       }else if(ch==='instagram' && q.remaining<=0){
-        toast('Moved to Ready — IG daily soft DM cap hit; messaging unlocks when the daily quota resets');
+        toast('Marked Ready — IG daily soft DM cap hit; messaging unlocks when the daily quota resets');
       }else{
-        toast('Moved to Ready to contact');
+        toast('Marked Ready to contact');
       }
     }catch(e){ toast(e.message||'Could not move to Ready',true); }
   }));
@@ -1022,7 +1018,7 @@ export function renderContactQueueList(){
       const res=await api('/api/sales/prospects/'+id+'/demote-to-contact',{method:'POST',body:{}});
       const row=state.contactQueueLeads.find(x=>String(x.id)===String(id));
       if(row && res && res.prospect) patchQueueLeadStage(row, res.prospect);
-      await goContactQueueTab('selected');
+      await refreshContactQueueStay();
       refreshPipelineAfterQueueMove();
       toast('Demoted to To contact');
     }catch(e){ toast(e.message,true); }
@@ -1035,8 +1031,8 @@ export function renderContactQueueList(){
       const before=state.contactQueueLeads.find(x=>String(x.id)===String(id));
       await markBookingIds([id], on);
       if(on){
-        await goContactQueueTab('booking');
-        toast('Moved to Has booking');
+        await refreshContactQueueStay();
+        toast('Marked Has booking');
       }else{
         await loadContactQueue({keepTab:true, force:true});
         renderContactQueueList();
@@ -1087,7 +1083,7 @@ export function renderContactQueueList(){
       const updated=await clearAlreadyConnected(btn.dataset.cqClearConnected, true);
       const row=state.contactQueueLeads.find(x=>String(x.id)===String(btn.dataset.cqClearConnected));
       if(row && updated) Object.assign(row, updated);
-      await goContactQueueTab('selected');
+      await refreshContactQueueStay();
       toast('Moved back to To contact');
     }catch(e){ toast(e.message,true); }
   }));

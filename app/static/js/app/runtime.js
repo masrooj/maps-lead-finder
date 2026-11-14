@@ -91,6 +91,9 @@ import {
 
 let rowsData=[];
 let locations={};
+/** Session-only Discover country/city — no Australia/Sydney hard default; cleared on close/reopen. */
+let discoverCountry='';
+let discoverCity='';
 let selectedIds=new Set();
 let composeLead=null;
 let composePreferred='email';
@@ -866,8 +869,9 @@ async function loadSettings(){
         const v=rows.find(x=>String(x.id)===String(btn.dataset.applyView));
         if(!v||!v.filters) return;
         if(v.filters.product_line && $('pipelineLine')){ $('pipelineLine').value=v.filters.product_line; }
-        if(v.filters.country && $('country')) $('country').value=v.filters.country;
-        if(v.filters.city && $('city')) $('city').value=v.filters.city;
+        if(v.filters.country!=null || v.filters.city!=null){
+          syncDiscoverLocation(v.filters.country||'', v.filters.city||'');
+        }
         if(v.filters.category && $('category')) $('category').value=v.filters.category;
         if(v.filters.status && $('statusFilter')) $('statusFilter').value=v.filters.status;
         toast('View applied: '+v.name);
@@ -2016,23 +2020,35 @@ async function load(opts={}){
   }
 }
 
-function fillCities(country){
+function fillCities(country, preferredCity){
   const city=$('city');
   const cities=locations[country]||[];
-  if(!country){city.innerHTML='<option value="">Select a country first</option>';city.disabled=true;return}
-  if(!cities.length){city.innerHTML='<option value="">No cities listed</option>';city.disabled=true;return}
+  if(!country){city.innerHTML='<option value="">Select a country first</option>';city.disabled=true;city.value='';return}
+  if(!cities.length){city.innerHTML='<option value="">No cities listed</option>';city.disabled=true;city.value='';return}
   city.innerHTML='<option value="">Select city</option>'+cities.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   city.disabled=false;
-  if(country==='Australia'&&cities.includes('Sydney'))city.value='Sydney';
+  const want=preferredCity!=null?preferredCity:discoverCity;
+  city.value=(want && cities.includes(want))?want:'';
+}
+
+/** Keep session Discover country/city in sync with selects (no AU/Sydney hard default). */
+function syncDiscoverLocation(country, city){
+  const names=Object.keys(locations||{});
+  const ctry=(country!=null?String(country):(($('country')&&$('country').value)||'')).trim();
+  const cty=(city!=null?String(city):(($('city')&&$('city').value)||'')).trim();
+  discoverCountry=(ctry && names.includes(ctry))?ctry:'';
+  if($('country')) $('country').value=discoverCountry;
+  fillCities(discoverCountry, cty);
+  discoverCity=($('city')&&$('city').value)||'';
+  return {country:discoverCountry, city:discoverCity};
 }
 
 async function loadLocations(){
   const data=await api('/api/locations');
   locations=data.countries||{};
   const names=Object.keys(locations).sort((a,b)=>a.localeCompare(b));
-  $('country').innerHTML=names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
-  $('country').value=names.includes('Australia')?'Australia':(names[0]||'');
-  fillCities($('country').value);
+  $('country').innerHTML='<option value="">Select country</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  syncDiscoverLocation(discoverCountry, discoverCity);
   await load();
 }
 
@@ -2126,16 +2142,12 @@ async function toggleMark(id){
   try{
     const nextMarked=await toggleDiscoverMark(id, row, { patchLead });
     if(nextMarked){
-      // Always drop from Discover list (even if status filter is not Fresh).
+      // Drop from Discover; stay on Discover (no jump to Contact queue).
       invalidateListCache('all');
       rowsData=rowsData.filter(b=>String(b.id)!==String(id));
       selectedIds.delete(String(id));
       paint();
       loadStats();
-      setAppPanel('contactQueue');
-      setContactQueueTab('selected');
-      await loadContactQueue({keepTab:true, force:true});
-      renderContactQueueList();
     }
   }catch(e){toast(e.message,true)}
 }
@@ -3042,8 +3054,14 @@ document.querySelectorAll('#stats .stat').forEach(btn=>btn.addEventListener('cli
   if(viewMode!=='city')setView('city',{status:status||DISCOVER_STATUS});
   else{$('statusFilter').value=status||DISCOVER_STATUS;load()}
 }));
-$('country').addEventListener('change',()=>{fillCities($('country').value);if(viewMode==='city')load()});
-$('city').addEventListener('change',()=>{if(viewMode==='city')load()});
+$('country').addEventListener('change',()=>{
+  syncDiscoverLocation($('country').value||'', '');
+  if(viewMode==='city')load();
+});
+$('city').addEventListener('change',()=>{
+  syncDiscoverLocation(discoverCountry||($('country').value||''), $('city').value||'');
+  if(viewMode==='city')load();
+});
 let filterTimer;
 $('filterText').addEventListener('input',()=>{clearTimeout(filterTimer);filterTimer=setTimeout(load,250)});
 $('statusFilter').addEventListener('change',load);
@@ -3059,15 +3077,11 @@ $('clearSelection').addEventListener('click',()=>{selectedIds.clear();paint()});
 $('bulkMark').addEventListener('click',async()=>{
   const ids=await bulk({marked_for_contact:true});
   if(!ids.length) return;
-  // Drop marked rows from Discover immediately, then open To contact.
+  // Drop marked rows from Discover; stay on Discover.
   const idSet=new Set(ids.map(String));
   rowsData=rowsData.filter(b=>!idSet.has(String(b.id)));
   paint();
   loadStats();
-  setAppPanel('contactQueue');
-  setContactQueueTab('selected');
-  await loadContactQueue({keepTab:true, force:true});
-  renderContactQueueList();
 });
 $('bulkUnmark').addEventListener('click',()=>bulk({marked_for_contact:false}));
 $('bulkContacted').addEventListener('click',()=>bulk({contacted:true}));
@@ -3492,7 +3506,8 @@ $('saveViewBtn')&&$('saveViewBtn').addEventListener('click',async()=>{
 });
 $('searchForm').addEventListener('submit',async e=>{
   e.preventDefault();
-  const country=$('country').value.trim(),city=$('city').value.trim(),category=$('category').value.trim();
+  const synced=syncDiscoverLocation();
+  const country=synced.country,city=synced.city,category=$('category').value.trim();
   if(!country||!city||!category)return;
   viewMode='city';
   document.querySelectorAll('[data-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.view==='city'));
@@ -3537,11 +3552,7 @@ $('rows').addEventListener('click',async e=>{
       if(on){
         pruneFreshDiscoverRows();
         paint();
-        setAppPanel('contactQueue');
-        setContactQueueTab('booking');
-        await loadContactQueue({keepTab:true, force:true});
-        renderContactQueueList();
-        toast('Moved to Has booking');
+        toast('Marked Has booking');
       }else if(row && isFreshDiscoverLead(row) && discoverShowingFresh()){
         await load();
         toast('Cleared booking — back in Discover');
