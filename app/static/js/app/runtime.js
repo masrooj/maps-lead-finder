@@ -25,6 +25,7 @@ import {
   renderCommsInvoices, loadCommsInvoices, currencySelectHtml, CURRENCY_OPTIONS
 } from '../features/invoices.js';
 import { wireProspectPicker, pickProspectField } from '../features/prospect-picker.js';
+import { mountSearchableSelect, getSearchableSelect } from '../features/searchable-select.js';
 import { scoreOpts, readScoreCriteria, refreshScorePreview } from '../features/scoring.js';
 import {
   contactQueueSelectedLeads, contactQueueReadyLeads, fillContactQueueLocationFilters, contactQueueMatchQuery,
@@ -2020,24 +2021,66 @@ async function load(opts={}){
   }
 }
 
-function fillCities(country, preferredCity){
+function ensureDiscoverLocationSelects(){
+  const country=$('country');
   const city=$('city');
-  const cities=locations[country]||[];
-  if(!country){city.innerHTML='<option value="">Select a country first</option>';city.disabled=true;city.value='';return}
-  if(!cities.length){city.innerHTML='<option value="">No cities listed</option>';city.disabled=true;city.value='';return}
-  city.innerHTML='<option value="">Select city</option>'+cities.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
-  city.disabled=false;
-  const want=preferredCity!=null?preferredCity:discoverCity;
-  city.value=(want && cities.includes(want))?want:'';
+  if(country && !getSearchableSelect(country)){
+    mountSearchableSelect(country,{
+      options:[],
+      placeholder:'Type to search country…',
+      emptyHint:'Select country',
+    });
+  }
+  if(city && !getSearchableSelect(city)){
+    mountSearchableSelect(city,{
+      options:[],
+      placeholder:'Select a country first',
+      emptyHint:'Select city',
+      disabled:true,
+    });
+  }
+  return {
+    country:country?getSearchableSelect(country):null,
+    city:city?getSearchableSelect(city):null,
+  };
 }
 
-/** Keep session Discover country/city in sync with selects (no AU/Sydney hard default). */
+function fillCities(country, preferredCity){
+  const {city:citySs}=ensureDiscoverLocationSelects();
+  const cityEl=$('city');
+  if(!citySs||!cityEl) return;
+  const cities=(locations[country]||[]).slice().sort((a,b)=>a.localeCompare(b));
+  if(!country){
+    citySs.setOptions([]);
+    citySs.setDisabled(true);
+    citySs.setPlaceholder('Select a country first');
+    citySs.setValue('');
+    return;
+  }
+  if(!cities.length){
+    citySs.setOptions([]);
+    citySs.setDisabled(true);
+    citySs.setPlaceholder('No cities listed');
+    citySs.setValue('');
+    return;
+  }
+  citySs.setOptions(cities);
+  citySs.setDisabled(false);
+  citySs.setPlaceholder('Type to search city…');
+  const want=preferredCity!=null?preferredCity:discoverCity;
+  citySs.setValue((want && cities.includes(want))?want:'');
+}
+
+/** Keep session Discover country/city in sync with searchable inputs (no AU/Sydney hard default). */
 function syncDiscoverLocation(country, city){
-  const names=Object.keys(locations||{});
+  const {country:countrySs}=ensureDiscoverLocationSelects();
+  const names=Object.keys(locations||{}).sort((a,b)=>a.localeCompare(b));
+  if(countrySs) countrySs.setOptions(names);
   const ctry=(country!=null?String(country):(($('country')&&$('country').value)||'')).trim();
   const cty=(city!=null?String(city):(($('city')&&$('city').value)||'')).trim();
   discoverCountry=(ctry && names.includes(ctry))?ctry:'';
-  if($('country')) $('country').value=discoverCountry;
+  if(countrySs) countrySs.setValue(discoverCountry);
+  else if($('country')) $('country').value=discoverCountry;
   fillCities(discoverCountry, cty);
   discoverCity=($('city')&&$('city').value)||'';
   return {country:discoverCountry, city:discoverCity};
@@ -2046,8 +2089,10 @@ function syncDiscoverLocation(country, city){
 async function loadLocations(){
   const data=await api('/api/locations');
   locations=data.countries||{};
-  const names=Object.keys(locations).sort((a,b)=>a.localeCompare(b));
-  $('country').innerHTML='<option value="">Select country</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  ensureDiscoverLocationSelects();
+  // Placeholder text kept for QA guard ("Select country")
+  const countrySs=getSearchableSelect($('country'));
+  if(countrySs) countrySs.setPlaceholder('Select country — type to search');
   syncDiscoverLocation(discoverCountry, discoverCity);
   await load();
 }

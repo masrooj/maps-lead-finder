@@ -189,8 +189,16 @@
       <div class="sectionhead"><h2>Find businesses</h2><span>Example: Australia · Sydney · barbers</span></div>
       <form id="searchForm">
         <div class="fields">
-          <div class="field"><label for="country">Country</label><select id="country" required><option value="">Loading…</option></select></div>
-          <div class="field"><label for="city">City</label><select id="city" required disabled><option value="">Select a country first</option></select></div>
+          <div class="field"><label for="country">Country</label>
+            <div class="searchable-select">
+              <input id="country" type="text" required placeholder="Type to search country…" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+          <div class="field"><label for="city">City</label>
+            <div class="searchable-select">
+              <input id="city" type="text" required disabled placeholder="Select a country first" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
           <div class="field"><label for="category">Business type</label><input id="category" required placeholder="e.g. barbers" value="barbers"></div>
           <div class="field"><label for="maxResults">Fetch</label><select id="maxResults">
             <option value="0" selected>All (scan city)</option>

@@ -44,6 +44,7 @@ def test_no_australia_sydney_hard_default_in_discover_location():
     assert "discoverCountry" in _RUNTIME
     assert "discoverCity" in _RUNTIME
     assert "Select country" in load
+    assert "mountSearchableSelect" in _RUNTIME or "ensureDiscoverLocationSelects" in load
 
 
 def test_saved_view_and_search_sync_discover_location():

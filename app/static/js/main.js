@@ -26,6 +26,7 @@ import './features/instagram-discover.js';
 import './features/scoring.js';
 import './features/be-bridge.js';
 import './features/prospect-picker.js';
+import './features/searchable-select.js';
 import './features/invoices.js';
 import './features/email-signature.js';
 import './app/runtime.js';
