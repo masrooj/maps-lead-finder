@@ -69,9 +69,12 @@ def infer_slug_from_flags(b: Business) -> str:
     if b.lost:
         return "lost"
     if _contacted_like(b):
-        kind = (getattr(b, "follow_up_kind", None) or "").strip()
+        kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
         if kind == "call_today":
             return "contacted"
+        if kind == "ladder_complete":
+            # Reply grace after +7 — stay on Follow-up +7 until auto-Lost / Engaged
+            return "follow_up_7"
         due = getattr(b, "next_follow_up_at", None)
         from app.services.automation import days_since_last_contact, follow_up_target_slug
 
@@ -260,6 +263,12 @@ def move_stage(
 
     if lost_reason:
         business.lost_reason = lost_reason[:500]
+
+    # Stop ladder on Engaged / Won / Lost — cancel open follow-up tasks + clear dues
+    if to_stage.is_lost or to_stage.is_won or (to_stage.slug or "") == "engaged":
+        from app.services.automation import cancel_open_follow_ups
+
+        cancel_open_follow_ups(db, business, commit=False)
 
     business.pipeline_stage_id = to_stage.id
     # Keep legacy flags in sync for Discover filters

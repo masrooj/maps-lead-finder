@@ -102,6 +102,8 @@ let composePreferred='email';
 let composeAllowUnready=false;
 /** Prefer templates named/purposed as follow-up (Contacted Follow-up +3/+7). */
 let composePreferFollowUp=false;
+/** Exact template purpose for ladder step: follow_up_3 | follow_up_7 | ''. */
+let composeFollowUpPurpose='';
 let drawerLead=null;
 let drawerTab='overview';
 let drawerMode='crm'; // outreach (Discover/CQ) | crm (Prospects + money flows)
@@ -2254,17 +2256,45 @@ function composeContactInfo(b,channel){
   return{label:'Contact',html:'—'};
 }
 
+function systemFollowUpHint(b){
+  if(!b) return 'System ladder — Confirm sent schedules the next step automatically.';
+  const kind=String(b.follow_up_kind||'').trim().toLowerCase();
+  const due=dateOnly(b.next_follow_up_at);
+  if(kind==='ladder_complete'){
+    return due
+      ?`Ladder done — reply window until ${due}. Mark Engaged if they reply; else auto-Lost.`
+      :'Ladder done — mark Engaged if they reply; else auto-Lost after grace.';
+  }
+  if(!b.contacted && !b.email_sent && !b.whatsapp_sent && !b.instagram_sent){
+    return 'After Confirm sent, system schedules Follow-up +3 (no manual date).';
+  }
+  if(kind==='plus7'||kind==='plus_7'||kind==='+7'){
+    return due?`System next: Follow-up +7 due ${due}`:'System next: Follow-up +7 after due.';
+  }
+  if(kind==='plus3'){
+    return due?`System next: Follow-up +3 due ${due}`:'System next: Follow-up +3 after due.';
+  }
+  return due?`System next follow-up: ${due}`:'System ladder — Confirm sent schedules the next step automatically.';
+}
 function fillComposeTemplates(channel){
   const list=templatesFor(channel);
-  const def=defaultTemplate(channel, {preferFollowUp: composePreferFollowUp});
+  const def=defaultTemplate(channel, {
+    preferFollowUp: composePreferFollowUp,
+    purpose: composeFollowUpPurpose||undefined,
+  });
   if(!list.length){
     $('composeTemplate').innerHTML='<option value="">No templates — open Templates in the top menu and save one</option>';
     $('composeSubject').value='';
     $('composeBody').value='';
   }else{
     // Marked default first so the dropdown matches the message pane; soft openers next for IG/WA.
-    // Follow-up compose: surface follow-named templates near the top.
+    // Follow-up compose: surface purpose-matched / follow-named templates near the top.
     const ordered=[...list].sort((a,b)=>{
+      if(composeFollowUpPurpose){
+        const af=(a.purpose||'')===composeFollowUpPurpose?0:1;
+        const bf=(b.purpose||'')===composeFollowUpPurpose?0:1;
+        if(af!==bf) return af-bf;
+      }
       if(composePreferFollowUp){
         const af=/follow/i.test(String(a.purpose||'')+String(a.name||''))?0:1;
         const bf=/follow/i.test(String(b.purpose||'')+String(b.name||''))?0:1;
@@ -2392,7 +2422,12 @@ async function copyComposeMessage(){
 }
 async function openCompose(b,preferred,opts={}){
   composeLead=b;openedChannel=null;composeAllowUnready=!!opts.allowUnready;
-  composePreferFollowUp=!!(opts.preferFollowUp || (opts.followUpDays!=null && opts.followUpDays!==''));
+  composePreferFollowUp=!!(opts.preferFollowUp || (opts.followUpDays!=null && opts.followUpDays!=='') || !!opts.followUpPurpose);
+  composeFollowUpPurpose=String(opts.followUpPurpose||'').trim();
+  if(!composeFollowUpPurpose && composePreferFollowUp){
+    const kind=String((b&&b.follow_up_kind)||'').trim().toLowerCase();
+    composeFollowUpPurpose=kind==='plus7'||kind==='plus_7'||kind==='+7'?'follow_up_7':'follow_up_3';
+  }
   wireIgWarmCompose();
   if(b.opt_out){showMessage('Prospect is opted out — outreach blocked.',true);return}
   // Cold outreach only from Ready (invoice/pay flows pass allowUnready)
@@ -2431,16 +2466,12 @@ async function openCompose(b,preferred,opts={}){
   $('composeChannel').innerHTML=channels.map(ch=>`<option value="${ch}" ${ch===composePreferred?'selected':''}>${channelLabel(ch)}</option>`).join('');
   $('composeOutcome').value=b.outcome||'';
   $('composeNotes').value='';
-  if(opts.followUpDays!=null && opts.followUpDays!==''){
-    $('composeFollowUp').value=plusDays(Number(opts.followUpDays));
-    $('composeFollowUp').dataset.touched='1';
-  }else if(opts.followUpAt){
-    $('composeFollowUp').value=dateOnly(opts.followUpAt)||'';
-    $('composeFollowUp').dataset.touched='1';
-  }else{
-    $('composeFollowUp').value=dateOnly(b.next_follow_up_at)||'';
+  // System-owned ladder — no manual date; hint only
+  if($('composeFollowUp')){
+    $('composeFollowUp').value='';
     $('composeFollowUp').dataset.touched='0';
   }
+  if($('composeFollowUpHint')) $('composeFollowUpHint').textContent=systemFollowUpHint(b);
   $('igCopyBox').classList.add('hidden');
   clearComposeConfirmReturn();
   fillComposeTemplates(composePreferred);
@@ -2476,7 +2507,7 @@ function syncComposeMarkBtn(){
 function closeCompose(){
   clearComposeConfirmReturn();
   $('composeModal').classList.add('hidden');
-  composeLead=null;openedChannel=null;composeAllowUnready=false;composePreferFollowUp=false;
+  composeLead=null;openedChannel=null;composeAllowUnready=false;composePreferFollowUp=false;composeFollowUpPurpose='';
   $('igCopyBox').classList.add('hidden');
   if($('drawer').classList.contains('hidden'))document.body.style.overflow='';
 }
@@ -2583,12 +2614,7 @@ async function confirmSent(opts={}){
   clearComposeConfirmReturn();
   try{
     const body={channel};
-    // Only change follow-up when the user set/cleared the date field intentionally via snooze or typing.
-    // Empty field = leave existing follow-up unchanged (avoids wiping Due dates by accident).
-    const follow=$('composeFollowUp').value;
-    const followTouched=$('composeFollowUp').dataset.touched==='1';
-    if(follow)body.next_follow_up_at=follow;
-    else if(followTouched)body.next_follow_up_at=null;
+    // Ladder dates are system-owned on confirm-sent — never send client next_follow_up_at.
     const outcome=$('composeOutcome').value;
     const notes=$('composeNotes').value.trim();
     const message=($('composeBody')&&$('composeBody').value||'').trim();
@@ -2868,7 +2894,9 @@ function renderDrawer(){
       </label>
       <label class="flag"><input type="checkbox" data-dfield="contacted" ${b.contacted?'checked':''}> Contacted</label>
       <label class="flag"><input type="checkbox" data-dfield="lost" ${b.lost?'checked':''}> Lost</label>
-      <div class="field" style="margin-top:10px"><label for="drawerFollowUp">Next follow up</label><input id="drawerFollowUp" type="date" value="${esc(dateOnly(b.next_follow_up_at))}"></div>
+      <div class="field" style="margin-top:10px"><label>Next follow-up</label>
+        <p class="hint" style="margin:0">${esc(systemFollowUpHint(b))}</p>
+      </div>
       <div class="field"><label for="drawerOutcome">Outcome</label>
         <select id="drawerOutcome">
           <option value="">—</option>
@@ -2876,13 +2904,6 @@ function renderDrawer(){
         </select>
       </div>
       <div class="field"><label for="drawerNotes">Notes</label><textarea id="drawerNotes">${esc(b.notes||'')}</textarea></div>
-      <div class="field" style="margin-top:8px"><label>Snooze follow-up</label>
-        <div class="snooze">
-          <button type="button" data-drawer-snooze="1">Tomorrow</button>
-          <button type="button" data-drawer-snooze="3">+3 days</button>
-          <button type="button" data-drawer-snooze="7">+7 days</button>
-        </div>
-      </div>
       <div class="drawer-actions">
         <button type="button" class="primary" id="saveDrawerBtn">Save</button>
         ${b.archived
@@ -3055,7 +3076,6 @@ async function saveDrawer(){
     put('drawerAddress','address',el=>el.value.trim());
     put('drawerNotes','notes',el=>el.value);
     put('drawerOutcome','outcome',el=>el.value);
-    put('drawerFollowUp','next_follow_up_at',el=>el.value||null);
     const panel=$('drawerPanel');
     ['marked_for_contact','email_sent','whatsapp_sent','instagram_sent','contacted','lost'].forEach(k=>{
       const el=panel&&panel.querySelector(`[data-dfield="${k}"]`);
@@ -3131,7 +3151,7 @@ $('bulkMark').addEventListener('click',async()=>{
 $('bulkUnmark').addEventListener('click',()=>bulk({marked_for_contact:false}));
 $('bulkContacted').addEventListener('click',()=>bulk({contacted:true}));
 $('bulkLost').addEventListener('click',()=>bulk({lost:true}));
-$('bulkFollowUp').addEventListener('click',()=>bulk({next_follow_up_at:plusDays(Number($('bulkSnooze').value||3))}));
+// Manual bulk follow-up removed — ladder dates are system-owned on Confirm sent.
 $('bulkArchive').addEventListener('click',async()=>{
   const ids=await bulk({archived:true},{silent:true});
   if(ids.length)undoToast('Archived '+ids.length+' leads.',async()=>{await api('/api/businesses/bulk-unarchive',{method:'POST',body:{ids}})});
@@ -3471,13 +3491,7 @@ $('saveSaasFlag')&&$('saveSaasFlag').addEventListener('click',async()=>{
     await loadSettings();
   }catch(e){toast(e.message||String(e),true)}
 });
-document.querySelectorAll('[data-snooze]').forEach(btn=>btn.addEventListener('click',()=>{
-  const v=btn.dataset.snooze;
-  $('composeFollowUp').value=v==='clear'?'':plusDays(Number(v));
-  $('composeFollowUp').dataset.touched='1';
-}));
-$('composeFollowUp').addEventListener('change',()=>{$('composeFollowUp').dataset.touched='1'});
-$('composeFollowUp').addEventListener('input',()=>{$('composeFollowUp').dataset.touched='1'});
+// Compose follow-up date/snooze removed — system ladder on Confirm sent.
 $('importFile').addEventListener('change',async e=>{
   const file=e.target.files&&e.target.files[0];
   if(!file)return;
@@ -3705,8 +3719,6 @@ $('drawerPanel').addEventListener('click',async e=>{
     );
     return;
   }
-  const snooze=e.target.closest('[data-drawer-snooze]');
-  if(snooze){$('drawerFollowUp').value=plusDays(Number(snooze.dataset.drawerSnooze));return}
   if(e.target.id==='saveDrawerBtn'){await saveDrawer();return}
   if(e.target.id==='unlockDrawerIgBtn'){
     const ig=$('drawerInstagram');

@@ -74,8 +74,9 @@ def due_follow_up_leads(db, *, limit: int = 200) -> list[Business]:
     out: list[Business] = []
     now = _utcnow()
     for b in rows:
-        kind = (getattr(b, "follow_up_kind", None) or "").strip()
-        if kind == "call_today":
+        kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
+        # call_today / ladder_complete are not "send follow-up" dues
+        if kind in ("call_today", "ladder_complete"):
             continue
         due = _aware(getattr(b, "next_follow_up_at", None))
         since = days_since_last_contact(b)
@@ -120,8 +121,8 @@ def build_digest_body(leads: list[Business], *, promoted: int) -> str:
     lines.extend(
         [
             "",
-            "Open Contact queue → Contacted (filter +3 / +7) or Pipeline Follow-up columns.",
-            "Cron: POST /api/cron/follow-up-reminders with X-Cron-Secret.",
+            "Open Contact queue → Ready (first cold) / Contacted (+3 / +7) or Pipeline Follow-up columns.",
+            "Cron: GET|POST /api/cron/follow-up-reminders with X-Cron-Secret or Bearer.",
         ]
     )
     return "\n".join(lines)
@@ -139,6 +140,8 @@ def run_follow_up_reminders(
     Idempotent email: AppSetting follow_up_reminders.last_digest_day = YYYY-MM-DD (UTC).
     """
     promoted = promote_due_follow_ups(db, actor_id=actor_id)
+    _setting_set(db, "follow_up_reminders.last_promote_at", _utcnow().isoformat())
+    _setting_set(db, "follow_up_reminders.last_promote_count", str(promoted))
     leads = due_follow_up_leads(db)
     today = _utcnow().date().isoformat()
     last_day = _setting_get(db, "follow_up_reminders.last_digest_day", "")
@@ -208,4 +211,5 @@ def run_follow_up_reminders(
         "push_reminders_enabled": push_on,
         "digest_day": today,
         "last_digest_day": last_day if not email_sent else today,
+        "last_promote_at": _setting_get(db, "follow_up_reminders.last_promote_at", ""),
     }

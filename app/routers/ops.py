@@ -414,9 +414,13 @@ def job_tick(job_id: int, _user: str = Depends(require_user), db=Depends(get_db)
 def _authorize_cron(request: Request, x_cron_secret: str, db) -> None:
     cron_secret = os.getenv("CRON_SECRET", "").strip()
     if cron_secret:
-        if x_cron_secret != cron_secret:
-            raise HTTPException(401, "Invalid cron secret")
-        return
+        bearer = ""
+        auth = (request.headers.get("authorization") or "").strip()
+        if auth.lower().startswith("bearer "):
+            bearer = auth[7:].strip()
+        if x_cron_secret == cron_secret or bearer == cron_secret:
+            return
+        raise HTTPException(401, "Invalid cron secret")
     if not _require_login:
         raise HTTPException(401, "Cron secret or login required")
     user = _require_login(request)
@@ -445,23 +449,44 @@ def cron_be_heartbeat(request: Request, x_cron_secret: str = Header(default=""),
     return run_heartbeat(db)
 
 
-@router.post("/api/cron/follow-up-reminders", tags=["ops"])
-def cron_follow_up_reminders(
+def _run_follow_up_reminders_cron(
+    request: Request,
+    x_cron_secret: str,
+    force_email: bool,
+    dry_run: bool,
+    db,
+):
+    _authorize_cron(request, x_cron_secret, db)
+    from app.services.follow_up_reminders import run_follow_up_reminders
+
+    return run_follow_up_reminders(db, force_email=force_email, dry_run=dry_run)
+
+
+@router.post("/api/cron/follow-up-reminders", tags=["ops"], operation_id="cron_follow_up_reminders_post")
+def cron_follow_up_reminders_post(
     request: Request,
     x_cron_secret: str = Header(default=""),
     force_email: bool = False,
     dry_run: bool = False,
     db=Depends(get_db),
 ):
-    """Promote due Contacted → Follow-up +3/+7 and email a once-per-day digest (SMTP).
+    """Promote due Contacted → Follow-up +3/+7, close ladder grace → Lost, digest (SMTP).
 
-    Schedule daily (e.g. morning). Header X-Cron-Secret when CRON_SECRET is set;
-    otherwise Owner session may run manually. force_email=1 re-sends same day.
+    Schedule daily. Auth: X-Cron-Secret or Authorization Bearer when CRON_SECRET set.
     """
-    _authorize_cron(request, x_cron_secret, db)
-    from app.services.follow_up_reminders import run_follow_up_reminders
+    return _run_follow_up_reminders_cron(request, x_cron_secret, force_email, dry_run, db)
 
-    return run_follow_up_reminders(db, force_email=force_email, dry_run=dry_run)
+
+@router.get("/api/cron/follow-up-reminders", tags=["ops"], operation_id="cron_follow_up_reminders_get")
+def cron_follow_up_reminders_get(
+    request: Request,
+    x_cron_secret: str = Header(default=""),
+    force_email: bool = False,
+    dry_run: bool = False,
+    db=Depends(get_db),
+):
+    """GET alias for Vercel Cron / schedulers that only support GET."""
+    return _run_follow_up_reminders_cron(request, x_cron_secret, force_email, dry_run, db)
 
 
 @router.post("/api/webhooks/stripe", tags=["ops"])

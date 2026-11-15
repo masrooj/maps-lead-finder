@@ -133,7 +133,8 @@ def test_confirm_stays_contacted_not_follow_up(auth_client):
     with SessionLocal() as db:
         b = db.get(Business, bid)
         assert b.contacted is True
-        assert b.follow_up_kind == "call_today"
+        # System ladder: WA/IG with phone also get +3 (no call_today shortcut)
+        assert b.follow_up_kind == "plus3"
         stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
         assert stage is None or stage.slug == "contacted"
 

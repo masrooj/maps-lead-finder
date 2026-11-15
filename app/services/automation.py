@@ -90,18 +90,26 @@ def days_since_last_contact(b: Business) -> int:
     return (_utcnow().date() - last_aware.date()).days
 
 
+# System-owned ladder kinds (no manual date setup).
+_PLUS7_KINDS = frozenset({"plus7", "plus_7", "+7"})
+_LADDER_COMPLETE_KIND = "ladder_complete"
+_LADDER_GRACE_DAYS = 7
+
+
 def follow_up_target_slug(b: Business) -> str:
     """Pick Follow-up +3 vs +7 from follow_up_kind only.
 
     +7 requires kind graduated by a follow-up confirm-sent — never calendar days alone.
+    ladder_complete stays on the +7 column until grace → Lost.
     """
     kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
-    if kind in ("plus7", "plus_7", "+7"):
+    if kind == _LADDER_COMPLETE_KIND or kind in _PLUS7_KINDS:
         return "follow_up_7"
     return "follow_up_3"
 
 
 def classify_follow_up_kind(follow_up_at: Optional[datetime], *, same_day_call: bool = False) -> str:
+    """Legacy helper for PATCH classification — ladder confirm-sent ignores this."""
     if same_day_call:
         return "call_today"
     if not follow_up_at:
@@ -111,6 +119,35 @@ def classify_follow_up_kind(follow_up_at: Optional[datetime], *, same_day_call: 
     if delta_days > 3:
         return "plus7"
     return "plus3"
+
+
+def cancel_open_follow_ups(db, b: Business, *, commit: bool = False) -> int:
+    """Cancel open follow-up / call / ladder tasks and clear due fields."""
+    b.next_follow_up_at = None
+    b.follow_up_kind = ""
+    b.updated_at = _utcnow()
+    tasks = db.scalars(
+        select(Task).where(
+            Task.business_id == b.id,
+            Task.status == "open",
+            or_(
+                Task.title.ilike("%follow%"),
+                Task.title.ilike("%call today%"),
+                Task.title.ilike("%reply window%"),
+                Task.title.ilike("%ladder%"),
+            ),
+        )
+    ).all()
+    cancelled = 0
+    for t in tasks:
+        t.status = "cancelled"
+        t.updated_at = _utcnow()
+        cancelled += 1
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    return cancelled
 
 
 def advance_at_least(
@@ -259,20 +296,17 @@ def apply_outreach_channel(b: Business, channel: str) -> None:
     if ch == "instagram" and not ig_warm_complete(b):
         b.ready_for_contact = False
         clear_ig_ready_at(b)
-    elif ch == "instagram" and bool(getattr(b, "ready_for_contact", False)):
+    elif bool(getattr(b, "ready_for_contact", False)):
+        # Re-stamp wait clock when channel changes while already Ready
         stamp_ig_ready_at(b)
-    elif ch != "instagram":
+    else:
         clear_ig_ready_at(b)
     b.updated_at = _utcnow()
 
 
 def stamp_ig_ready_at(b: Business) -> None:
-    """Clock starts when lead enters Ready on Instagram (Settings-timezone day wait)."""
-    ch = normalize_outreach_channel(getattr(b, "outreach_channel", ""))
-    if ch == "instagram":
-        b.ig_ready_at = _utcnow()
-    else:
-        b.ig_ready_at = None
+    """Clock starts when lead enters Ready (any channel) — Settings-timezone day wait."""
+    b.ig_ready_at = _utcnow()
 
 
 def clear_ig_ready_at(b: Business) -> None:
@@ -294,10 +328,10 @@ def ig_ready_wait_payload(
     wait_days: Optional[int] = None,
     tz_pair: Optional[tuple] = None,
 ) -> dict:
-    """IG soft-ask unlock after N calendar days in Settings timezone (promote stamp).
+    """Ready unlock after N calendar days in Settings timezone (promote stamp).
 
-    Missing stamp → grandfather (unlocked). WA/Email and already-contacted/IG-sent skip wait.
-    Pass wait_days / tz_pair to avoid per-lead AppSetting SELECTs (e.g. contact-queue rank).
+    Applies to IG / WA / Email cold outreach. Missing stamp → grandfather (unlocked).
+    Already-contacted skips wait. Pass wait_days / tz_pair to avoid per-lead SELECTs.
     """
     if wait_days is None:
         wait_days = ig_ready_wait_days(db)
@@ -327,14 +361,14 @@ def ig_ready_wait_payload(
             "can_message": False,
             "reason": "Awaiting IG follow-back",
         }
-    if ch != "instagram":
-        return base
     # Bumps / already contacted: no Ready wait (Follow-only warm still applies separately).
     if ig_warm_follow_only(b):
         return base
     ready = bool(getattr(b, "ready_for_contact", False))
     if not ready:
         return {**base, "can_message": False}
+    if not ch:
+        return {**base, "can_message": False, "reason": "Pick a channel first"}
     # Grandfather existing Ready leads without a stamp.
     if not stamp:
         return {**base, "applies": True, "unlocked": True, "can_message": True}
@@ -378,7 +412,7 @@ def ig_ready_wait_payload(
 def assert_ig_ready_wait_elapsed(db, b: Business) -> None:
     payload = ig_ready_wait_payload(db, b)
     if payload.get("applies") and not payload.get("unlocked"):
-        raise ValueError(payload.get("reason") or "IG Ready wait not elapsed")
+        raise ValueError(payload.get("reason") or "Ready wait not elapsed")
 
 
 def messaging_gate_payload(
@@ -485,14 +519,15 @@ def demote_to_to_contact(db, b: Business, *, actor_id: Optional[int] = None, not
 def maybe_promote_follow_up(
     db, b: Business, *, actor_id: Optional[int] = None, commit: bool = True
 ) -> bool:
-    """Move contacted → follow_up_3 / follow_up_7 when due/past or days-since gap (not call_today).
+    """Move contacted → follow_up_3 / follow_up_7 when due/past or days-since gap.
 
+    Skips call_today and ladder_complete (grace → Lost via close_exhausted_ladders).
     Syncs Pipeline Follow-up columns with Contacted +3/+7 passed buckets.
     """
     if not b.contacted or b.lost:
         return False
-    kind = (getattr(b, "follow_up_kind", None) or "").strip()
-    if kind == "call_today":
+    kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
+    if kind in ("call_today", _LADDER_COMPLETE_KIND):
         return False
     due = getattr(b, "next_follow_up_at", None)
     since = days_since_last_contact(b)
@@ -532,9 +567,19 @@ def maybe_promote_follow_up(
 def follow_up_badge(b: Business) -> dict:
     """UI badge helpers for Contacted / Follow-up columns."""
     due = getattr(b, "next_follow_up_at", None)
-    kind = (getattr(b, "follow_up_kind", None) or "").strip()
+    kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
     if kind == "call_today":
         return {"kind": "call_today", "label": "Call today", "days": 0}
+    if kind == _LADDER_COMPLETE_KIND:
+        if not due:
+            return {"kind": "ladder_complete", "label": "Ladder done — Engaged or Lost", "days": None}
+        due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
+        delta_days = (due_aware.date() - _utcnow().date()).days
+        if delta_days < 0:
+            return {"kind": "ladder_complete", "label": "Closing Lost", "days": delta_days}
+        if delta_days == 0:
+            return {"kind": "ladder_complete", "label": "Reply window ends today", "days": 0}
+        return {"kind": "ladder_complete", "label": f"Reply window · {delta_days}d", "days": delta_days}
     if not due:
         return {"kind": "", "label": "", "days": None}
     due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
@@ -721,7 +766,7 @@ def remap_legacy_follow_up_stages(
 def promote_due_follow_ups(db, *, product_line: Optional[str] = None, actor_id: Optional[int] = None, limit: int = 500) -> int:
     """Batch promote contacted → follow_up_3/7 when scheduled due is due/past.
 
-    Uses a single commit at the end (stage moves flush without per-row commits).
+    Also closes ladder_complete grace → Lost. Single commit at the end.
     """
     remap_legacy_follow_up_stages(db, product_line=product_line, limit=limit, commit=False)
     q = select(Business).where(
@@ -736,8 +781,9 @@ def promote_due_follow_ups(db, *, product_line: Optional[str] = None, actor_id: 
     for b in rows:
         if maybe_promote_follow_up(db, b, actor_id=actor_id, commit=False):
             moved += 1
+    closed = close_exhausted_ladders(db, actor_id=actor_id, limit=limit, commit=False)
     db.commit()
-    return moved
+    return moved + closed
 
 
 def on_outreach_confirmed(
@@ -753,14 +799,17 @@ def on_outreach_confirmed(
     record_send: bool = True,
     already_contacted: bool = False,
 ) -> dict:
-    """Email/WA/IG confirm-sent: activity + follow-up task + auto stage advance.
+    """Email/WA/IG confirm-sent: activity + system ladder + auto stage advance.
+
+    Ladder (client next_follow_up_at ignored):
+      cold confirm → plus3 (+3 days)
+      +3 follow-up confirm → plus7 (+7 days from that send)
+      +7 follow-up confirm → ladder_complete (+7 day reply grace → Lost)
 
     record_send=False skips a new outreach_sent row (re-confirm / note-only) so IG
     daily cap is not burned twice for the same lead.
-
-    already_contacted=True (follow-up re-confirm) graduates to plus7 and schedules +7 days.
-    Client next_follow_up_at is ignored — ladder dates are system-decided.
     """
+    _ = follow_up_at  # system-owned; ignore client due
     biz_name = (b.name or f"#{b.id}").strip()
     msg = (message or "").strip()
     note = (notes or "").strip()
@@ -791,50 +840,50 @@ def on_outreach_confirmed(
                 created_by=actor_id,
             )
         )
-    # Ladder is system-owned (ignore compose due): cold → +3 first; follow-up send → +7.
-    # Optional same-day call nudge for WA/IG with phone on first cold touch only.
-    same_day_call = False
+    kind_before = (getattr(b, "follow_up_kind", None) or "").strip().lower()
+    ladder_complete = False
     if already_contacted:
-        follow_up_at = _utcnow() + timedelta(days=7)
-        b.next_follow_up_at = follow_up_at
-        b.follow_up_kind = "plus7"
-    else:
-        facts = _channel_facts(b)
-        if facts.get("has_phone") and channel in ("instagram", "whatsapp"):
-            follow_up_at = _utcnow()
-            same_day_call = True
-            b.next_follow_up_at = follow_up_at
-            b.follow_up_kind = "call_today"
+        if kind_before == _LADDER_COMPLETE_KIND:
+            due = getattr(b, "next_follow_up_at", None) or (_utcnow() + timedelta(days=_LADDER_GRACE_DAYS))
+            b.next_follow_up_at = due
+            b.follow_up_kind = _LADDER_COMPLETE_KIND
+            ladder_complete = True
+        elif kind_before in _PLUS7_KINDS:
+            due = _utcnow() + timedelta(days=_LADDER_GRACE_DAYS)
+            b.next_follow_up_at = due
+            b.follow_up_kind = _LADDER_COMPLETE_KIND
+            ladder_complete = True
         else:
-            follow_up_at = _utcnow() + timedelta(days=3)
-            b.next_follow_up_at = follow_up_at
-            b.follow_up_kind = "plus3"
-    due = follow_up_at
-    title = (
-        f"{biz_name} · Call today after {channel}"
-        if same_day_call
-        else f"{biz_name} · Follow up after {channel}"
-    )
-    description = msg or note or (
-        "Optional same-day call — confirm-sent created this reminder"
-        if same_day_call
-        else "Auto-created when outreach was confirmed sent"
-    )
+            # plus3 / call_today / empty → graduate to +7 after follow-up send
+            due = _utcnow() + timedelta(days=7)
+            b.next_follow_up_at = due
+            b.follow_up_kind = "plus7"
+    else:
+        due = _utcnow() + timedelta(days=3)
+        b.next_follow_up_at = due
+        b.follow_up_kind = "plus3"
+
+    if ladder_complete:
+        title = f"{biz_name} · Reply window after +7"
+        description = msg or note or (
+            f"Ladder complete — mark Engaged if they reply, else auto-Lost in {_LADDER_GRACE_DAYS} days"
+        )
+    else:
+        title = f"{biz_name} · Follow up after {channel}"
+        description = msg or note or "Auto-created when outreach was confirmed sent"
+
     existing = db.scalar(
         select(Task).where(
             Task.business_id == b.id,
             Task.status == "open",
-            Task.title.ilike("%follow%"),
+            or_(
+                Task.title.ilike("%follow%"),
+                Task.title.ilike("%call today%"),
+                Task.title.ilike("%reply window%"),
+                Task.title.ilike("%ladder%"),
+            ),
         )
     )
-    if not existing and same_day_call:
-        existing = db.scalar(
-            select(Task).where(
-                Task.business_id == b.id,
-                Task.status == "open",
-                Task.title.ilike("%call today%"),
-            )
-        )
     if existing:
         existing.title = title
         existing.description = description
@@ -854,10 +903,68 @@ def on_outreach_confirmed(
             )
         )
     # Confirm-sent lands in Contacted only. Follow-up waits for scheduled due.
+    # After +7 send, keep pipeline on follow_up_7 during reply grace.
     b.ready_for_contact = False
     clear_ig_ready_at(b)
-    advance_at_least(db, b, "contacted", actor_id=actor_id, note=f"Auto after {channel} confirm-sent")
-    return {"ok": True, "channel": channel, "same_day_call": same_day_call}
+    if ladder_complete:
+        advance_at_least(
+            db, b, "follow_up_7", actor_id=actor_id, note=f"Auto: +7 sent · reply grace after {channel}"
+        )
+    else:
+        advance_at_least(db, b, "contacted", actor_id=actor_id, note=f"Auto after {channel} confirm-sent")
+    return {
+        "ok": True,
+        "channel": channel,
+        "same_day_call": False,
+        "follow_up_kind": b.follow_up_kind,
+        "ladder_complete": ladder_complete,
+    }
+
+
+def close_exhausted_ladders(
+    db, *, actor_id: Optional[int] = None, limit: int = 500, commit: bool = True
+) -> int:
+    """Move ladder_complete leads past reply grace → Lost."""
+    rows = db.scalars(
+        select(Business)
+        .where(
+            Business.contacted.is_(True),
+            Business.follow_up_kind == _LADDER_COMPLETE_KIND,
+            Business.next_follow_up_at.is_not(None),
+            or_(Business.lost.is_(False), Business.lost.is_(None)),
+            or_(Business.archived.is_(False), Business.archived.is_(None)),
+        )
+        .limit(max(1, min(int(limit), 2000)))
+    ).all()
+    now = _utcnow()
+    closed = 0
+    for b in rows:
+        due = getattr(b, "next_follow_up_at", None)
+        if not due:
+            continue
+        due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
+        if due_aware > now:
+            continue
+        cancel_open_follow_ups(db, b, commit=False)
+        lost_stage = get_stage(db, b.product_line or "STANDALONE", "lost")
+        if not lost_stage:
+            continue
+        move_stage(
+            db,
+            b,
+            lost_stage.id,
+            actor_id=actor_id,
+            note="Auto: outreach ladder complete — no reply",
+            lost_reason="Outreach ladder exhausted (cold → +3 → +7, no engagement)",
+            force=True,
+            commit=False,
+        )
+        closed += 1
+    if commit and closed:
+        db.commit()
+    elif not commit:
+        db.flush()
+    return closed
 
 
 def _is_contacted_queue_state(b: Business) -> bool:
@@ -967,11 +1074,15 @@ def on_score_saved(db, b: Business, *, actor_id: Optional[int] = None) -> None:
 
 
 def mark_engaged(db, b: Business, *, actor_id: Optional[int] = None, note: str = "") -> dict:
-    """Explicit Engaged transition (reply / human signal) — not auto from discovery/score."""
+    """Explicit Engaged transition (reply / human signal) — not auto from discovery/score.
+
+    Cancels open ladder follow-ups — Engaged leaves the cold/+3/+7 cadence.
+    """
     if is_already_connected(b):
         raise ValueError("Already connected park — clear before Engaged")
     clear_cannot_contact(b, rematch=False)
     b.ig_awaiting_follow_back = False
+    cancel_open_follow_ups(db, b, commit=False)
     b.updated_at = _utcnow()
     moved = advance_at_least(
         db,

@@ -58,5 +58,21 @@ def test_bearer_feature_groups(client):
             "ig_awaiting_follow_back",
             "can_message",
             "can_message_reason",
+            "follow_up_kind",
+            "follow_up_badge",
+            "next_follow_up_at",
+            "ig_ready_wait",
         ):
             assert key in sample, f"CQ lead missing {key}"
+
+    queues = client.get("/api/sales/dashboard/queues", headers=h)
+    assert queues.status_code == 200, queues.text
+    q = (queues.json().get("queues") or {})
+    for key in (
+        "ready_unlocked_count",
+        "follow_up_3_count",
+        "follow_up_7_count",
+        "ladder_grace_count",
+        "ladder_closing_count",
+    ):
+        assert key in q, f"queues missing {key}"

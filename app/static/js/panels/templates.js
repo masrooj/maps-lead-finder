@@ -35,10 +35,16 @@ function looksLikeFollowUpTemplate(t) {
 /**
  * Resolve which template compose / the editor should treat as default.
  * Marked isDefault always wins (Set default). Soft openers are fallback for IG/WA only.
- * When preferFollowUp, prefer name/purpose containing "follow" (Contacted follow-up send).
+ * When purpose is follow_up_3 / follow_up_7, prefer that purpose (ladder step).
+ * When preferFollowUp, prefer purpose/name containing "follow".
  */
 export function pickDefaultTemplate(list, channel, opts = {}) {
   const items = Array.isArray(list) ? list : [];
+  const purpose = String(opts.purpose || '').trim();
+  if (purpose) {
+    const byPurpose = items.find((t) => (t.purpose || '') === purpose);
+    if (byPurpose) return byPurpose;
+  }
   if (opts.preferFollowUp) {
     const follow = items.find(looksLikeFollowUpTemplate);
     if (follow) return follow;
@@ -64,6 +70,8 @@ export function templateOptionLabel(t) {
   const bits = [];
   if (t && t.isDefault) bits.push('default');
   if (t && (t.purpose || '') === 'soft_opener') bits.push('soft');
+  if (t && (t.purpose || '') === 'follow_up_3') bits.push('+3');
+  if (t && (t.purpose || '') === 'follow_up_7') bits.push('+7');
   return bits.length ? ` (${bits.join(' · ')})` : '';
 }
 

@@ -44,9 +44,12 @@ export function buildNotificationItems(dashboard){
   return [
     {id:'overdue', goto:'tasks', count:q.overdue_count||0, label:'Overdue tasks', sub:'Needs action now', urgent:true},
     {id:'due_today', goto:'tasks', count:q.due_today_count||0, label:'Due today', sub:'Follow up before EOD'},
+    {id:'ready_unlocked', goto:'contactQueue', count:q.ready_unlocked_count||0, label:'Ready — send first cold', sub:'Wait elapsed · Contact queue → Ready', urgent:true},
     {id:'follow_up_due', goto:'pipeline', count:q.follow_up_due_count||0, label:'Follow-ups due', sub:'Pipeline +3/+7 · Contacted filters', urgent:true},
     {id:'follow_up_3', goto:'pipeline', count:q.follow_up_3_count||0, label:'Follow-up +3', sub:'Contacted · +3 days passed'},
     {id:'follow_up_7', goto:'pipeline', count:q.follow_up_7_count||0, label:'Follow-up +7', sub:'Contacted · +7 days passed'},
+    {id:'ladder_closing', goto:'pipeline', count:q.ladder_closing_count||0, label:'Ladder closing → Lost', sub:'Reply window ended · Engaged or auto-Lost', urgent:true},
+    {id:'ladder_grace', goto:'pipeline', count:q.ladder_grace_count||0, label:'Ladder reply window', sub:'After +7 — mark Engaged or wait for Lost'},
     {id:'due_soon', goto:'tasks', count:q.due_soon_count||0, label:'Due in 7 days', sub:'Upcoming follow-ups'},
     {id:'to_contact', goto:'contactQueue', count:q.contact_queue_count||q.to_contact_count||0, label:'To contact', sub:'Open Contact queue'},
     {id:'no_next_action', goto:'prospects', count:q.no_next_action_count||0, label:'No next action', sub:'Prospects without a next step'},

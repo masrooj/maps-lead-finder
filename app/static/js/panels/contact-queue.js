@@ -92,6 +92,8 @@ export function contactQueueFollowBucket(b){
 
   if(last===today) return 'today';
   if(kind==='call_today' && !duePassed) return 'today';
+  // After +7 send — reply window; no more Follow-up send button
+  if(kind==='ladder_complete') return 'sent';
 
   // Future due → Sent/waiting (Pipeline Contacted) — matches promote-when-due
   if(due && !duePassed) return 'sent';
@@ -849,7 +851,14 @@ export function renderContactQueueList(){
     if(!lead){ toast('Lead not in queue',true); return; }
     const preferred=preferredColdChannel(lead, btn.dataset.composeChannel||'');
     try{
-      await B.openCompose(lead, preferred);
+      const opts={};
+      const kind=String((lead.follow_up_kind)||'').trim().toLowerCase();
+      const contacted=!!(lead.contacted||lead.email_sent||lead.whatsapp_sent||lead.instagram_sent);
+      if(contacted && (kind==='plus3'||kind==='plus7'||kind==='plus_7'||kind==='+7')){
+        opts.preferFollowUp=true;
+        opts.followUpPurpose=kind==='plus7'||kind==='plus_7'||kind==='+7'?'follow_up_7':'follow_up_3';
+      }
+      await B.openCompose(lead, preferred, opts);
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('[data-cq-follow-send]').forEach(btn=>btn.addEventListener('click',async ev=>{
@@ -861,7 +870,9 @@ export function renderContactQueueList(){
     const preferred=(lead.outreach_channel||'').trim()||preferredColdChannel(lead);
     try{
       // Date is system-owned on confirm-sent; compose only prefers follow-up templates.
-      await B.openCompose(lead, preferred, { preferFollowUp: true });
+      const kind=String((lead.follow_up_kind)||'').trim().toLowerCase();
+      const purpose=kind==='plus7'||kind==='plus_7'||kind==='+7'?'follow_up_7':'follow_up_3';
+      await B.openCompose(lead, preferred, { preferFollowUp: true, followUpPurpose: purpose });
       toast('Follow-up compose — Confirm sent; system schedules the next step');
     }catch(e){ toast(e.message,true); }
   }));

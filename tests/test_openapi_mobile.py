@@ -26,10 +26,16 @@ def test_openapi_has_bearer_and_feature_tags(client):
     for needed in (
         "/api/sales/prospects/{business_id}/already-connected",
         "/api/sales/prospects/{business_id}/clear-already-connected",
+        "/api/sales/prospects/{business_id}/cannot-contact",
+        "/api/sales/prospects/{business_id}/clear-cannot-contact",
         "/api/sales/prospects/{business_id}/same-contact-siblings",
         "/api/sales/prospects/{business_id}/ig-awaiting-follow-back",
         "/api/sales/prospects/{business_id}/mark-engaged",
         "/api/sales/prospects/{business_id}/confirm-sent",
+        "/api/sales/prospects/{business_id}/promote-ready",
+        "/api/sales/prospects/{business_id}/ready-status",
+        "/api/sales/prospects/{business_id}/demote-to-contact",
+        "/api/sales/dashboard/queues",
     ):
         assert needed in paths, f"missing OpenAPI path {needed}"
 

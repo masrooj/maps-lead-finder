@@ -34,6 +34,33 @@ services:
     depends_on:
       db:
         condition: service_healthy
+  # Daily ladder promote + Lost grace + optional email digest (08:00 local container TZ).
+  # Set CRON_SECRET in .env to match app. Disable with PROFILE=nocron if needed.
+  followup-cron:
+    image: curlimages/curl:8.5.0
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      CRON_SECRET: ${CRON_SECRET:-}
+      APP_INTERNAL_URL: http://app:8000
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "followup-cron: waiting for app…"
+        sleep 30
+        while true; do
+          echo "followup-cron: $$(date -u +%Y-%m-%dT%H:%M:%SZ) tick"
+          if [ -n "$$CRON_SECRET" ]; then
+            curl -sS -X POST -H "X-Cron-Secret: $$CRON_SECRET" \
+              "$$APP_INTERNAL_URL/api/cron/follow-up-reminders" || true
+          else
+            echo "followup-cron: CRON_SECRET unset — skip (set in .env)"
+          fi
+          # ~24h; boot + confirm-sent still promote opportunistically
+          sleep 86400
+        done
+    depends_on:
+      - app
 volumes:
   postgres_data:
   uploads_data:

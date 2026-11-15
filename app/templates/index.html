@@ -271,12 +271,6 @@
       <button type="button" id="bulkUnmark">Unmark</button>
       <button type="button" id="bulkContacted">Mark contacted</button>
       <button type="button" id="bulkLost">Mark lost</button>
-      <select id="bulkSnooze" title="Follow-up snooze">
-        <option value="1">Follow up tomorrow</option>
-        <option value="3" selected>Follow up +3 days</option>
-        <option value="7">Follow up +7 days</option>
-      </select>
-      <button type="button" id="bulkFollowUp">Apply follow-up</button>
       <button type="button" id="bulkArchive">Archive</button>
       <button type="button" id="bulkUnarchive">Unarchive</button>
       <button type="button" class="ghost" id="clearSelection">Clear</button>
@@ -961,13 +955,10 @@
           </select>
         </div>
         <div class="field"><label for="composeNotes">Notes (on confirm)</label><textarea id="composeNotes" rows="4" placeholder="Optional note after sending…"></textarea></div>
-        <div class="field"><label for="composeFollowUp">Follow up on</label><input id="composeFollowUp" type="date">
-          <div class="snooze">
-            <button type="button" data-snooze="1">Tomorrow</button>
-            <button type="button" data-snooze="3">+3 days</button>
-            <button type="button" data-snooze="7">+7 days</button>
-            <button type="button" data-snooze="clear">Clear</button>
-          </div>
+        <div class="field" id="composeFollowUpField">
+          <label>Next follow-up</label>
+          <p class="hint" id="composeFollowUpHint" style="margin:0">System ladder — Confirm sent schedules the next step automatically.</p>
+          <input id="composeFollowUp" type="hidden" value="">
         </div>
         <div class="field" id="composeCallNowField">
           <label>Call today <span class="sub">(optional)</span></label>

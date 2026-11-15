@@ -60,7 +60,7 @@ def cannot_contact_payload(b: Business) -> dict:
     }
 
 
-def apply_cannot_contact(b: Business, *, via: str, notes: str = "") -> None:
+def apply_cannot_contact(b: Business, *, via: str, notes: str = "", db=None) -> None:
     v = normalize_via(via) or "both"
     if v not in CANNOT_VIA:
         v = "both"
@@ -71,6 +71,14 @@ def apply_cannot_contact(b: Business, *, via: str, notes: str = "") -> None:
     b.marked_for_contact = True
     b.contacted = False
     b.outcome = OUTCOME_BY_VIA[v]
+    # Leave outreach ladder — park is a stop condition
+    if db is not None:
+        from app.services.automation import cancel_open_follow_ups
+
+        cancel_open_follow_ups(db, b, commit=False)
+    else:
+        b.next_follow_up_at = None
+        b.follow_up_kind = ""
     note = str(notes or "").strip()
     if note:
         existing = (b.notes or "").strip()

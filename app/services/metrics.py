@@ -179,11 +179,54 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
 
     # Pipeline Follow-up columns (synced with Contacted +3/+7 passed)
     from app.services.follow_up_reminders import due_follow_up_leads
-    from app.services.automation import follow_up_target_slug
+    from app.services.automation import follow_up_target_slug, ig_ready_wait_payload
 
     due_leads = due_follow_up_leads(db, limit=2000)
     follow_up_3 = sum(1 for b in due_leads if follow_up_target_slug(b) == "follow_up_3")
     follow_up_7 = sum(1 for b in due_leads if follow_up_target_slug(b) == "follow_up_7")
+
+    # Ready to contact + wait elapsed → notify first cold send
+    ready_rows = db.scalars(
+        select(Business)
+        .where(
+            or_(Business.archived.is_(False), Business.archived.is_(None)),
+            or_(Business.lost.is_(False), Business.lost.is_(None)),
+            or_(Business.opt_out.is_(False), Business.opt_out.is_(None)),
+            Business.ready_for_contact.is_(True),
+            Business.contacted.is_(False),
+        )
+        .limit(2000)
+    ).all()
+    ready_unlocked = 0
+    for rb in ready_rows:
+        wait = ig_ready_wait_payload(db, rb)
+        if wait.get("can_message", True) and wait.get("unlocked", True) is not False:
+            ready_unlocked += 1
+
+    # Ladder complete reply window — Engaged or closing Lost
+    now = _utcnow()
+    ladder_rows = db.scalars(
+        select(Business)
+        .where(
+            Business.contacted.is_(True),
+            Business.follow_up_kind == "ladder_complete",
+            or_(Business.lost.is_(False), Business.lost.is_(None)),
+            or_(Business.archived.is_(False), Business.archived.is_(None)),
+        )
+        .limit(2000)
+    ).all()
+    ladder_grace = 0
+    ladder_closing = 0
+    for lb in ladder_rows:
+        due = getattr(lb, "next_follow_up_at", None)
+        if due is None:
+            ladder_closing += 1
+            continue
+        due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
+        if due_aware <= now:
+            ladder_closing += 1
+        else:
+            ladder_grace += 1
 
     from app.services.mail import smtp_configured
     from app.services.follow_up_reminders import email_reminders_enabled, push_reminders_enabled
@@ -210,9 +253,12 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
         "due_soon_count": int(due_soon_count),
         "to_contact_count": int(to_contact),
         "contact_queue_count": int(to_contact),
+        "ready_unlocked_count": int(ready_unlocked),
         "follow_up_due_count": len(due_leads),
         "follow_up_3_count": int(follow_up_3),
         "follow_up_7_count": int(follow_up_7),
+        "ladder_grace_count": int(ladder_grace),
+        "ladder_closing_count": int(ladder_closing),
         "smtp_ready": smtp_ok,
         "follow_up_email_reminders_enabled": email_on,
         "follow_up_push_reminders_enabled": push_on,

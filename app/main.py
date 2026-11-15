@@ -139,6 +139,71 @@ SOFT_OPENER_TEMPLATES = [
         "subject": "",
         "body": "Just bumping — still juggling WhatsApp + walk-ins, or already sorted?",
     },
+    # Ladder follow-ups (seeded; do not overwrite soft openers)
+    {
+        "channel": "instagram",
+        "name": "Day 3 follow-up",
+        "purpose": "follow_up_3",
+        "subject": "",
+        "body": (
+            "Hi {{name}} — circling back on the booking idea for {{category}} in {{city}}.\n"
+            "Still open to a 60-sec look, or already sorted?"
+        ),
+    },
+    {
+        "channel": "instagram",
+        "name": "Day 7 follow-up",
+        "purpose": "follow_up_7",
+        "subject": "",
+        "body": (
+            "Last nudge from me, {{name}} — happy to share how shops like yours cut WhatsApp booking clashes.\n"
+            "Want the short version, or shall I leave it?"
+        ),
+    },
+    {
+        "channel": "whatsapp",
+        "name": "Day 3 follow-up",
+        "purpose": "follow_up_3",
+        "subject": "",
+        "body": (
+            "Hi {{name}} — quick follow-up on AppointHive for {{category}} in {{city}}.\n"
+            "Still worth a 60-sec look?"
+        ),
+    },
+    {
+        "channel": "whatsapp",
+        "name": "Day 7 follow-up",
+        "purpose": "follow_up_7",
+        "subject": "",
+        "body": (
+            "Last note from me, {{name}} — booking link idea for {{city}} shops.\n"
+            "Want it, or all good as you are?"
+        ),
+    },
+    {
+        "channel": "email",
+        "name": "Day 3 follow-up",
+        "purpose": "follow_up_3",
+        "subject": "Quick follow-up for {{name}}",
+        "body": (
+            "Hi {{name}},\n\n"
+            "Just following up on my note about AppointHive for {{category}} in {{city}}.\n\n"
+            "Open to a short look this week?\n\n"
+            "Thanks!"
+        ),
+    },
+    {
+        "channel": "email",
+        "name": "Day 7 follow-up",
+        "purpose": "follow_up_7",
+        "subject": "Last follow-up — {{name}}",
+        "body": (
+            "Hi {{name}},\n\n"
+            "Last follow-up from me on AppointHive bookings for {{city}}.\n\n"
+            "Happy to share a 60-sec idea if useful — otherwise I’ll leave it.\n\n"
+            "Thanks!"
+        ),
+    },
 ]
 
 # Schema/migrations must not crash the process — otherwise Vercel/Lambda cannot
@@ -1155,6 +1220,9 @@ def apply_business_updates(b: Business, data: dict, db=None):
             "Use Confirm sent for Instagram (warm checklist + daily soft-DM cap). "
             "PATCH cannot mark Instagram sent."
         )
+    # Ladder dates are system-owned (confirm-sent only) — ignore client dues / kind.
+    data.pop("next_follow_up_at", None)
+    data.pop("follow_up_kind", None)
     # Already-contacted: only Follow warm tick is maintained (ignore like/comment updates).
     warm_follow_only = bool(getattr(b, "contacted", False) or getattr(b, "instagram_sent", False))
     # ready_for_contact=True must pass channel/IG gates (same as promote-ready) — not a blind flip.
@@ -1196,7 +1264,6 @@ def apply_business_updates(b: Business, data: dict, db=None):
         "website": 2000,
         "address": 2000,
         "cannot_contact_via": 40,
-        "follow_up_kind": 40,
     }
     for field, maxlen in str_fields.items():
         if field in data and data[field] is not None:
@@ -1255,7 +1322,7 @@ def apply_business_updates(b: Business, data: dict, db=None):
         clear_cannot_contact(b, rematch=False)
     elif data.get("cannot_contact") is True:
         via = normalize_via(data.get("cannot_contact_via")) or cannot_contact_payload(b).get("cannot_contact_via") or "both"
-        apply_cannot_contact(b, via=via, notes="")
+        apply_cannot_contact(b, via=via, notes="", db=db)
     if data.get("marked_for_contact") is True:
         from app.services.automation import clear_ig_ready_at
 
@@ -1273,15 +1340,16 @@ def apply_business_updates(b: Business, data: dict, db=None):
     if data.get("contacted") is True or data.get("email_sent") is True or data.get("whatsapp_sent") is True or data.get("instagram_sent") is True:
         if getattr(b, "cannot_contact", False) or cannot_contact_payload(b).get("cannot_contact"):
             clear_cannot_contact(b, rematch=False)
-    if "next_follow_up_at" in data:
-        follow = parse_follow_up(data["next_follow_up_at"])
-        b.next_follow_up_at = follow
-        if "follow_up_kind" not in data:
-            from app.services.automation import classify_follow_up_kind
+    if data.get("cannot_contact") is True and db is not None:
+        from app.services.automation import cancel_open_follow_ups
 
-            b.follow_up_kind = classify_follow_up_kind(follow) if follow else ""
+        cancel_open_follow_ups(db, b, commit=False)
     if b.lost:
         b.contacted = True
+        if data.get("lost") is True and db is not None:
+            from app.services.automation import cancel_open_follow_ups
+
+            cancel_open_follow_ups(db, b, commit=False)
     if data.get("contacted") is True or data.get("email_sent") is True or data.get("whatsapp_sent") is True or data.get("instagram_sent") is True:
         if not b.last_contacted_at:
             b.last_contacted_at = utcnow()
@@ -2004,7 +2072,7 @@ def mark_business_cannot_contact(
         b = db.get(Business, business_id)
         if not b:
             raise HTTPException(404, "Business not found")
-        apply_cannot_contact(b, via=via, notes=str(payload.notes or ""))
+        apply_cannot_contact(b, via=via, notes=str(payload.notes or ""), db=db)
         b.updated_at = utcnow()
         log_activity(db, b.id, "cannot_contact", channel=via, note=str(payload.notes or "")[:500])
         db.commit()
@@ -2259,15 +2327,20 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
                 assert_ig_soft_send_allowed(db, b, skip_cap=already_sent)
             except ValueError as e:
                 raise HTTPException(422, str(e)) from e
+        elif not already_contacted and not payload.allow_unready:
+            # Email/WA cold: same Ready day-wait as IG (system ladder)
+            from app.services.automation import assert_ig_ready_wait_elapsed
+
+            try:
+                assert_ig_ready_wait_elapsed(db, b)
+            except ValueError as e:
+                raise HTTPException(422, str(e)) from e
         setattr(b, field, True)
         b.contacted = True
         b.last_contacted_at = utcnow()
         if getattr(b, "cannot_contact", False) or cannot_contact_payload(b).get("cannot_contact"):
             clear_cannot_contact(b, rematch=False)
-        follow = None
-        if payload.next_follow_up_at is not None:
-            follow = parse_follow_up(payload.next_follow_up_at)
-            b.next_follow_up_at = follow
+        # Ladder dates are system-owned — ignore client next_follow_up_at on confirm-sent.
         if payload.notes is not None and str(payload.notes).strip():
             note = str(payload.notes).strip()
             existing = (b.notes or "").strip()
@@ -2282,7 +2355,7 @@ def confirm_sent(business_id: int, payload: ConfirmSent, _user: str = Depends(re
             b,
             channel=channel,
             actor_id=actor.id if actor else None,
-            follow_up_at=follow,
+            follow_up_at=None,
             outcome=str(payload.outcome or ""),
             notes=str(payload.notes or ""),
             message=str(payload.message or ""),
@@ -2719,12 +2792,7 @@ async def import_csv(file: UploadFile = File(...), _user: str = Depends(require_
                 b.notes = col("Notes")[:5000]
             if col("Search labels"):
                 b.search_labels = col("Search labels")[:500]
-            follow = col("Next follow up", "Next follow-up")
-            if follow:
-                try:
-                    b.next_follow_up_at = parse_follow_up(follow)
-                except HTTPException:
-                    pass
+            # Ladder dues are system-owned — ignore CSV "Next follow up" columns.
             last = col("Last contacted")
             if last:
                 try:

@@ -149,7 +149,8 @@ def test_wait_days_zero_allows_same_day(auth_client):
         _set_wait_days("1")
 
 
-def test_wa_promote_no_wait(auth_client):
+def test_wa_promote_has_ready_wait(auth_client):
+    """WA/Email share the same Ready day-wait as IG (system ladder)."""
     _set_wait_days("1")
     bid = _make_ig_lead(
         outreach_channel="whatsapp",
@@ -159,9 +160,19 @@ def test_wa_promote_no_wait(auth_client):
     )
     prom = auth_client.post(f"/api/sales/prospects/{bid}/promote-ready")
     assert prom.status_code == 200, prom.text
-    assert not (prom.json().get("ig_ready_at") or "")
+    assert prom.json().get("ig_ready_at")
     wait = prom.json().get("ig_ready_wait") or {}
-    assert wait.get("applies") is False
+    assert wait.get("applies") is True
+    assert wait.get("unlocked") is False
+    blocked = auth_client.post(
+        f"/api/businesses/{bid}/confirm-sent",
+        json={"channel": "whatsapp", "message": "hi"},
+    )
+    assert blocked.status_code == 422, blocked.text
+    with SessionLocal() as db:
+        b = db.get(Business, bid)
+        b.ig_ready_at = datetime.now(timezone.utc) - timedelta(days=2)
+        db.commit()
     r = auth_client.post(
         f"/api/businesses/{bid}/confirm-sent",
         json={"channel": "whatsapp", "message": "hi"},

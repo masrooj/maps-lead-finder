@@ -35,6 +35,7 @@ def apply_already_connected(
     *,
     primary_id: int,
     notes: str = "",
+    db=None,
 ) -> None:
     pid = int(primary_id)
     if pid == int(b.id):
@@ -46,6 +47,14 @@ def apply_already_connected(
     b.ready_for_contact = False
     b.ig_ready_at = None
     b.ig_awaiting_follow_back = False
+    # Leave outreach ladder — park is a stop condition
+    if db is not None:
+        from app.services.automation import cancel_open_follow_ups
+
+        cancel_open_follow_ups(db, b, commit=False)
+    else:
+        b.next_follow_up_at = None
+        b.follow_up_kind = ""
     note = str(notes or "").strip()
     if note:
         existing = (b.notes or "").strip()
