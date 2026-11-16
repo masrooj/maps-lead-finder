@@ -146,7 +146,7 @@
       <p class="hint" style="margin-top:0">Use this loop for every city. Click a step to jump there.</p>
       <div class="guide-steps" id="guideSteps">
         <button type="button" class="guide-step" data-goto="leads"><strong>1. Discover</strong><span>Search Places (Fetch: All for city scan). Star ★ leads. Prospects auto-setup on import.</span></button>
-        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → To contact (channel + IG warm) → Ready → Message + Confirm sent. Parks: Has booking · Can't contact · Already connected. IG follow-back hold on Ready.</span></button>
+        <button type="button" class="guide-step" data-goto="contactQueue"><strong>2. Contact queue</strong><span>All → To contact (channel + IG warm) → Ready → Message + Confirm sent. Then Contacted → Follow-up +3 → Follow-up +7. Parks: Has booking · Can't contact · Already connected.</span></button>
         <button type="button" class="guide-step" data-goto="pipeline"><strong>3. Pipeline</strong><span>To contact → Ready → Contacted match Contact queue; Follow-up +3/+7 → Engaged (explicit) → Won/Lost.</span></button>
         <button type="button" class="guide-step" data-goto="tasks"><strong>4. Tasks</strong><span>Follow-ups auto-create when you confirm email/WA/IG sent. Complete or reschedule.</span></button>
         <button type="button" class="guide-step" data-goto="activities"><strong>5. Communication</strong><span>Outreach + invoices grouped by lead. Closing stays under Deals.</span></button>
@@ -361,6 +361,8 @@
         <button type="button" role="tab" data-cq-tab="selected" aria-selected="false">To contact <span class="tab-count" id="contactQueueSelectedCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="ready" aria-selected="false">Ready to contact <span class="tab-count" id="contactQueueReadyCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="contacted" aria-selected="false">Contacted <span class="tab-count" id="contactQueueContactedCount">0</span></button>
+        <button type="button" role="tab" data-cq-tab="plus3" aria-selected="false" title="Only when follow-up due date has passed">Follow-up +3 <span class="tab-count" id="contactQueuePlus3Count">0</span></button>
+        <button type="button" role="tab" data-cq-tab="plus7" aria-selected="false" title="Only when follow-up due date has passed">Follow-up +7 <span class="tab-count" id="contactQueuePlus7Count">0</span></button>
         <button type="button" role="tab" data-cq-tab="booking" aria-selected="false">Has booking <span class="tab-count" id="contactQueueBookingCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="cannot" aria-selected="false">Can't contact <span class="tab-count" id="contactQueueCannotCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="connected" aria-selected="false">Already connected <span class="tab-count" id="contactQueueConnectedCount">0</span></button>
@@ -389,12 +391,10 @@
         </div>
         <div class="field" id="contactQueueFollowField" hidden>
           <label for="contactQueueFollowFilter">Follow-up timing</label>
-          <select id="contactQueueFollowFilter" aria-label="Filter Contacted by follow-up timing">
-            <option value="">All contacted</option>
+          <select id="contactQueueFollowFilter" aria-label="Filter Contacted waiting leads">
+            <option value="">All waiting</option>
             <option value="today">Today's messages</option>
-            <option value="sent">Sent / waiting</option>
-            <option value="plus3">+3 days passed</option>
-            <option value="plus7">+7 days passed</option>
+            <option value="sent">Sent / waiting (not due yet)</option>
           </select>
         </div>
         <div class="field">
@@ -575,7 +575,7 @@
         <p class="hint" style="margin-top:0">Assign product line, currency, pipeline stage, and follow-up tasks for leads missing Sales OS fields.</p>
         <button type="button" class="primary" id="autoSetupProspectsBtn">Run auto-setup now</button>
         <h3 class="panel-title">Legacy Contacted → +3</h3>
-        <p class="hint" style="margin-top:0">One-shot for live data: move already-due Contacted cards into Follow-up +3 and seed missing Day 3 / Day 7 follow-up templates (skips +7 / ladder-complete). Then work Contact queue → Contacted → +3.</p>
+        <p class="hint" style="margin-top:0">One-shot for live data: move already-due Contacted cards into Follow-up +3 and seed missing Day 3 / Day 7 follow-up templates (skips +7 / ladder-complete). Then work Contact queue → <strong>Follow-up +3</strong> / <strong>Follow-up +7</strong> tabs.</p>
         <button type="button" class="primary" id="backfillDuePlus3Btn">Move due Contacted → +3 (+ seed templates)</button>
         <h3 class="panel-title">Currency</h3>
         <p class="hint" style="margin-top:0">Default for new prospects is <strong>USD</strong>. Bulk-convert any source currency (or all) to a target. Per-prospect overrides stay in the drawer <strong>Sales</strong> tab → Currency.</p>

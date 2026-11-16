@@ -140,7 +140,12 @@ def test_confirm_stays_contacted_not_follow_up(auth_client):
 
 
 def test_cold_confirm_system_schedules_plus3_ignores_client_due(auth_client):
-    """Cold confirm always +3 first — client due (past or far) is ignored."""
+    """Cold confirm always +3 first — client due (past or far) is ignored.
+
+    Lead stays Contacted until the scheduled due date — not Follow-up +3 yet.
+    """
+    from app.services.automation import follow_up_badge
+
     bid = _lead(ready_for_contact=True, outreach_channel="email")
     r = auth_client.post(
         f"/api/businesses/{bid}/confirm-sent",
@@ -155,6 +160,8 @@ def test_cold_confirm_system_schedules_plus3_ignores_client_due(auth_client):
         stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
         assert stage is None or stage.slug == "contacted"
         assert maybe_promote_follow_up(db, b) is False
+        assert follow_up_badge(b).get("kind") == "scheduled"
+        assert infer_slug_from_flags(b) == "contacted"
 
 
 def test_due_plus3_then_kind_plus7_promotes_follow_up_7(auth_client):
@@ -213,22 +220,34 @@ def test_reconfirm_followup_system_schedules_plus7(auth_client):
 
 
 def test_contact_queue_follow_filter_markup():
-    """Contacted timing filter + CSS hidden override ship with the UI."""
+    """Contacted timing filter + Follow-up +3/+7 tabs ship with the UI."""
     from pathlib import Path
 
     root = Path(__file__).resolve().parents[1]
     html = (root / "app/templates/index.html").read_text(encoding="utf-8")
     css = (root / "app/static/css/app.css").read_text(encoding="utf-8")
     js = (root / "app/static/js/panels/contact-queue.js").read_text(encoding="utf-8")
+    notif = (root / "app/static/js/core/notifications.js").read_text(encoding="utf-8")
     assert 'id="contactQueueFollowFilter"' in html
     assert 'id="contactQueueFollowField"' in html
+    assert 'data-cq-tab="plus3"' in html
+    assert 'data-cq-tab="plus7"' in html
+    assert 'id="contactQueuePlus3Count"' in html
+    assert 'id="contactQueuePlus7Count"' in html
+    assert 'value="plus3"' not in html.split('id="contactQueueFollowFilter"')[1].split("</select>")[0]
     assert ".field[hidden]" in css
     assert "contactQueueFollowMatch" in js
     assert "contactQueueFollowBucket" in js
+    assert "contactQueueWaitingContactedLeads" in js
+    assert "contactQueuePlus3Leads" in js
+    assert "contactQueuePlus7Leads" in js
+    assert "due date passes" in js or "duePassed" in js
     assert "data-cq-follow-send" in js
     assert "Message" in js
     assert "Engaged" in js
-    assert "never since>=7 alone" in js or "never calendar-only" in js
+    assert "never calendar-only" in js
+    assert "contactQueue:plus3" in notif
+    assert "contactQueue:plus7" in notif
     # Follow-up cards: single system Follow-up (no manual +3/+7 choice / Back to Ready)
     contacted_branch = js.split("}else if(isContacted){")[1].split("}else if(isCannot){")[0]
     assert "data-cq-revert" not in contacted_branch

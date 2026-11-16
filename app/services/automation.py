@@ -589,11 +589,12 @@ def follow_up_badge(b: Business) -> dict:
         return {"kind": "overdue", "label": f"Overdue {-delta_days}d", "days": delta_days}
     if delta_days == 0:
         return {"kind": "due_today", "label": "Due today", "days": 0}
-    if delta_days <= 3:
-        return {"kind": "plus3", "label": f"+{delta_days} day follow-up", "days": delta_days}
-    if delta_days <= 7:
-        return {"kind": "plus7", "label": f"+{delta_days} day follow-up", "days": delta_days}
-    return {"kind": "scheduled", "label": f"+{delta_days} day follow-up", "days": delta_days}
+    # Future due — still Contacted (waiting); do not label as Follow-up +3/+7 yet
+    return {
+        "kind": "scheduled",
+        "label": f"Follow-up due in {delta_days}d",
+        "days": delta_days,
+    }
 
 
 def _setting_value(db, key: str, default: str = "") -> str:

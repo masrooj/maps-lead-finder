@@ -54,7 +54,7 @@ let contactQueueModes = [];
 let contactQueuePick = new Set();
 let contactQueueQuery = '';
 let contactQueueChannel = '';
-/** Contacted-tab only: '' | today | sent | plus3 | plus7 */
+/** Contacted-tab only (waiting): '' | today | sent */
 let contactQueueFollowFilter = '';
 let contactQueueLocations = {};
 let igDiscoverStarted = new Set();
@@ -78,8 +78,8 @@ function daysSinceLastContact(b){
 
 /**
  * Exclusive Contacted timing bucket (every contacted lead lands in exactly one):
- * today → sent/waiting → plus3 (calendar: due or 3d+, until follow-up sent)
- * → plus7 only after follow-up confirm sets kind=plus7 (never calendar-only).
+ * today / sent (waiting on Contacted) → plus3 / plus7 only after due date passes.
+ * +7 requires kind graduated by follow-up confirm-sent (never calendar-only).
  */
 export function contactQueueFollowBucket(b){
   const today=cqLocalDay();
@@ -90,20 +90,30 @@ export function contactQueueFollowBucket(b){
   const duePassed=!!due && due<=today;
   const isPlus7Kind=kind==='plus7'||kind==='plus_7'||kind==='+7';
 
-  if(last===today) return 'today';
   if(kind==='call_today' && !duePassed) return 'today';
-  // After +7 send — reply window; no more Follow-up send button
+  // After +7 send — reply window stays on Contacted (waiting), not Follow-up tabs
   if(kind==='ladder_complete') return 'sent';
 
-  // Future due → Sent/waiting (Pipeline Contacted) — matches promote-when-due
-  if(due && !duePassed) return 'sent';
+  // Scheduled future due → stay Contacted (today if sent today, else waiting)
+  if(due && !duePassed){
+    return last===today ? 'today' : 'sent';
+  }
 
-  // +7 only when graduated by follow-up confirm-sent (kind), never since>=7 alone
-  if(isPlus7Kind && (duePassed || since>=3)) return 'plus7';
-  if(duePassed || since>=3) return 'plus3';
+  // Due date passed (or legacy: no due + 3d since last send) → Follow-up tabs only
+  if(duePassed || (!due && since>=3)){
+    if(isPlus7Kind) return 'plus7';
+    return 'plus3';
+  }
 
+  if(last===today) return 'today';
   // 1–2 days since send with no due yet
   return 'sent';
+}
+
+/** True while waiting on Contacted (not yet due for Follow-up +3/+7). */
+export function contactQueueIsWaitingContacted(b){
+  const bucket=contactQueueFollowBucket(b);
+  return bucket==='today' || bucket==='sent';
 }
 
 export function contactQueueFollowMatch(b, filter){
@@ -127,16 +137,20 @@ export function scrollContactQueueTop() {
   try { window.scrollTo(0, 0); } catch (_) { /* ignore */ }
 }
 
+const CQ_TABS = new Set([
+  'all', 'selected', 'ready', 'contacted', 'plus3', 'plus7', 'booking', 'cannot', 'connected',
+]);
+
 export function setContactQueueTab(tab) {
-  if (tab === 'selected' || tab === 'ready' || tab === 'booking' || tab === 'contacted' || tab === 'cannot' || tab === 'connected') {
-    state.contactQueueTab = tab;
-  } else {
-    state.contactQueueTab = 'all';
-  }
+  state.contactQueueTab = CQ_TABS.has(tab) ? tab : 'all';
   requestAnimationFrame(() => {
     scrollContactQueueTop();
     setTimeout(scrollContactQueueTop, 40);
   });
+}
+
+function isContactedLikeTab(tab) {
+  return tab === 'contacted' || tab === 'plus3' || tab === 'plus7';
 }
 
 /** Reload CQ list without changing panel or tab (mark / ready / booking stay put). */
@@ -164,7 +178,7 @@ function refreshPipelineAfterQueueMove(){
 export function setContactQueueQuery(q) { contactQueueQuery = q || ''; }
 export function setContactQueueChannel(ch) { contactQueueChannel = ch || ''; }
 export function setContactQueueFollowFilter(v) {
-  const allowed = new Set(['', 'today', 'sent', 'plus3', 'plus7']);
+  const allowed = new Set(['', 'today', 'sent']);
   contactQueueFollowFilter = allowed.has(v || '') ? (v || '') : '';
 }
 export function getContactQueueFollowFilter() { return contactQueueFollowFilter; }
@@ -204,6 +218,21 @@ export function contactQueueContactedLeads(){
     if (b.opt_out || isCannotContact(b) || isAlreadyConnected(b)) return false;
     return !!(b.contacted || b.email_sent || b.whatsapp_sent || b.instagram_sent);
   });
+}
+
+/** Contacted leads still waiting — due date not passed yet (Contacted tab). */
+export function contactQueueWaitingContactedLeads(){
+  return contactQueueContactedLeads().filter((b) => contactQueueIsWaitingContacted(b));
+}
+
+/** Due Day 3 follow-ups only (date passed) — Follow-up +3 tab. */
+export function contactQueuePlus3Leads(){
+  return contactQueueContactedLeads().filter((b) => contactQueueFollowBucket(b) === 'plus3');
+}
+
+/** Due Day 7 follow-ups only (date passed) — Follow-up +7 tab. */
+export function contactQueuePlus7Leads(){
+  return contactQueueContactedLeads().filter((b) => contactQueueFollowBucket(b) === 'plus7');
 }
 
 export function contactQueueConnectedLeads(){
@@ -319,7 +348,9 @@ export function contactQueueVisibleLeads(){
   if(state.contactQueueTab==='selected') base=contactQueueSelectedLeads();
   else if(state.contactQueueTab==='ready') base=contactQueueReadyLeads();
   else if(state.contactQueueTab==='booking') base=contactQueueBookingLeads();
-  else if(state.contactQueueTab==='contacted') base=contactQueueContactedLeads();
+  else if(state.contactQueueTab==='plus3') base=contactQueuePlus3Leads();
+  else if(state.contactQueueTab==='plus7') base=contactQueuePlus7Leads();
+  else if(state.contactQueueTab==='contacted') base=contactQueueWaitingContactedLeads();
   else if(state.contactQueueTab==='cannot') base=contactQueueCannotLeads();
   else if(state.contactQueueTab==='connected') base=contactQueueConnectedLeads();
   else base=(state.contactQueueLeads||[]).slice();
@@ -331,7 +362,7 @@ export function contactQueueVisibleLeads(){
       if(aPark!==bPark) return aPark?1:-1;
       return (Number(b.rank_score)||0)-(Number(a.rank_score)||0);
     });
-  } else if(state.contactQueueTab==='contacted' || state.contactQueueTab==='cannot' || state.contactQueueTab==='ready' || state.contactQueueTab==='connected'){
+  } else if(isContactedLikeTab(state.contactQueueTab) || state.contactQueueTab==='cannot' || state.contactQueueTab==='ready' || state.contactQueueTab==='connected'){
     base.sort((a,b)=>{
       const aAt=a.updated_at||a.last_contacted_at||'';
       const bAt=b.updated_at||b.last_contacted_at||'';
@@ -381,7 +412,7 @@ export function renderContactQueueExplain(data){
         <div><div class="sub" style="margin:0">In scope</div><strong style="font-size:22px;letter-spacing:-.03em">${total}</strong></div>
       </div>
     </div>
-    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → Mark to contact → pick channel (+ IG warm 2/3) → Ready to contact → Message → Confirm sent. Can't contact parks unreachable.</p>
+    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → Mark to contact → pick channel (+ IG warm 2/3) → Ready → Message → Confirm sent → <strong>Follow-up +3</strong> → <strong>Follow-up +7</strong>. Can't contact parks unreachable.</p>
     ${igCapBannerHtml()}
     ${parts.length?`<p class="hint" style="margin:8px 0 0"><strong style="color:var(--text)">Top why:</strong> ${esc(parts.join(' · '))}</p>`:''}
   `;
@@ -416,7 +447,9 @@ export function syncContactQueueTabs(){
   const selBase=contactQueueSelectedLeads();
   const readyBase=contactQueueReadyLeads();
   const bookBase=contactQueueBookingLeads();
-  const contactedBase=contactQueueContactedLeads();
+  const contactedBase=contactQueueWaitingContactedLeads();
+  const plus3Base=contactQueuePlus3Leads();
+  const plus7Base=contactQueuePlus7Leads();
   const cannotBase=contactQueueCannotLeads();
   const connectedBase=contactQueueConnectedLeads();
   if($('contactQueueAllCount')) $('contactQueueAllCount').textContent=String(pass(allBase).length);
@@ -424,6 +457,8 @@ export function syncContactQueueTabs(){
   if($('contactQueueReadyCount')) $('contactQueueReadyCount').textContent=String(pass(readyBase).length);
   if($('contactQueueBookingCount')) $('contactQueueBookingCount').textContent=String(pass(bookBase).length);
   if($('contactQueueContactedCount')) $('contactQueueContactedCount').textContent=String(pass(contactedBase, {applyFollow:true}).length);
+  if($('contactQueuePlus3Count')) $('contactQueuePlus3Count').textContent=String(pass(plus3Base).length);
+  if($('contactQueuePlus7Count')) $('contactQueuePlus7Count').textContent=String(pass(plus7Base).length);
   if($('contactQueueCannotCount')) $('contactQueueCannotCount').textContent=String(pass(cannotBase).length);
   if($('contactQueueConnectedCount')) $('contactQueueConnectedCount').textContent=String(pass(connectedBase).length);
   const followField=$('contactQueueFollowField');
@@ -696,15 +731,17 @@ export function renderContactQueueList(){
   const isSelected=state.contactQueueTab==='selected';
   const isReady=state.contactQueueTab==='ready';
   const isBooking=state.contactQueueTab==='booking';
-  const isContacted=state.contactQueueTab==='contacted';
+  const isPlus3=state.contactQueueTab==='plus3';
+  const isPlus7=state.contactQueueTab==='plus7';
+  const isContacted=state.contactQueueTab==='contacted' || isPlus3 || isPlus7;
   const isCannot=state.contactQueueTab==='cannot';
   const isConnected=state.contactQueueTab==='connected';
   const leads=contactQueueVisibleLeads();
   const q=(contactQueueQuery||'').trim();
   const pagerHost=ensurePagerHost(list,'contactQueuePager');
-  const tabLabel=isSelected?'To contact':(isReady?'Ready to contact':(isBooking?'Has booking':(isContacted?'Contacted':(isCannot?"Can't contact":(isConnected?'Already connected':'All')))));
+  const tabLabel=isSelected?'To contact':(isReady?'Ready to contact':(isBooking?'Has booking':(isPlus3?'Follow-up +3':(isPlus7?'Follow-up +7':(state.contactQueueTab==='contacted'?'Contacted':(isCannot?"Can't contact":(isConnected?'Already connected':'All')))))));
   if(!leads.length){
-    if(q || contactQueueChannel || (isContacted && contactQueueFollowFilter)){
+    if(q || contactQueueChannel || (state.contactQueueTab==='contacted' && contactQueueFollowFilter)){
       list.innerHTML=`<div class="empty-card">No matches on <strong>${tabLabel}</strong> for this search/filter.</div>`;
     }else{
       list.innerHTML=isSelected
@@ -713,8 +750,12 @@ export function renderContactQueueList(){
           ? '<div class="empty-card">Nothing ready. On <strong>To contact</strong>, pick a channel (and IG warm 2/3), then <strong>Ready to contact</strong>.</div>'
         : isBooking
           ? '<div class="empty-card">No leads marked as already having booking. Use <strong>Has booking</strong> on Discover or All.</div>'
-          : isContacted
-            ? '<div class="empty-card">No confirmed sends yet. From <strong>Ready to contact</strong>, message then <strong>Confirm sent</strong>. System moves leads to Follow-up +3 then +7 after each send.</div>'
+          : isPlus3
+            ? '<div class="empty-card">No Day 3 follow-ups due. After cold Confirm sent, leads land here when +3 is due — use <strong>Follow-up</strong> then Confirm sent.</div>'
+          : isPlus7
+            ? '<div class="empty-card">No Day 7 follow-ups due. After a +3 Follow-up Confirm sent, leads land here when +7 is due.</div>'
+          : state.contactQueueTab==='contacted'
+            ? '<div class="empty-card">No waiting Contacted leads. After Confirm sent they stay here until the follow-up <strong>due date</strong>, then move to <strong>Follow-up +3</strong> / <strong>+7</strong>.</div>'
           : isCannot
             ? '<div class="empty-card">No parked leads. On <strong>To contact</strong> or <strong>Ready</strong>, use <strong>Can\'t contact</strong> when unreachable.</div>'
           : isConnected

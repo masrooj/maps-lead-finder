@@ -88,9 +88,30 @@ def test_future_due_stays_contacted_board():
         follow_up_kind="plus3",
     )
     with SessionLocal() as db:
+        from app.services.automation import follow_up_badge
+
         b = db.get(Business, bid)
         assert infer_slug_from_flags(b) == "contacted"
         assert maybe_promote_follow_up(db, b) is False
+        badge = follow_up_badge(b)
+        assert badge.get("kind") == "scheduled"
+        assert "due in" in (badge.get("label") or "").lower()
+
+
+def test_due_today_badge_not_scheduled_as_plus_column():
+    """Due today is actionable Follow-up — badge due_today, board follow_up_3."""
+    bid = _lead(
+        last_contacted_at=datetime.now(timezone.utc) - timedelta(days=3),
+        next_follow_up_at=datetime.now(timezone.utc),
+        follow_up_kind="plus3",
+    )
+    with SessionLocal() as db:
+        from app.services.automation import follow_up_badge
+
+        b = db.get(Business, bid)
+        assert infer_slug_from_flags(b) == "follow_up_3"
+        badge = follow_up_badge(b)
+        assert badge.get("kind") == "due_today"
 
 
 def test_reminders_dry_run_promotes_without_email(auth_client, monkeypatch):

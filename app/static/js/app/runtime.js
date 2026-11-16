@@ -159,6 +159,9 @@ function setAppPanel(panel, opts){
     if(appPanel==='deals') dealsTab=tabHint==='paylinks'?'paylinks':'proposals';
     if(appPanel==='appoinHive') ahTab=['overview','connect','events','catalogs'].includes(tabHint)?tabHint:ahTab;
     if(appPanel==='settings') settingsTab=['general','team','ranking','jobs','views'].includes(tabHint)?tabHint:settingsTab;
+    if(appPanel==='contactQueue' && ['all','selected','ready','contacted','plus3','plus7','booking','cannot','connected'].includes(tabHint)){
+      setContactQueueTab(tabHint);
+    }
   }
   if(o.moneyTab) moneyTab=o.moneyTab;
   if(o.commsTab) commsTab=o.commsTab;
