@@ -36,6 +36,8 @@ def test_openapi_has_bearer_and_feature_tags(client):
         "/api/sales/prospects/{business_id}/ready-status",
         "/api/sales/prospects/{business_id}/demote-to-contact",
         "/api/sales/dashboard/queues",
+        "/api/sales/prospects/backfill-due-plus3",
+        "/api/sales/templates/ensure-defaults",
     ):
         assert needed in paths, f"missing OpenAPI path {needed}"
 

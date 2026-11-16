@@ -2188,6 +2188,43 @@ def sales_auto_setup_prospects(_user: str = Depends(require_user), db=Depends(ge
     return {"ok": True, **result}
 
 
+@router.post("/prospects/backfill-due-plus3", tags=["pipeline"])
+def sales_backfill_due_plus3(
+    product_line: str = "STANDALONE",
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Move already-due Contacted leads into Follow-up +3 (kind + pipeline column).
+
+    Also idempotently seeds missing Day 3 / Day 7 follow-up templates for live DBs.
+    Skips plus7 / ladder_complete. Safe one-shot for legacy Contacted cards.
+    """
+    from app.main import seed_default_templates
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.automation import backfill_due_contacted_to_plus3
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    pl = (product_line or "STANDALONE").strip().upper() or "STANDALONE"
+    templates = seed_default_templates(db, commit=False)
+    result = backfill_due_contacted_to_plus3(
+        db, product_line=pl, actor_id=actor.id if actor else None
+    )
+    return {**result, "templates": templates}
+
+
+@router.post("/templates/ensure-defaults", tags=["pipeline"])
+def sales_ensure_default_templates(_user: str = Depends(require_user), db=Depends(get_db)):
+    """Idempotent seed of soft openers + Day 3 / Day 7 follow-up templates (live-safe)."""
+    from app.main import seed_default_templates
+    from app.services.authz import get_user_by_email, require_role
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    result = seed_default_templates(db, commit=True)
+    return {"ok": True, **result}
+
+
 @router.post("/prospects/normalize-currency", tags=["pipeline"])
 def sales_normalize_currency(
     from_currency: str = "AUD",

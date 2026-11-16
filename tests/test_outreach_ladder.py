@@ -9,6 +9,7 @@ from app.models import Business, PipelineStage, Task
 from sqlalchemy import select
 
 from app.services.automation import (
+    backfill_due_contacted_to_plus3,
     close_exhausted_ladders,
     maybe_promote_follow_up,
     promote_due_follow_ups,
@@ -236,3 +237,67 @@ def test_due_plus3_promotes_not_ladder_complete():
         stage = db.get(PipelineStage, b.pipeline_stage_id)
         assert stage is not None and stage.slug == "follow_up_3"
         assert b.follow_up_kind == "plus3"
+
+
+def test_backfill_due_contacted_to_plus3(auth_client):
+    due = _lead(
+        contacted=True,
+        email_sent=True,
+        ready_for_contact=False,
+        follow_up_kind="",
+        next_follow_up_at=datetime.now(timezone.utc) - timedelta(days=2),
+        last_contacted_at=datetime.now(timezone.utc) - timedelta(days=5),
+    )
+    call = _lead(
+        place_id=f"qa/ladder-call-{time.time_ns()}",
+        name="Call Today Legacy",
+        contacted=True,
+        email_sent=True,
+        ready_for_contact=False,
+        follow_up_kind="call_today",
+        next_follow_up_at=datetime.now(timezone.utc) - timedelta(hours=1),
+        last_contacted_at=datetime.now(timezone.utc) - timedelta(days=1),
+    )
+    future = _lead(
+        place_id=f"qa/ladder-fut-{time.time_ns()}",
+        name="Not Due Yet",
+        contacted=True,
+        email_sent=True,
+        ready_for_contact=False,
+        follow_up_kind="plus3",
+        next_follow_up_at=datetime.now(timezone.utc) + timedelta(days=2),
+        last_contacted_at=datetime.now(timezone.utc),
+    )
+    plus7 = _lead(
+        place_id=f"qa/ladder-p7-{time.time_ns()}",
+        name="Already Plus7",
+        contacted=True,
+        email_sent=True,
+        ready_for_contact=False,
+        follow_up_kind="plus7",
+        next_follow_up_at=datetime.now(timezone.utc) - timedelta(days=1),
+        last_contacted_at=datetime.now(timezone.utc) - timedelta(days=8),
+    )
+    r = auth_client.post("/api/sales/prospects/backfill-due-plus3")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body.get("ok") is True
+    assert body.get("kind_updated", 0) >= 2
+    assert body.get("promoted_follow_up_3", 0) >= 2
+    with SessionLocal() as db:
+        b_due = db.get(Business, due)
+        b_call = db.get(Business, call)
+        b_fut = db.get(Business, future)
+        b_p7 = db.get(Business, plus7)
+        assert b_due.follow_up_kind == "plus3"
+        assert b_call.follow_up_kind == "plus3"
+        assert (db.get(PipelineStage, b_due.pipeline_stage_id).slug == "follow_up_3")
+        assert (db.get(PipelineStage, b_call.pipeline_stage_id).slug == "follow_up_3")
+        assert b_fut.follow_up_kind == "plus3"
+        assert b_p7.follow_up_kind == "plus7"
+        fut_stage = db.get(PipelineStage, b_fut.pipeline_stage_id) if b_fut.pipeline_stage_id else None
+        assert fut_stage is None or fut_stage.slug in ("contacted", "identified", "to_contact", "ready_to_contact")
+        assert maybe_promote_follow_up(db, b_fut) is False
+        if b_p7.pipeline_stage_id:
+            p7_stage = db.get(PipelineStage, b_p7.pipeline_stage_id)
+            assert p7_stage is None or p7_stage.slug != "follow_up_3"

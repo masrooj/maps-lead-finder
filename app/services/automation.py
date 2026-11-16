@@ -786,6 +786,81 @@ def promote_due_follow_ups(db, *, product_line: Optional[str] = None, actor_id: 
     return moved + closed
 
 
+def _contacted_is_due_for_plus3(b: Business) -> bool:
+    """True when Contacted lead belongs in +3 work (due/past or 3d+ since last send)."""
+    kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
+    if kind in _PLUS7_KINDS or kind == _LADDER_COMPLETE_KIND:
+        return False
+    due = getattr(b, "next_follow_up_at", None)
+    if due:
+        due_aware = due if due.tzinfo else due.replace(tzinfo=timezone.utc)
+        return due_aware <= _utcnow()
+    return days_since_last_contact(b) >= 3
+
+
+def backfill_due_contacted_to_plus3(
+    db, *, product_line: Optional[str] = None, actor_id: Optional[int] = None, limit: int = 2000
+) -> dict:
+    """One-shot: due Contacted cards → follow_up_kind=plus3 + Pipeline Follow-up +3.
+
+    Skips plus7 / ladder_complete. Converts empty / call_today / scheduled kinds.
+    Ensures next_follow_up_at is due (now) when missing so CQ +3 filter matches.
+    """
+    q = select(Business).where(
+        Business.contacted.is_(True),
+        or_(Business.lost.is_(False), Business.lost.is_(None)),
+        or_(Business.archived.is_(False), Business.archived.is_(None)),
+    )
+    if product_line:
+        q = q.where(Business.product_line == product_line.upper())
+    rows = db.scalars(q.limit(max(1, min(int(limit), 5000)))).all()
+    updated = 0
+    promoted = 0
+    skipped = 0
+    samples: list[dict] = []
+    for b in rows:
+        if not _contacted_is_due_for_plus3(b):
+            skipped += 1
+            continue
+        kind = (getattr(b, "follow_up_kind", None) or "").strip().lower()
+        changed = False
+        if kind not in ("plus3",):
+            b.follow_up_kind = "plus3"
+            changed = True
+        if not getattr(b, "next_follow_up_at", None):
+            b.next_follow_up_at = _utcnow()
+            changed = True
+        elif kind == "call_today":
+            # Clear same-day call hold so promote + CQ treat as +3 due
+            b.follow_up_kind = "plus3"
+            changed = True
+        b.updated_at = _utcnow()
+        if changed:
+            updated += 1
+        if maybe_promote_follow_up(db, b, actor_id=actor_id, commit=False):
+            promoted += 1
+        if len(samples) < 25:
+            samples.append(
+                {
+                    "id": b.id,
+                    "name": b.name,
+                    "follow_up_kind": (getattr(b, "follow_up_kind", None) or "").strip(),
+                    "next_follow_up_at": (
+                        b.next_follow_up_at.isoformat() if b.next_follow_up_at else ""
+                    ),
+                }
+            )
+    db.commit()
+    return {
+        "ok": True,
+        "scanned": len(rows),
+        "kind_updated": updated,
+        "promoted_follow_up_3": promoted,
+        "skipped_not_due_or_past_plus3": skipped,
+        "sample": samples,
+    }
+
+
 def on_outreach_confirmed(
     db,
     b: Business,

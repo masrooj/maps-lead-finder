@@ -1139,7 +1139,12 @@ def log_activity(db, business_id: int, kind: str, channel: str = "", note: str =
     db.add(ActivityLog(business_id=business_id, kind=kind, channel=channel or "", note=note or ""))
 
 
-def seed_default_templates(db):
+def seed_default_templates(db, *, commit: bool = True) -> dict:
+    """Idempotent seed of default + soft opener + ladder follow-up templates.
+
+    Safe on live: never overwrites existing rows; only inserts missing
+    (channel, purpose, name) keys — including follow_up_3 / follow_up_7.
+    """
     existing = db.scalars(select(MessageTemplate)).all()
     have_channels = {t.channel for t in existing}
     have_keys = {(t.channel, (t.purpose or ""), (t.name or "")) for t in existing}
@@ -1148,7 +1153,8 @@ def seed_default_templates(db):
         for t in existing
         if t.is_default and t.channel in ("whatsapp", "instagram")
     }
-    created = False
+    created = 0
+    created_keys: list[str] = []
     for channel, data in DEFAULT_TEMPLATES.items():
         if channel in have_channels:
             continue
@@ -1163,7 +1169,8 @@ def seed_default_templates(db):
             purpose="",
             governance_ok=True,
         ))
-        created = True
+        created += 1
+        created_keys.append(f"{channel}:::{data['name']}")
         have_channels.add(channel)
         have_keys.add((channel, "", data["name"]))
     for data in SOFT_OPENER_TEMPLATES:
@@ -1173,8 +1180,10 @@ def seed_default_templates(db):
         key = (channel, purpose, name)
         if key in have_keys:
             continue
+        # Never mark ladder follow-ups as channel default — soft_opener / long-form stay default.
         make_default = (
-            channel in ("whatsapp", "instagram")
+            purpose == "soft_opener"
+            and channel in ("whatsapp", "instagram")
             and channel not in soft_default_channels
             and not any(t.channel == channel and t.is_default for t in existing)
         )
@@ -1189,10 +1198,29 @@ def seed_default_templates(db):
         ))
         if make_default:
             soft_default_channels.add(channel)
-        created = True
+        created += 1
+        created_keys.append(f"{channel}:{purpose}:{name}")
         have_keys.add(key)
-    if created or not existing:
+    if commit and (created or not existing):
         db.commit()
+    ladder = [
+        k for k in created_keys if ":follow_up_3:" in k or ":follow_up_7:" in k
+    ]
+    return {
+        "created": created,
+        "created_keys": created_keys[:40],
+        "ladder_templates_created": len(ladder),
+        "ladder_keys": ladder,
+    }
+
+
+# After seed_default_templates is defined — live deploy restart inserts missing +3/+7 copy.
+if boot_state.db_ready:
+    with SessionLocal() as _tpl_seed_db:
+        try:
+            seed_default_templates(_tpl_seed_db, commit=True)
+        except Exception:
+            pass
 
 
 def parse_follow_up(value: Any) -> Optional[datetime]:

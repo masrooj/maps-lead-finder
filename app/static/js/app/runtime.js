@@ -3445,6 +3445,21 @@ $('autoSetupProspectsBtn')&&$('autoSetupProspectsBtn').addEventListener('click',
     toast(`Auto-setup done · updated ${res.updated||0} / ${res.total||0}`);
   }catch(e){ toast(e.message,true); }
 });
+$('backfillDuePlus3Btn')&&$('backfillDuePlus3Btn').addEventListener('click',async()=>{
+  const ok=await uiConfirm({
+    title:'Move due Contacted → +3?',
+    message:'Sets follow_up_kind=plus3 and Pipeline Follow-up +3 for Contacted leads that are already due (or 3+ days since last send). Also seeds missing Day 3 / Day 7 follow-up templates. Skips +7 and ladder-complete.',
+    confirmLabel:'Move to +3',
+  });
+  if(!ok) return;
+  try{
+    const res=await api('/api/sales/prospects/backfill-due-plus3',{method:'POST',body:{}});
+    const tpl=(res.templates&&res.templates.ladder_templates_created)||0;
+    toast(`Due → +3 · kind ${res.kind_updated||0} · promoted ${res.promoted_follow_up_3||0} · templates +${tpl}`);
+    if(typeof loadContactQueue==='function') loadContactQueue({keepTab:true, force:true}).catch(()=>{});
+    if(typeof refreshPipelineAfterQueueMove==='function') refreshPipelineAfterQueueMove();
+  }catch(e){ toast(e.message,true); }
+});
 $('normalizeCurrencyBtn')&&$('normalizeCurrencyBtn').addEventListener('click',async()=>{
   const from=(($('currencyNormalizeFrom')&&$('currencyNormalizeFrom').value)||'AUD').toUpperCase();
   const to=(($('currencyNormalizeTo')&&$('currencyNormalizeTo').value)||'USD').toUpperCase();
