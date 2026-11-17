@@ -3,6 +3,14 @@ from __future__ import annotations
 
 import os
 
+
+def normalize_database_url(url: str) -> str:
+    """SQLAlchemy expects postgresql://; Prisma/Heroku often emit postgres://."""
+    if url.lower().startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://") :]
+    return url
+
+
 def _database_url() -> str:
     """Postgres only. Never use SQLite (avoids dual-DB confusion)."""
     explicit = (os.getenv("DATABASE_URL") or "").strip()
@@ -12,7 +20,7 @@ def _database_url() -> str:
                 "SQLite is disabled. Set DATABASE_URL to Postgres "
                 "(Docker: postgresql+psycopg://mapsleads:…@127.0.0.1:5433/mapsleads)."
             )
-        return explicit
+        return normalize_database_url(explicit)
     pw = (os.getenv("POSTGRES_PASSWORD") or "change-this-password").strip()
     port = (os.getenv("DB_PORT") or "5433").strip() or "5433"
     return f"postgresql+psycopg://mapsleads:{pw}@127.0.0.1:{port}/mapsleads"
