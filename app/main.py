@@ -21,6 +21,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import or_, select, and_, case, func, text
 from sqlalchemy.exc import OperationalError
 
+from app.boot_data import (
+    run_boot_schema_init,
+    run_post_schema_startup_mutations,
+    run_startup_template_seed,
+)
 from app.config import (
     ENABLE_API_DOCS,
     LOGIN_PASSWORD,
@@ -208,26 +213,36 @@ SOFT_OPENER_TEMPLATES = [
 
 # Schema/migrations must not crash the process — otherwise Vercel/Lambda cannot
 # serve a system error page when the DB provider rejects connections (e.g. Neon quota).
+# APP_SKIP_SCHEMA_INIT=true (read-only smoke) skips DDL/migrations; default unchanged.
+def _readonly_boot_probe() -> None:
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
+
+
 try:
-    Base.metadata.create_all(engine)
-    apply_migrations()
-    mark_boot_ok()
+    run_boot_schema_init(
+        create_all_fn=lambda: Base.metadata.create_all(engine),
+        apply_migrations_fn=apply_migrations,
+        mark_ok_fn=mark_boot_ok,
+        readonly_probe_fn=_readonly_boot_probe,
+    )
 except Exception as _boot_exc:
     set_boot_issue(_boot_exc)
 
-# Seed Sales OS catalog/stages/owner (idempotent) + remap marked→to_contact
-if boot_state.db_ready:
-    with SessionLocal() as _seed_db:
-        try:
-            seed_sales_os(_seed_db)
-            backfill_prospect_stages(_seed_db)
-            from app.services.automation import promote_due_follow_ups
+# Catalog/pipeline mutations (skipped when APP_STARTUP_DATA_MUTATIONS=false).
+try:
+    from app.services.automation import promote_due_follow_ups
 
-            promote_due_follow_ups(_seed_db)
-            _seed_db.commit()
-        except Exception:
-            # Do not block app boot if seed races; APIs can re-run backfill
-            pass
+    run_post_schema_startup_mutations(
+        db_ready=boot_state.db_ready,
+        session_factory=SessionLocal,
+        seed_sales_os_fn=seed_sales_os,
+        backfill_fn=backfill_prospect_stages,
+        promote_fn=promote_due_follow_ups,
+    )
+except Exception:
+    # Do not block app boot if seed races; APIs can re-run backfill
+    pass
 
 _API_DESCRIPTION = (
     "Web + mobile AppointHive Sales OS API.\n\n"
@@ -1214,13 +1229,16 @@ def seed_default_templates(db, *, commit: bool = True) -> dict:
     }
 
 
-# After seed_default_templates is defined — live deploy restart inserts missing +3/+7 copy.
-if boot_state.db_ready:
-    with SessionLocal() as _tpl_seed_db:
-        try:
-            seed_default_templates(_tpl_seed_db, commit=True)
-        except Exception:
-            pass
+# After seed_default_templates is defined — live deploy restart inserts missing +3/+7 copy
+# (skipped when APP_STARTUP_DATA_MUTATIONS=false).
+try:
+    run_startup_template_seed(
+        db_ready=boot_state.db_ready,
+        session_factory=SessionLocal,
+        seed_templates_fn=seed_default_templates,
+    )
+except Exception:
+    pass
 
 
 def parse_follow_up(value: Any) -> Optional[datetime]:

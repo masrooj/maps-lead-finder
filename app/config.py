@@ -38,6 +38,27 @@ ACCESS_TOKEN_MINUTES = int((os.getenv("ACCESS_TOKEN_MINUTES") or "30").strip() o
 REFRESH_TOKEN_DAYS = int((os.getenv("REFRESH_TOKEN_DAYS") or "30").strip() or "30")
 ENABLE_API_DOCS = (os.getenv("ENABLE_API_DOCS") or "true").strip().lower() in ("1", "true", "yes")
 
+
+def startup_data_mutations_enabled() -> bool:
+    """Import-time seed/backfill/promote. Default on; set APP_STARTUP_DATA_MUTATIONS=false to skip."""
+    raw = os.getenv("APP_STARTUP_DATA_MUTATIONS")
+    if raw is None or not str(raw).strip():
+        return True
+    return str(raw).strip().lower() not in ("0", "false", "no", "off")
+
+
+def schema_init_skipped() -> bool:
+    """Skip create_all/apply_migrations at import. Default off; set APP_SKIP_SCHEMA_INIT=true for read-only smoke."""
+    raw = os.getenv("APP_SKIP_SCHEMA_INIT")
+    if raw is None or not str(raw).strip():
+        return False
+    return str(raw).strip().lower() in ("1", "true", "yes", "on")
+
+
+# Snapshot for callers that prefer a constant; prefer startup_data_mutations_enabled() in tests.
+APP_STARTUP_DATA_MUTATIONS = startup_data_mutations_enabled()
+APP_SKIP_SCHEMA_INIT = schema_init_skipped()
+
 # Commercial defaults (overridable via app_settings table)
 DEFAULT_CURRENCY = os.getenv("DEFAULT_CURRENCY", "USD").strip().upper() or "USD"
 DEFAULT_TIMEZONE = os.getenv("DEFAULT_TIMEZONE", "Australia/Sydney").strip() or "Australia/Sydney"

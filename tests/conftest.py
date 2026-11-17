@@ -104,6 +104,13 @@ from app.services.seed import seed_owner, seed_sales_os
 from app.services.pipeline import backfill_prospect_stages
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "no_db: pure unit test — skip autouse DB truncate/client isolation",
+    )
+
+
 def frontend_source(html: str = "") -> str:
     """HTML shell + static JS/CSS — markers moved out of index.html in SOLID extract."""
     parts = [html or ""]
@@ -210,13 +217,19 @@ def client():
 
 
 @pytest.fixture(autouse=True)
-def _isolate_db(client):
+def _isolate_db(request):
     """Per-test data isolation (mutable truncate + light reseed).
 
     Catalog tables (stages/plans/settings) stay warm from the session seed so we
     avoid the full-catalog TRUNCATE that made the suite ~13–16 minutes on a
     nearly-full disk. Correctness target: same as ephemeral SQLite per process.
+
+    Tests marked ``no_db`` skip DB isolation entirely (no ``client`` / truncate).
     """
+    if request.node.get_closest_marker("no_db"):
+        yield
+        return
+    request.getfixturevalue("client")
     _reset_fast()
     yield
 
