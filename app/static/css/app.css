@@ -882,6 +882,8 @@ body:not(.authed) .wrap{
 .provider-create-row{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 12px}
 .provider-create-row button{flex:1 1 auto;min-width:110px}
 .fields.filter-bar{grid-template-columns:repeat(auto-fit,minmax(160px,1fr)) auto;align-items:end}
+.cq-sent-ch-filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.cq-sent-ch-filters .flag{margin:0;padding:6px 10px;font-size:12px}
 .activity{list-style:none;margin:0;padding:0}
 .activity li{padding:8px 0;border-bottom:1px solid var(--line-soft);font-size:12px}
 .activity li:last-child{border-bottom:0}

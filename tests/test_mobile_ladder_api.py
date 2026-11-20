@@ -147,6 +147,7 @@ def test_dashboard_queues_ladder_keys(client):
     assert r.status_code == 200, r.text
     q = (r.json().get("queues") or {})
     for key in (
+        "lined_up_count",
         "ready_unlocked_count",
         "follow_up_due_count",
         "follow_up_3_count",
@@ -168,3 +169,38 @@ def test_ready_status_includes_ladder_and_wait(client):
     assert "follow_up_badge" in body
     assert "can_confirm_sent" in body
     assert "ladder_complete" in body
+    assert "lined_up" in body
+    assert body.get("queue_tab") == "ready"
+    assert body.get("lined_up") is False
+
+
+def test_contact_queue_lined_up_and_ready_endpoints(client):
+    h = _bearer(client)
+    waiting = _lead(
+        ready_for_contact=True,
+        ig_ready_at=datetime.now(timezone.utc),
+        outreach_channel="email",
+    )
+    unlocked = _lead(
+        ready_for_contact=True,
+        ig_ready_at=datetime.now(timezone.utc) - timedelta(days=3),
+        outreach_channel="email",
+    )
+    lined = client.get("/api/sales/contact-queue/lined-up", headers=h, params={"limit": 5000})
+    assert lined.status_code == 200, lined.text
+    assert lined.json().get("tab") == "lined_up"
+    lined_ids = {int(x["id"]) for x in (lined.json().get("leads") or [])}
+    assert waiting in lined_ids
+    assert unlocked not in lined_ids
+
+    ready = client.get("/api/sales/contact-queue/ready", headers=h, params={"limit": 5000})
+    assert ready.status_code == 200, ready.text
+    assert ready.json().get("tab") == "ready"
+    ready_ids = {int(x["id"]) for x in (ready.json().get("leads") or [])}
+    assert unlocked in ready_ids
+    assert waiting not in ready_ids
+
+    st = client.get(f"/api/sales/prospects/{waiting}/ready-status", headers=h)
+    assert st.status_code == 200
+    assert st.json().get("lined_up") is True
+    assert st.json().get("queue_tab") == "lined_up"

@@ -35,9 +35,11 @@ import {
 } from '../features/cannot-contact.js';
 import {
   alreadyConnectedPrimaryId,
+  bulkMarkForContact,
   clearAlreadyConnected,
   fetchSameContactSiblings,
   isAlreadyConnected,
+  isEngaged,
   markAlreadyConnected,
   markEngaged,
   setIgAwaitingFollowBack,
@@ -56,6 +58,8 @@ let contactQueueQuery = '';
 let contactQueueChannel = '';
 /** Contacted-tab only (waiting): '' | today | sent */
 let contactQueueFollowFilter = '';
+/** Contacted-tab: Set of whatsapp|instagram|email — OR filter on *_sent */
+let contactQueueSentChannels = new Set();
 let contactQueueLocations = {};
 let igDiscoverStarted = new Set();
 
@@ -138,7 +142,7 @@ export function scrollContactQueueTop() {
 }
 
 const CQ_TABS = new Set([
-  'all', 'selected', 'ready', 'contacted', 'plus3', 'plus7', 'booking', 'cannot', 'connected',
+  'all', 'selected', 'lined_up', 'ready', 'contacted', 'plus3', 'plus7', 'engaged', 'booking', 'cannot', 'connected',
 ]);
 
 export function setContactQueueTab(tab) {
@@ -151,6 +155,25 @@ export function setContactQueueTab(tab) {
 
 function isContactedLikeTab(tab) {
   return tab === 'contacted' || tab === 'plus3' || tab === 'plus7';
+}
+
+export function setContactQueueSentChannels(chans) {
+  const allowed = new Set(['whatsapp', 'instagram', 'email']);
+  contactQueueSentChannels = new Set(
+    [...(chans || [])].map((c) => String(c || '').toLowerCase()).filter((c) => allowed.has(c))
+  );
+}
+export function getContactQueueSentChannels() {
+  return contactQueueSentChannels;
+}
+
+export function contactQueueSentChannelMatch(b, chans) {
+  const set = chans instanceof Set ? chans : new Set(chans || []);
+  if (!set.size) return true;
+  if (set.has('whatsapp') && b.whatsapp_sent) return true;
+  if (set.has('instagram') && b.instagram_sent) return true;
+  if (set.has('email') && b.email_sent) return true;
+  return false;
 }
 
 /** Reload CQ list without changing panel or tab (mark / ready / booking stay put). */
@@ -203,8 +226,8 @@ export function contactQueueSelectedLeads(){
   );
 }
 
-/** Messaging queue: ready_for_contact and not yet contacted / parked. */
-export function contactQueueReadyLeads(){
+/** Ready pool base: promoted, not contacted, not parked. */
+function contactQueueReadyPoolLeads(){
   return (state.contactQueueLeads||[]).filter(b=>
     b.ready_for_contact && !b.contacted && !b.opt_out && !isCannotContact(b)
     && !leadHasBooking(b) && !isAlreadyConnected(b)
@@ -212,10 +235,40 @@ export function contactQueueReadyLeads(){
   );
 }
 
-/** Marked businesses whose first cold message was confirmed sent. */
+/**
+ * Promoted but not yet sendable (IG/WA/Email warm wait or follow-back hold).
+ * Keeps "Ready to contact" for leads that can actually open Message.
+ */
+export function leadIsLinedUpWaiting(b){
+  if(!b || !b.ready_for_contact) return false;
+  if(b.opt_out || isCannotContact(b) || leadHasBooking(b) || isAlreadyConnected(b)) return false;
+  if(b.contacted || b.email_sent || b.whatsapp_sent || b.instagram_sent) return false;
+  if(b.ig_awaiting_follow_back) return true;
+  const wait=b.ig_ready_wait;
+  if(wait && wait.applies && wait.unlocked===false) return true;
+  if(b.can_message===false){
+    const reason=String(b.can_message_reason||'').toLowerCase();
+    // Daily IG soft-DM cap stays on Ready (resets same day) — not Lined up.
+    if(reason.includes('daily') || reason.includes('cap') || reason.includes('quota')) return false;
+    return true;
+  }
+  return false;
+}
+
+/** Lined up: promoted · waiting for unlock before send. */
+export function contactQueueLinedUpLeads(){
+  return contactQueueReadyPoolLeads().filter((b) => leadIsLinedUpWaiting(b));
+}
+
+/** Messaging queue: ready + unlocked (can send cold message now). */
+export function contactQueueReadyLeads(){
+  return contactQueueReadyPoolLeads().filter((b) => !leadIsLinedUpWaiting(b));
+}
+
+/** Marked businesses whose first cold message was confirmed sent (not Engaged). */
 export function contactQueueContactedLeads(){
   return (state.contactQueueLeads||[]).filter(b=>{
-    if (b.opt_out || isCannotContact(b) || isAlreadyConnected(b)) return false;
+    if (b.opt_out || isCannotContact(b) || isAlreadyConnected(b) || isEngaged(b)) return false;
     return !!(b.contacted || b.email_sent || b.whatsapp_sent || b.instagram_sent);
   });
 }
@@ -233,6 +286,11 @@ export function contactQueuePlus3Leads(){
 /** Due Day 7 follow-ups only (date passed) — Follow-up +7 tab. */
 export function contactQueuePlus7Leads(){
   return contactQueueContactedLeads().filter((b) => contactQueueFollowBucket(b) === 'plus7');
+}
+
+/** Explicit Engaged (reply / interest) — leaves Contacted / +3 / +7. */
+export function contactQueueEngagedLeads(){
+  return (state.contactQueueLeads||[]).filter(b=>!b.opt_out && isEngaged(b));
 }
 
 export function contactQueueConnectedLeads(){
@@ -346,10 +404,12 @@ export function contactQueueIsParked(b){
 export function contactQueueVisibleLeads(){
   let base;
   if(state.contactQueueTab==='selected') base=contactQueueSelectedLeads();
+  else if(state.contactQueueTab==='lined_up') base=contactQueueLinedUpLeads();
   else if(state.contactQueueTab==='ready') base=contactQueueReadyLeads();
   else if(state.contactQueueTab==='booking') base=contactQueueBookingLeads();
   else if(state.contactQueueTab==='plus3') base=contactQueuePlus3Leads();
   else if(state.contactQueueTab==='plus7') base=contactQueuePlus7Leads();
+  else if(state.contactQueueTab==='engaged') base=contactQueueEngagedLeads();
   else if(state.contactQueueTab==='contacted') base=contactQueueWaitingContactedLeads();
   else if(state.contactQueueTab==='cannot') base=contactQueueCannotLeads();
   else if(state.contactQueueTab==='connected') base=contactQueueConnectedLeads();
@@ -362,7 +422,15 @@ export function contactQueueVisibleLeads(){
       if(aPark!==bPark) return aPark?1:-1;
       return (Number(b.rank_score)||0)-(Number(a.rank_score)||0);
     });
-  } else if(isContactedLikeTab(state.contactQueueTab) || state.contactQueueTab==='cannot' || state.contactQueueTab==='ready' || state.contactQueueTab==='connected'){
+  } else if(state.contactQueueTab==='lined_up'){
+    // Soonest unlock first so the queue isn't buried under long waits
+    base.sort((a,b)=>{
+      const aAt=(a.ig_ready_wait&&a.ig_ready_wait.unlocks_at)||a.ig_ready_at||a.updated_at||'';
+      const bAt=(b.ig_ready_wait&&b.ig_ready_wait.unlocks_at)||b.ig_ready_at||b.updated_at||'';
+      if(aAt!==bAt) return aAt<bAt?-1:1;
+      return (Number(b.rank_score)||0)-(Number(a.rank_score)||0);
+    });
+  } else if(isContactedLikeTab(state.contactQueueTab) || state.contactQueueTab==='engaged' || state.contactQueueTab==='cannot' || state.contactQueueTab==='ready' || state.contactQueueTab==='connected'){
     base.sort((a,b)=>{
       const aAt=a.updated_at||a.last_contacted_at||'';
       const bAt=b.updated_at||b.last_contacted_at||'';
@@ -374,6 +442,9 @@ export function contactQueueVisibleLeads(){
   if(ch) base=base.filter(b=>contactQueueChannelMatch(b,ch));
   if(state.contactQueueTab==='contacted' && contactQueueFollowFilter){
     base=base.filter(b=>contactQueueFollowMatch(b, contactQueueFollowFilter));
+  }
+  if(state.contactQueueTab==='contacted' && contactQueueSentChannels.size){
+    base=base.filter(b=>contactQueueSentChannelMatch(b, contactQueueSentChannels));
   }
   const q=(contactQueueQuery||'').trim().toLowerCase();
   if(!q) return base;
@@ -412,7 +483,7 @@ export function renderContactQueueExplain(data){
         <div><div class="sub" style="margin:0">In scope</div><strong style="font-size:22px;letter-spacing:-.03em">${total}</strong></div>
       </div>
     </div>
-    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → Mark to contact → pick channel (+ IG warm 2/3) → Ready → Message → Confirm sent → <strong>Follow-up +3</strong> → <strong>Follow-up +7</strong>. Can't contact parks unreachable.</p>
+    <p class="hint" style="margin:12px 0 0"><strong style="color:var(--text)">Workflow:</strong> All → Mark to contact → pick channel (+ IG warm 2/3) → <strong>Lined up</strong> (warming) → <strong>Ready</strong> (send) → Confirm sent → <strong>Follow-up +3</strong> → <strong>Follow-up +7</strong>. Can't contact parks unreachable.</p>
     ${igCapBannerHtml()}
     ${parts.length?`<p class="hint" style="margin:8px 0 0"><strong style="color:var(--text)">Top why:</strong> ${esc(parts.join(' · '))}</p>`:''}
   `;
@@ -437,32 +508,40 @@ export function syncContactQueueTabs(){
   const q=(contactQueueQuery||'').trim().toLowerCase();
   const ch=contactQueueChannel||(($('contactQueueChannel')&&$('contactQueueChannel').value)||'');
   const follow=contactQueueFollowFilter||(($('contactQueueFollowFilter')&&$('contactQueueFollowFilter').value)||'');
-  const pass=(list, {applyFollow=false}={})=>list.filter(b=>{
+  const sent=contactQueueSentChannels;
+  const pass=(list, {applyFollow=false, applySent=false}={})=>list.filter(b=>{
     if(ch && !contactQueueChannelMatch(b,ch)) return false;
     if(applyFollow && follow && !contactQueueFollowMatch(b, follow)) return false;
+    if(applySent && sent.size && !contactQueueSentChannelMatch(b, sent)) return false;
     if(q && !contactQueueMatchQuery(b,q)) return false;
     return true;
   });
   const allBase=state.contactQueueLeads||[];
   const selBase=contactQueueSelectedLeads();
+  const linedBase=contactQueueLinedUpLeads();
   const readyBase=contactQueueReadyLeads();
   const bookBase=contactQueueBookingLeads();
   const contactedBase=contactQueueWaitingContactedLeads();
   const plus3Base=contactQueuePlus3Leads();
   const plus7Base=contactQueuePlus7Leads();
+  const engagedBase=contactQueueEngagedLeads();
   const cannotBase=contactQueueCannotLeads();
   const connectedBase=contactQueueConnectedLeads();
   if($('contactQueueAllCount')) $('contactQueueAllCount').textContent=String(pass(allBase).length);
   if($('contactQueueSelectedCount')) $('contactQueueSelectedCount').textContent=String(pass(selBase).length);
+  if($('contactQueueLinedUpCount')) $('contactQueueLinedUpCount').textContent=String(pass(linedBase).length);
   if($('contactQueueReadyCount')) $('contactQueueReadyCount').textContent=String(pass(readyBase).length);
   if($('contactQueueBookingCount')) $('contactQueueBookingCount').textContent=String(pass(bookBase).length);
-  if($('contactQueueContactedCount')) $('contactQueueContactedCount').textContent=String(pass(contactedBase, {applyFollow:true}).length);
+  if($('contactQueueContactedCount')) $('contactQueueContactedCount').textContent=String(pass(contactedBase, {applyFollow:true, applySent:true}).length);
   if($('contactQueuePlus3Count')) $('contactQueuePlus3Count').textContent=String(pass(plus3Base).length);
   if($('contactQueuePlus7Count')) $('contactQueuePlus7Count').textContent=String(pass(plus7Base).length);
+  if($('contactQueueEngagedCount')) $('contactQueueEngagedCount').textContent=String(pass(engagedBase).length);
   if($('contactQueueCannotCount')) $('contactQueueCannotCount').textContent=String(pass(cannotBase).length);
   if($('contactQueueConnectedCount')) $('contactQueueConnectedCount').textContent=String(pass(connectedBase).length);
   const followField=$('contactQueueFollowField');
   if(followField) followField.hidden=state.contactQueueTab!=='contacted';
+  const sentField=$('contactQueueSentChannelField');
+  if(sentField) sentField.hidden=state.contactQueueTab!=='contacted';
   document.querySelectorAll('#contactQueueTabs [data-cq-tab]').forEach(btn=>{
     const on=btn.dataset.cqTab===state.contactQueueTab;
     btn.classList.toggle('active',on);
@@ -470,13 +549,16 @@ export function syncContactQueueTabs(){
   });
   const allBar=$('contactQueueBulkBar');
   const selBar=$('contactQueueSelectedBar');
+  const linedBar=$('contactQueueLinedUpBar');
   const readyBar=$('contactQueueReadyBar');
   if(allBar) allBar.classList.toggle('show', state.contactQueueTab==='all' && contactQueuePick.size>0);
   if(selBar) selBar.classList.toggle('show', state.contactQueueTab==='selected' && selBase.length>0);
+  if(linedBar) linedBar.classList.toggle('show', state.contactQueueTab==='lined_up' && linedBase.length>0);
   if(readyBar) readyBar.classList.toggle('show', state.contactQueueTab==='ready' && readyBase.length>0);
   if($('contactQueuePickCount')) $('contactQueuePickCount').textContent=contactQueuePick.size+' picked';
   if($('contactQueueSelectedHint')) $('contactQueueSelectedHint').textContent=selBase.length?`${selBase.length} in prep · pick channel, warm IG, then Ready`:'No leads in To contact yet';
-  if($('contactQueueReadyHint')) $('contactQueueReadyHint').textContent=readyBase.length?`${readyBase.length} ready · message from here`:'No leads ready to contact yet';
+  if($('contactQueueLinedUpHint')) $('contactQueueLinedUpHint').textContent=linedBase.length?`${linedBase.length} lined up · waiting for unlock`:'No lined-up leads';
+  if($('contactQueueReadyHint')) $('contactQueueReadyHint').textContent=readyBase.length?`${readyBase.length} sendable · message from here`:'No leads unlocked to send yet — check Lined up';
   if($('contactQueueMessageNext')) $('contactQueueMessageNext').disabled=!readyBase.length;
 }
 
@@ -698,7 +780,7 @@ async function promptAlreadyConnected(id){
 function queueDiscoverInstagramForVisible(leads){
   const need=(leads||[]).filter((b)=>leadNeedsIgDiscover(b) && !igDiscoverStarted.has(String(b.id))).slice(0, 8);
   if(!need.length) return;
-  const onQueueTab=state.contactQueueTab==='selected' || state.contactQueueTab==='ready';
+  const onQueueTab=state.contactQueueTab==='selected' || state.contactQueueTab==='lined_up' || state.contactQueueTab==='ready';
   need.forEach((b)=>{
     const id=String(b.id);
     igDiscoverStarted.add(id);
@@ -729,31 +811,37 @@ export function renderContactQueueList(){
   if(!list) return;
   syncContactQueueTabs();
   const isSelected=state.contactQueueTab==='selected';
+  const isLinedUp=state.contactQueueTab==='lined_up';
   const isReady=state.contactQueueTab==='ready';
   const isBooking=state.contactQueueTab==='booking';
   const isPlus3=state.contactQueueTab==='plus3';
   const isPlus7=state.contactQueueTab==='plus7';
+  const isEngagedTab=state.contactQueueTab==='engaged';
   const isContacted=state.contactQueueTab==='contacted' || isPlus3 || isPlus7;
   const isCannot=state.contactQueueTab==='cannot';
   const isConnected=state.contactQueueTab==='connected';
   const leads=contactQueueVisibleLeads();
   const q=(contactQueueQuery||'').trim();
   const pagerHost=ensurePagerHost(list,'contactQueuePager');
-  const tabLabel=isSelected?'To contact':(isReady?'Ready to contact':(isBooking?'Has booking':(isPlus3?'Follow-up +3':(isPlus7?'Follow-up +7':(state.contactQueueTab==='contacted'?'Contacted':(isCannot?"Can't contact":(isConnected?'Already connected':'All')))))));
+  const tabLabel=isSelected?'To contact':(isLinedUp?'Lined up':(isReady?'Ready to contact':(isBooking?'Has booking':(isPlus3?'Follow-up +3':(isPlus7?'Follow-up +7':(isEngagedTab?'Engaged':(state.contactQueueTab==='contacted'?'Contacted':(isCannot?"Can't contact":(isConnected?'Already connected':'All')))))))));
   if(!leads.length){
-    if(q || contactQueueChannel || (state.contactQueueTab==='contacted' && contactQueueFollowFilter)){
+    if(q || contactQueueChannel || (state.contactQueueTab==='contacted' && (contactQueueFollowFilter || contactQueueSentChannels.size))){
       list.innerHTML=`<div class="empty-card">No matches on <strong>${tabLabel}</strong> for this search/filter.</div>`;
     }else{
       list.innerHTML=isSelected
         ? '<div class="empty-card">Nothing in prep yet. On <strong>All</strong>, pick leads and use <strong>Mark to contact</strong>.</div>'
+        : isLinedUp
+          ? '<div class="empty-card">Nothing lined up. After <strong>Ready to contact</strong> on To contact, leads wait here until warm unlock / follow-back — then they move to <strong>Ready to contact</strong> to send.</div>'
         : isReady
-          ? '<div class="empty-card">Nothing ready. On <strong>To contact</strong>, pick a channel (and IG warm 2/3), then <strong>Ready to contact</strong>.</div>'
+          ? '<div class="empty-card">Nothing sendable yet. Leads still warming sit on <strong>Lined up</strong>. On <strong>To contact</strong>, finish channel + warm, then promote.</div>'
         : isBooking
           ? '<div class="empty-card">No leads marked as already having booking. Use <strong>Has booking</strong> on Discover or All.</div>'
           : isPlus3
             ? '<div class="empty-card">No Day 3 follow-ups due. After cold Confirm sent, leads land here when +3 is due — use <strong>Follow-up</strong> then Confirm sent.</div>'
           : isPlus7
             ? '<div class="empty-card">No Day 7 follow-ups due. After a +3 Follow-up Confirm sent, leads land here when +7 is due.</div>'
+          : isEngagedTab
+            ? '<div class="empty-card">No engaged leads yet. On <strong>Contacted</strong> / Follow-up, use <strong>Engaged</strong> when they reply — saves their response here.</div>'
           : state.contactQueueTab==='contacted'
             ? '<div class="empty-card">No waiting Contacted leads. After Confirm sent they stay here until the follow-up <strong>due date</strong>, then move to <strong>Follow-up +3</strong> / <strong>+7</strong>.</div>'
           : isCannot
@@ -775,7 +863,7 @@ export function renderContactQueueList(){
     const hasBook=!!(b.has_booking||(b.current_booking_software||'').trim());
     const rankNo=slice.start+i+1;
     const mapsUrl=mapsUrlFor(b);
-    const noCheck=isSelected||isReady||isBooking||isContacted||isCannot||isConnected;
+    const noCheck=isSelected||isLinedUp||isReady||isBooking||isContacted||isEngagedTab||isCannot||isConnected;
     const checkCell=noCheck?'':`<div class="checkcol"><input type="checkbox" data-cq-pick="${b.id}" ${picked?'checked':''} aria-label="Pick ${esc(b.name||'lead')}"></div>`;
     const holdOn=!!b.ig_awaiting_follow_back;
     let actions='';
@@ -788,10 +876,19 @@ export function renderContactQueueList(){
         <button type="button" data-cq-cannot="${b.id}">Can't contact</button>
         <button type="button" data-open-prospect="${b.id}">Open</button>
         <button type="button" data-cq-unmark="${b.id}">Remove</button>`;
-    }else if(isReady){
+    }else if(isLinedUp){
+      const waitReason=(b.ig_ready_wait&&b.ig_ready_wait.reason)||b.can_message_reason||'Waiting to unlock';
       actions=`
         ${igReadyWaitChipHtml(b)}
-        ${holdOn?'<span class="ch-tag" title="Waiting for follow-back">Awaiting follow-back</span>':''}
+        ${holdOn?'<span class="ch-tag" title="Waiting for follow-back">Awaiting follow-back</span>':`<span class="ch-tag" title="${esc(waitReason)}">${esc(waitReason)}</span>`}
+        <button type="button" data-cq-already-connected="${b.id}">Already connected</button>
+        <button type="button" data-cq-ig-hold="${b.id}" data-awaiting="${holdOn?'0':'1'}">${holdOn?'Clear follow-back hold':'Awaiting follow-back'}</button>
+        <button type="button" data-cq-booking="${b.id}" data-booking-on="1">Has booking</button>
+        <button type="button" data-cq-demote="${b.id}">Demote</button>
+        <button type="button" data-cq-cannot="${b.id}">Can't contact</button>
+        <button type="button" data-open-prospect="${b.id}">Open</button>`;
+    }else if(isReady){
+      actions=`
         ${composeChosenChannelButtonHtml(b)}
         <button type="button" data-cq-already-connected="${b.id}">Already connected</button>
         <button type="button" data-cq-ig-hold="${b.id}" data-awaiting="${holdOn?'0':'1'}">${holdOn?'Clear follow-back hold':'Awaiting follow-back'}</button>
@@ -803,6 +900,11 @@ export function renderContactQueueList(){
       actions=`
         <button type="button" data-open-prospect="${b.id}">Open</button>
         <button type="button" data-cq-booking="${b.id}" data-booking-on="0">Clear booking</button>`;
+    }else if(isEngagedTab){
+      const reply=(b.customer_response||'').trim();
+      actions=`
+        ${reply?`<span class="ch-tag" title="Customer response">${esc(reply.length>80?reply.slice(0,80)+'…':reply)}</span>`:''}
+        <button type="button" data-open-prospect="${b.id}">Open</button>`;
     }else if(isContacted){
       const badge=b.follow_up_badge&&b.follow_up_badge.label
         ?`<span class="ch-tag" title="Follow-up">${esc(b.follow_up_badge.label)}</span>`
@@ -831,7 +933,7 @@ export function renderContactQueueList(){
         <button type="button" data-open-prospect="${b.id}">Open</button>
         ${prim?`<span class="ch-tag" title="Primary">Primary #${esc(String(prim))}</span>`:''}`;
     }else{
-      const markLabel=isReadyLead?'On Ready':(already?'On To contact':'Mark to contact');
+      const markLabel=isReadyLead?(leadIsLinedUpWaiting(b)?'On Lined up':'On Ready'):(already?'On To contact':'Mark to contact');
       actions=`
         <button type="button" class="primary" data-cq-mark="${b.id}" ${already||isReadyLead||isAlreadyConnected(b)?'disabled':''}>${markLabel}</button>
         <button type="button" data-cq-booking="${b.id}" data-booking-on="${hasBook?'0':'1'}">${hasBook?'Clear booking':'Has booking'}</button>
@@ -1047,19 +1149,28 @@ export function renderContactQueueList(){
         if(res&&res.outreach_channel!=null) row.outreach_channel=res.outreach_channel;
         if(res&&res.ig_ready_at!=null) row.ig_ready_at=res.ig_ready_at;
         if(res&&res.ig_ready_wait) row.ig_ready_wait=res.ig_ready_wait;
-        if(res&&res.prospect) patchQueueLeadStage(row, res.prospect);
+        if(res&&res.can_message!=null) row.can_message=!!res.can_message;
+        if(res&&res.can_message_reason!=null) row.can_message_reason=res.can_message_reason||'';
+        if(res&&res.prospect){
+          patchQueueLeadStage(row, res.prospect);
+          if(res.prospect.can_message!=null) row.can_message=!!res.prospect.can_message;
+          if(res.prospect.can_message_reason!=null) row.can_message_reason=res.prospect.can_message_reason||'';
+          if(res.prospect.ig_ready_wait) row.ig_ready_wait=res.prospect.ig_ready_wait;
+        }
       }
-      await refreshContactQueueStay();
-      refreshPipelineAfterQueueMove();
       const wait=res&&res.ig_ready_wait;
       const ch=((row&&row.outreach_channel)||(res&&res.outreach_channel)||'').toLowerCase();
       const q=getIgOutreachQuota();
-      if(wait&&wait.applies&&wait.unlocked===false){
-        toast(wait.reason||'Marked Ready — soft ask unlocks after wait');
+      const lined=row?leadIsLinedUpWaiting(row):(wait&&wait.applies&&wait.unlocked===false);
+      setContactQueueTab(lined?'lined_up':'ready');
+      await loadContactQueue({keepTab:true, force:true});
+      refreshPipelineAfterQueueMove();
+      if(lined){
+        toast(wait&&wait.reason?`Lined up — ${wait.reason}`:'Lined up — waiting for unlock before send');
       }else if(ch==='instagram' && q.remaining<=0){
-        toast('Marked Ready — IG daily soft DM cap hit; messaging unlocks when the daily quota resets');
+        toast('Ready to contact — IG daily soft DM cap hit; messaging unlocks when the daily quota resets');
       }else{
-        toast('Marked Ready to contact');
+        toast('Ready to contact — send from here');
       }
     }catch(e){ toast(e.message||'Could not move to Ready',true); }
   }));
@@ -1162,15 +1273,22 @@ export function renderContactQueueList(){
     try{
       const form=await uiForm({
         title:'Mark Engaged',
-        message:'Use when they reply or show real interest (does not skip from discovery/score alone).',
+        message:'Use when they reply or show real interest. Saves their response and moves the lead to the Engaged tab.',
         confirmLabel:'Engaged',
-        fields:[{name:'note',label:'Note (optional)',type:'text'}],
+        fields:[
+          {name:'customer_response',label:'Customer response',type:'textarea',required:true,rows:3,placeholder:'What they said / replied…'},
+          {name:'note',label:'Internal note (optional)',type:'text'},
+        ],
       });
       if(!form) return;
-      await markEngaged(id, form.note||'');
+      await markEngaged(id, {
+        note: form.note||'',
+        customer_response: form.customer_response||'',
+      });
+      setContactQueueTab('engaged');
       await loadContactQueue({keepTab:true, force:true});
       refreshPipelineAfterQueueMove();
-      toast('Marked Engaged');
+      toast('Marked Engaged — moved to Engaged tab');
     }catch(e){ toast(e.message,true); }
   }));
   list.querySelectorAll('[data-cq-ig-discover]').forEach(btn=>btn.addEventListener('click',async ev=>{
@@ -1227,11 +1345,18 @@ export function renderContactQueueList(){
 export async function markContactQueueIds(ids, marked){
   const list=(ids||[]).map(Number).filter(Boolean);
   if(!list.length) return;
-  await api('/api/businesses/bulk',{method:'POST',body:{ids:list, marked_for_contact:!!marked}});
+  // Sales prefix so mobile + web share one mark-for-contact contract.
+  const res=await bulkMarkForContact(list, !!marked);
   invalidateListCache('all');
+  const byId=new Map((res&&res.prospects||[]).map(p=>[Number(p.id), p]));
   list.forEach(id=>{
     const row=state.contactQueueLeads.find(x=>Number(x.id)===Number(id));
-    if(row) row.marked_for_contact=!!marked;
+    const prospect=byId.get(Number(id));
+    if(row){
+      if(prospect) patchQueueLeadStage(row, prospect);
+      row.marked_for_contact=!!marked;
+      if(!marked) row.ready_for_contact=false;
+    }
     contactQueuePick.delete(String(id));
   });
 }
@@ -1263,7 +1388,7 @@ function applyContactQueuePayload(data, country, city){
   if($('contactQueueDef')){
     $('contactQueueDef').textContent=(data.definition||'')
       +(scope?` · Scoped to ${scope}.`:' · All countries/cities combined — pick a country then city to separate.')
-      +` · All → Mark to contact → channel (+ IG warm) → Ready → Message → Confirm sent.`;
+      +` · All → Mark to contact → channel (+ IG warm) → Lined up → Ready → Message → Confirm sent.`;
   }
   renderContactQueueExplain(data);
   state.contactQueueLeads=data.leads||[];

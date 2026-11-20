@@ -69,6 +69,7 @@ def test_bearer_feature_groups(client):
     assert queues.status_code == 200, queues.text
     q = (queues.json().get("queues") or {})
     for key in (
+        "lined_up_count",
         "ready_unlocked_count",
         "follow_up_3_count",
         "follow_up_7_count",

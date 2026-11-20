@@ -18,7 +18,7 @@ let pipelineCategories = [];
 const CQ_HINT = {
   identified: 'Discover / parks (booking · already connected)',
   to_contact: 'Contact queue · To contact',
-  ready_to_contact: 'Contact queue · Ready',
+  ready_to_contact: 'Contact queue · Lined up / Ready',
   contacted: 'Contact queue · Contacted',
   follow_up_3: 'Contact queue · Follow-up +3 (due date passed)',
   follow_up_7: 'Contact queue · Follow-up +7 (due date passed)',
@@ -306,12 +306,25 @@ export async function loadPipeline() {
       try {
         const form = await uiForm({
           title: 'Mark Engaged',
-          message: 'Use when they reply or show real interest.',
+          message: 'Use when they reply or show real interest. Saves their response on the Engaged tab.',
           confirmLabel: 'Engaged',
-          fields: [{ name: 'note', label: 'Note (optional)', type: 'text' }],
+          fields: [
+            {
+              name: 'customer_response',
+              label: 'Customer response',
+              type: 'textarea',
+              required: true,
+              rows: 3,
+              placeholder: 'What they said / replied…',
+            },
+            { name: 'note', label: 'Internal note (optional)', type: 'text' },
+          ],
         });
         if (!form) return;
-        await markEngaged(id, form.note || '');
+        await markEngaged(id, {
+          note: form.note || '',
+          customer_response: form.customer_response || '',
+        });
         toast('Marked Engaged');
         await loadPipeline();
       } catch (e) {

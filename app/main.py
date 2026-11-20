@@ -1095,6 +1095,7 @@ def business_dict(b: Business, db=None) -> dict:
         "next_follow_up_at": iso_or_empty(getattr(b, "next_follow_up_at", None)),
         "last_contacted_at": iso_or_empty(getattr(b, "last_contacted_at", None)),
         "outcome": getattr(b, "outcome", "") or "",
+        "customer_response": (getattr(b, "customer_response", None) or "").strip(),
         "notes": b.notes or "",
         "created_at": iso_or_empty(b.created_at),
         "updated_at": iso_or_empty(b.updated_at),

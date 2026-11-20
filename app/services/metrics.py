@@ -185,7 +185,9 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
     follow_up_3 = sum(1 for b in due_leads if follow_up_target_slug(b) == "follow_up_3")
     follow_up_7 = sum(1 for b in due_leads if follow_up_target_slug(b) == "follow_up_7")
 
-    # Ready to contact + wait elapsed → notify first cold send
+    # Ready / Lined up split — notify sendable vs waiting
+    from app.services.automation import is_lined_up_waiting
+
     ready_rows = db.scalars(
         select(Business)
         .where(
@@ -198,9 +200,12 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
         .limit(2000)
     ).all()
     ready_unlocked = 0
+    lined_up = 0
     for rb in ready_rows:
         wait = ig_ready_wait_payload(db, rb)
-        if wait.get("can_message", True) and wait.get("unlocked", True) is not False:
+        if is_lined_up_waiting(db, rb, wait=wait):
+            lined_up += 1
+        elif wait.get("can_message", True) and wait.get("unlocked", True) is not False:
             ready_unlocked += 1
 
     # Ladder complete reply window — Engaged or closing Lost
@@ -253,6 +258,7 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
         "due_soon_count": int(due_soon_count),
         "to_contact_count": int(to_contact),
         "contact_queue_count": int(to_contact),
+        "lined_up_count": int(lined_up),
         "ready_unlocked_count": int(ready_unlocked),
         "follow_up_due_count": len(due_leads),
         "follow_up_3_count": int(follow_up_3),

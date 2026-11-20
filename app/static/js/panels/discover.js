@@ -10,6 +10,7 @@ import {
   cannotViaLabel,
   markCannotContact,
 } from '../features/cannot-contact.js';
+import { markForContact } from '../features/already-connected.js';
 import { registerPanel } from './registry.js';
 import { B } from '../app/bridge.js';
 
@@ -33,15 +34,28 @@ export function resolveDiscoverStatus(status){
 /** Toggle ★ mark for contact — Discover owner.
  * Mark: drops from Discover list; stays on Discover (no panel/tab jump).
  * Unmark: returns to Discover when still fresh.
+ * Uses POST /api/sales/prospects/{id}/mark-for-contact (mobile + web).
  */
 export async function toggleDiscoverMark(id, row, { patchLead } = {}) {
-  if (!row || typeof patchLead !== 'function') throw new Error('patchLead required');
+  if (!row) throw new Error('row required');
   const nextMarked = !row.marked_for_contact;
-  const updated = await patchLead(id, { marked_for_contact: nextMarked });
+  let updated = null;
+  try {
+    const res = await markForContact(id, nextMarked);
+    updated = (res && res.prospect) || res;
+  } catch (e) {
+    // Fallback to legacy PATCH if sales route unavailable
+    if (typeof patchLead !== 'function') throw e;
+    updated = await patchLead(id, { marked_for_contact: nextMarked });
+  }
   if (row) {
     if (updated && typeof updated === 'object') Object.assign(row, updated);
     row.marked_for_contact = nextMarked;
     if (nextMarked) row.ready_for_contact = false;
+  }
+  // Keep Discover list prune when using sales endpoint (patchLead already prunes).
+  if (nextMarked && typeof patchLead === 'function' && updated && updated.marked_for_contact) {
+    /* caller (toggleMark) also filters rowsData */
   }
   toast(nextMarked ? 'Marked for To contact' : 'Unmarked — back in Discover.');
   return nextMarked;

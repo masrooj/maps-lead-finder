@@ -140,17 +140,22 @@ def prospect_sales_dict(b: Business, stage=None, db=None) -> dict:
         "follow_up_kind": kind,
         "follow_up_badge": follow_up_badge(b),
         "ladder_complete": kind == "ladder_complete",
+        "engaged": bool(stage and getattr(stage, "slug", "") == "engaged"),
+        "customer_response": (getattr(b, "customer_response", None) or "").strip(),
         **ig_warm_payload(b),
         **cannot_contact_payload(b),
         **already_connected_payload(b),
     }
     if db is not None:
-        from app.services.automation import messaging_gate_payload
+        from app.services.automation import lined_up_payload, messaging_gate_payload
 
         gate = messaging_gate_payload(db, b)
         out["can_message"] = bool(gate.get("can_message"))
         out["can_message_reason"] = gate.get("can_message_reason") or ""
         out["ig_ready_wait"] = gate.get("ig_ready_wait") or {}
+        lined = lined_up_payload(db, b, stage=stage, wait=out["ig_ready_wait"], gate=gate)
+        out["lined_up"] = lined["lined_up"]
+        out["queue_tab"] = lined["queue_tab"]
     return out
 
 
@@ -530,7 +535,7 @@ def sales_revert_to_contact(business_id: int, _user: str = Depends(require_user)
 
 @router.post("/prospects/{business_id}/promote-ready", tags=["pipeline"])
 def sales_promote_ready(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
-    """To contact → Ready to contact when channel (+ IG warm) gates pass."""
+    """To contact → Lined up (warming) or Ready (sendable) when channel (+ IG warm) gates pass."""
     from app.models import PipelineStage
     from app.services.authz import get_user_by_email, require_role
     from app.services.automation import promote_to_ready
@@ -545,26 +550,33 @@ def sales_promote_ready(business_id: int, _user: str = Depends(require_user), db
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    prospect = prospect_sales_dict(b, stage, db=db)
     return {
         "ok": True,
         **result,
-        "prospect": prospect_sales_dict(b, stage, db=db),
+        "prospect": prospect,
         "ready_for_contact": True,
         "outreach_channel": (b.outreach_channel or "").strip(),
+        "lined_up": bool(result.get("lined_up")),
+        "queue_tab": result.get("queue_tab") or prospect.get("queue_tab") or "ready",
     }
 
 
 @router.get("/prospects/{business_id}/ready-status", tags=["pipeline"])
 def sales_ready_status(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
-    """Mobile/web: Ready + IG warm + Ready-wait + soft-DM quota for messaging gates."""
+    """Mobile/web: Ready + Lined up + IG warm + Ready-wait + soft-DM quota for messaging gates."""
+    from app.models import PipelineStage
     from app.services.already_connected import already_connected_payload
     from app.services.automation import (
+        follow_up_badge,
         ig_outreach_quota,
         ig_ready_wait_payload,
         ig_warm_payload,
+        lined_up_payload,
         messaging_gate_payload,
         normalize_outreach_channel,
     )
+    from app.services.cannot_contact import cannot_contact_payload
 
     b = db.get(Business, business_id)
     if not b:
@@ -603,9 +615,13 @@ def sales_ready_status(business_id: int, _user: str = Depends(require_user), db=
     elif not can_confirm and not block_reason:
         if not ready and not contacted:
             block_reason = "Move to Ready to contact first"
-    from app.services.automation import follow_up_badge
-    from app.services.cannot_contact import cannot_contact_payload
-
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    lined = lined_up_payload(db, b, stage=stage, wait=wait, gate=gate)
+    # Cap can block confirm without moving Lined up → Ready
+    queue_tab = lined["queue_tab"]
+    if queue_tab == "ready" and not can_confirm and ready and not contacted:
+        # still Ready tab (daily cap); lined_up stays false
+        pass
     kind = (getattr(b, "follow_up_kind", None) or "").strip()
     return {
         "ok": True,
@@ -627,6 +643,8 @@ def sales_ready_status(business_id: int, _user: str = Depends(require_user), db=
         "ladder_complete": kind == "ladder_complete",
         **cannot_contact_payload(b),
         **already_connected_payload(b),
+        "lined_up": lined["lined_up"],
+        "queue_tab": queue_tab,
         "can_message": can_confirm,
         "can_message_reason": block_reason,
         "can_confirm_sent": can_confirm,
@@ -663,6 +681,16 @@ class IgAwaitingFollowBackBody(BaseModel):
 
 class MarkEngagedBody(BaseModel):
     note: str = ""
+    customer_response: str = ""
+
+
+class MarkForContactBody(BaseModel):
+    marked: bool = True
+
+
+class BulkMarkForContactBody(BaseModel):
+    ids: list[int] = Field(default_factory=list)
+    marked: bool = True
 
 
 class ConfirmSentBody(BaseModel):
@@ -903,6 +931,59 @@ def sales_ig_awaiting_follow_back(
     }
 
 
+@router.post("/prospects/{business_id}/mark-for-contact", tags=["pipeline"])
+def sales_mark_for_contact(
+    business_id: int,
+    body: MarkForContactBody = MarkForContactBody(),
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Discover / All → To contact (mobile-friendly sales prefix). Body: {marked: true|false}."""
+    from app.models import PipelineStage
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.automation import mark_for_contact
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    b = db.get(Business, business_id)
+    if not b:
+        raise HTTPException(404, "Prospect not found")
+    result = mark_for_contact(
+        db, b, actor_id=actor.id if actor else None, marked=bool(body.marked)
+    )
+    stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+    return {
+        "ok": True,
+        **result,
+        "prospect": prospect_sales_dict(b, stage, db=db),
+    }
+
+
+@router.post("/prospects/bulk-mark-for-contact", tags=["pipeline"])
+def sales_bulk_mark_for_contact(
+    body: BulkMarkForContactBody,
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Bulk Discover / All → To contact (or unmark). Mobile + web Contact queue picks."""
+    from app.models import PipelineStage
+    from app.services.authz import get_user_by_email, require_role
+    from app.services.automation import mark_for_contact
+
+    actor = get_user_by_email(db, _user)
+    require_role(actor, "owner", "sales")
+    ids = [int(i) for i in (body.ids or []) if i is not None]
+    if not ids:
+        raise HTTPException(422, "Select at least one lead.")
+    rows = db.scalars(select(Business).where(Business.id.in_(ids))).all()
+    results = []
+    for b in rows:
+        mark_for_contact(db, b, actor_id=actor.id if actor else None, marked=bool(body.marked))
+        stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+        results.append(prospect_sales_dict(b, stage, db=db))
+    return {"ok": True, "updated": len(results), "marked": bool(body.marked), "prospects": results}
+
+
 @router.post("/prospects/{business_id}/mark-engaged", tags=["pipeline"])
 def sales_mark_engaged(
     business_id: int,
@@ -921,7 +1002,13 @@ def sales_mark_engaged(
     if not b:
         raise HTTPException(404, "Prospect not found")
     try:
-        result = mark_engaged(db, b, actor_id=actor.id if actor else None, note=body.note or "")
+        result = mark_engaged(
+            db,
+            b,
+            actor_id=actor.id if actor else None,
+            note=body.note or "",
+            customer_response=body.customer_response or "",
+        )
     except ValueError as e:
         raise HTTPException(422, str(e)) from e
     stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
@@ -2153,8 +2240,250 @@ def sales_contact_queue_meta(
     )
 
 
+def _cq_is_engaged(lead: dict) -> bool:
+    if lead.get("engaged"):
+        return True
+    stage = lead.get("stage") or {}
+    return (stage.get("slug") or "") == "engaged"
+
+
+def _cq_is_lined_up(lead: dict) -> bool:
+    """Promoted ready but not yet sendable (warm wait / follow-back)."""
+    if not lead.get("ready_for_contact"):
+        return False
+    if _cq_contacted_like(lead):
+        return False
+    if lead.get("cannot_contact") or lead.get("already_connected") or lead.get("has_booking"):
+        return False
+    if lead.get("ig_awaiting_follow_back"):
+        return True
+    wait = lead.get("ig_ready_wait") or {}
+    if wait.get("applies") and wait.get("unlocked") is False:
+        return True
+    if lead.get("can_message") is False:
+        reason = str(lead.get("can_message_reason") or "").lower()
+        if "daily" in reason or "cap" in reason or "quota" in reason:
+            return False
+        return True
+    return False
+
+
+def _cq_contacted_like(lead: dict) -> bool:
+    return bool(
+        lead.get("contacted")
+        or lead.get("email_sent")
+        or lead.get("whatsapp_sent")
+        or lead.get("instagram_sent")
+    )
+
+
+def _cq_follow_bucket(lead: dict) -> str:
+    """Mirror web Contacted timing buckets for mobile tab filtering."""
+    from datetime import date as date_cls
+
+    kind = str(lead.get("follow_up_kind") or "").strip().lower()
+    due_raw = (lead.get("next_follow_up_at") or "").strip()
+    last_raw = (lead.get("last_contacted_at") or "").strip()
+    today = datetime.now(timezone.utc).date().isoformat()
+
+    def _day(iso: str) -> str:
+        return iso[:10] if iso else ""
+
+    due = _day(due_raw)
+    last = _day(last_raw)
+    due_passed = bool(due and due <= today)
+    is_plus7 = kind in ("plus7", "plus_7", "+7")
+
+    if kind == "call_today" and not due_passed:
+        return "today"
+    if kind == "ladder_complete":
+        return "sent"
+    if due and not due_passed:
+        return "today" if last == today else "sent"
+    if due_passed:
+        return "plus7" if is_plus7 else "plus3"
+    if last:
+        try:
+            since = (date_cls.fromisoformat(today) - date_cls.fromisoformat(last)).days
+        except Exception:
+            since = -1
+        if since >= 3:
+            return "plus7" if is_plus7 else "plus3"
+        if last == today:
+            return "today"
+        return "sent"
+    return "sent"
+
+
+def _parse_sent_channels(sent_channels: str) -> set[str]:
+    raw = {
+        c.strip().lower()
+        for c in (sent_channels or "").replace(";", ",").split(",")
+        if c.strip()
+    }
+    out: set[str] = set()
+    for c in raw:
+        if c in ("whatsapp", "wa"):
+            out.add("whatsapp")
+        elif c in ("instagram", "ig"):
+            out.add("instagram")
+        elif c == "email":
+            out.add("email")
+    return out
+
+
+def _cq_sent_channel_ok(lead: dict, chans: set[str]) -> bool:
+    if not chans:
+        return True
+    if "whatsapp" in chans and lead.get("whatsapp_sent"):
+        return True
+    if "instagram" in chans and lead.get("instagram_sent"):
+        return True
+    if "email" in chans and lead.get("email_sent"):
+        return True
+    return False
+
+
+def _filter_contact_queue_leads(
+    leads: list,
+    *,
+    tab: str = "",
+    sent_channels: str = "",
+) -> list:
+    """Optional server-side tab / sent-channel filter for mobile clients."""
+    tab = (tab or "").strip().lower()
+    chans = _parse_sent_channels(sent_channels)
+    apply_sent = bool(chans) and tab in ("", "all", "contacted")
+
+    out = []
+    for lead in leads:
+        engaged = _cq_is_engaged(lead)
+
+        if tab == "engaged":
+            if engaged:
+                out.append(lead)
+            continue
+        if engaged and tab not in ("", "all"):
+            continue
+
+        if tab == "selected":
+            if not (
+                lead.get("marked_for_contact")
+                and not lead.get("ready_for_contact")
+                and not _cq_contacted_like(lead)
+                and not lead.get("cannot_contact")
+                and not lead.get("already_connected")
+                and not lead.get("has_booking")
+            ):
+                continue
+        elif tab in ("ready", "lined_up"):
+            if not (
+                lead.get("ready_for_contact")
+                and not _cq_contacted_like(lead)
+                and not lead.get("cannot_contact")
+                and not lead.get("already_connected")
+                and not lead.get("has_booking")
+            ):
+                continue
+            lined = _cq_is_lined_up(lead)
+            if tab == "lined_up" and not lined:
+                continue
+            if tab == "ready" and lined:
+                continue
+        elif tab == "contacted":
+            if engaged or not _cq_contacted_like(lead):
+                continue
+            if lead.get("cannot_contact") or lead.get("already_connected"):
+                continue
+            if _cq_follow_bucket(lead) not in ("today", "sent"):
+                continue
+        elif tab == "plus3":
+            if engaged or not _cq_contacted_like(lead) or _cq_follow_bucket(lead) != "plus3":
+                continue
+        elif tab == "plus7":
+            if engaged or not _cq_contacted_like(lead) or _cq_follow_bucket(lead) != "plus7":
+                continue
+        elif tab == "cannot":
+            if not lead.get("cannot_contact"):
+                continue
+        elif tab == "connected":
+            if not lead.get("already_connected"):
+                continue
+        elif tab == "booking":
+            if not lead.get("has_booking"):
+                continue
+        elif tab and tab != "all":
+            continue
+
+        if apply_sent and _cq_contacted_like(lead) and not _cq_sent_channel_ok(lead, chans):
+            continue
+        out.append(lead)
+    return out
+
+
+def _sales_contact_queue_payload(
+    db,
+    *,
+    product_line: str = "STANDALONE",
+    limit: int = 2000,
+    mode: str = "",
+    country: str = "",
+    city: str = "",
+    tab: str = "",
+    sent_channels: str = "",
+) -> dict:
+    from app.services.automation import rank_contact_queue
+
+    data = rank_contact_queue(
+        db,
+        product_line=product_line.upper(),
+        limit=limit,
+        mode=(mode or "").strip() or None,
+        country=(country or "").strip() or None,
+        city=(city or "").strip() or None,
+    )
+    tab_f = (tab or "").strip().lower()
+    sent_f = (sent_channels or "").strip()
+    if tab_f or sent_f:
+        leads = data.get("leads") or []
+        filtered = _filter_contact_queue_leads(leads, tab=tab_f, sent_channels=sent_f)
+        data = {
+            **data,
+            "leads": filtered,
+            "sample_size": len(filtered),
+            "tab": tab_f or "all",
+            "sent_channels": sent_f,
+        }
+    return data
+
+
 @router.get("/contact-queue", tags=["pipeline"])
 def sales_contact_queue(
+    product_line: str = "STANDALONE",
+    limit: int = 2000,
+    mode: str = "",
+    country: str = "",
+    city: str = "",
+    tab: str = "",
+    sent_channels: str = "",
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Ranked contact queue. Optional mobile filters: tab (selected|lined_up|ready|…), sent_channels (wa,ig,email)."""
+    return _sales_contact_queue_payload(
+        db,
+        product_line=product_line,
+        limit=limit,
+        mode=mode,
+        country=country,
+        city=city,
+        tab=tab,
+        sent_channels=sent_channels,
+    )
+
+
+@router.get("/contact-queue/lined-up", tags=["pipeline"])
+def sales_contact_queue_lined_up(
     product_line: str = "STANDALONE",
     limit: int = 2000,
     mode: str = "",
@@ -2163,16 +2492,37 @@ def sales_contact_queue(
     _user: str = Depends(require_user),
     db=Depends(get_db),
 ):
-    from app.services.automation import rank_contact_queue
-
-    # Due follow-up promotions run via cron / startup — not on every queue GET.
-    return rank_contact_queue(
+    """Mobile: Lined up tab — promoted but waiting (warm unlock / follow-back)."""
+    return _sales_contact_queue_payload(
         db,
-        product_line=product_line.upper(),
+        product_line=product_line,
         limit=limit,
-        mode=(mode or "").strip() or None,
-        country=(country or "").strip() or None,
-        city=(city or "").strip() or None,
+        mode=mode,
+        country=country,
+        city=city,
+        tab="lined_up",
+    )
+
+
+@router.get("/contact-queue/ready", tags=["pipeline"])
+def sales_contact_queue_ready(
+    product_line: str = "STANDALONE",
+    limit: int = 2000,
+    mode: str = "",
+    country: str = "",
+    city: str = "",
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """Mobile: Ready to contact tab — unlocked / sendable cold messages only."""
+    return _sales_contact_queue_payload(
+        db,
+        product_line=product_line,
+        limit=limit,
+        mode=mode,
+        country=country,
+        city=city,
+        tab="ready",
     )
 
 

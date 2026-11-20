@@ -44,7 +44,7 @@ export function buildNotificationItems(dashboard){
   return [
     {id:'overdue', goto:'tasks', count:q.overdue_count||0, label:'Overdue tasks', sub:'Needs action now', urgent:true},
     {id:'due_today', goto:'tasks', count:q.due_today_count||0, label:'Due today', sub:'Follow up before EOD'},
-    {id:'ready_unlocked', goto:'contactQueue', count:q.ready_unlocked_count||0, label:'Ready — send first cold', sub:'Wait elapsed · Contact queue → Ready', urgent:true},
+    {id:'ready_unlocked', goto:'contactQueue:ready', count:q.ready_unlocked_count||0, label:'Ready — send first cold', sub:'Wait elapsed · Contact queue → Ready to contact', urgent:true},
     {id:'follow_up_due', goto:'contactQueue:plus3', count:q.follow_up_due_count||0, label:'Follow-ups due', sub:'Contact queue · Follow-up +3 / +7', urgent:true},
     {id:'follow_up_3', goto:'contactQueue:plus3', count:q.follow_up_3_count||0, label:'Follow-up +3', sub:'Contact queue · Day 3 due'},
     {id:'follow_up_7', goto:'contactQueue:plus7', count:q.follow_up_7_count||0, label:'Follow-up +7', sub:'Contact queue · Day 7 due'},

@@ -28,13 +28,15 @@ import { wireProspectPicker, pickProspectField } from '../features/prospect-pick
 import { mountSearchableSelect, getSearchableSelect } from '../features/searchable-select.js';
 import { scoreOpts, readScoreCriteria, refreshScorePreview } from '../features/scoring.js';
 import {
-  contactQueueSelectedLeads, contactQueueReadyLeads, fillContactQueueLocationFilters, contactQueueMatchQuery,
+  contactQueueSelectedLeads, contactQueueLinedUpLeads, contactQueueReadyLeads,
+  fillContactQueueLocationFilters, contactQueueMatchQuery,
   contactQueueBookingLeads, contactQueueChannelMatch, contactQueueIsParked,
   contactQueueVisibleLeads, fillContactQueueModes, renderContactQueueExplain,
   syncContactQueueSearchUi, syncContactQueueTabs, mapsUrlFor, channelTagsHtml,
   renderContactQueueList, markContactQueueIds, markBookingIds, loadContactQueue,
   saveContactQueueMode, getContactQueuePick, clearContactQueuePick, setContactQueueTab,
-  setContactQueueQuery, setContactQueueChannel, setContactQueueFollowFilter, getContactQueueLocations
+  setContactQueueQuery, setContactQueueChannel, setContactQueueFollowFilter, setContactQueueSentChannels,
+  getContactQueueLocations
 } from '../panels/contact-queue.js';
 import {
   brandLogoAbsoluteUrl, emailSignaturePlain, withEmailSignature,
@@ -52,6 +54,7 @@ import { loadReports, renderBars } from '../panels/reports.js';
 import { loadTasks, renderTasksList, createTaskFlow } from '../panels/tasks.js';
 import { DISCOVER_STATUS, isFreshDiscoverLead, resolveDiscoverStatus, toggleDiscoverMark, setDiscoverBooking } from '../panels/discover.js';
 import { canMessageLead } from '../features/lead-workflow.js';
+import { bulkMarkForContact } from '../features/already-connected.js';
 import { loadDemos, renderDemosTable, loadDemoAssets, addDemoAssetFlow, uploadDemoAssetFile, createDemoFlow } from '../panels/demos.js';
 import { loadProspects, renderProspectsTable, fillProspectsLocationFilters, prospectsScopeLabel, mergeProspectsLocCache } from '../panels/prospects.js';
 import { showDrawerLoading, resolveDrawerMode, clampDrawerTab } from '../features/drawer.js';
@@ -159,7 +162,7 @@ function setAppPanel(panel, opts){
     if(appPanel==='deals') dealsTab=tabHint==='paylinks'?'paylinks':'proposals';
     if(appPanel==='appoinHive') ahTab=['overview','connect','events','catalogs'].includes(tabHint)?tabHint:ahTab;
     if(appPanel==='settings') settingsTab=['general','team','ranking','jobs','views'].includes(tabHint)?tabHint:settingsTab;
-    if(appPanel==='contactQueue' && ['all','selected','ready','contacted','plus3','plus7','booking','cannot','connected'].includes(tabHint)){
+    if(appPanel==='contactQueue' && ['all','selected','lined_up','ready','contacted','plus3','plus7','engaged','booking','cannot','connected'].includes(tabHint)){
       setContactQueueTab(tabHint);
     }
   }
@@ -3143,15 +3146,31 @@ $('selectAll').addEventListener('change',()=>{
 });
 $('clearSelection').addEventListener('click',()=>{selectedIds.clear();paint()});
 $('bulkMark').addEventListener('click',async()=>{
-  const ids=await bulk({marked_for_contact:true});
-  if(!ids.length) return;
-  // Drop marked rows from Discover; stay on Discover.
-  const idSet=new Set(ids.map(String));
-  rowsData=rowsData.filter(b=>!idSet.has(String(b.id)));
-  paint();
-  loadStats();
+  const ids=[...selectedIds].map(Number);
+  if(!ids.length){toast('Select leads first.',true);return}
+  try{
+    await bulkMarkForContact(ids, true);
+    selectedIds.clear();
+    invalidateListCache('all');
+    // Drop marked rows from Discover; stay on Discover.
+    const idSet=new Set(ids.map(String));
+    rowsData=rowsData.filter(b=>!idSet.has(String(b.id)));
+    paint();
+    loadStats();
+    toast('Marked '+ids.length+' for To contact');
+  }catch(e){toast(e.message,true)}
 });
-$('bulkUnmark').addEventListener('click',()=>bulk({marked_for_contact:false}));
+$('bulkUnmark').addEventListener('click',async()=>{
+  const ids=[...selectedIds].map(Number);
+  if(!ids.length){toast('Select leads first.',true);return}
+  try{
+    await bulkMarkForContact(ids, false);
+    selectedIds.clear();
+    invalidateListCache('all');
+    await load();
+    toast('Unmarked '+ids.length+' leads');
+  }catch(e){toast(e.message,true)}
+});
 $('bulkContacted').addEventListener('click',()=>bulk({contacted:true}));
 $('bulkLost').addEventListener('click',()=>bulk({lost:true}));
 // Manual bulk follow-up removed — ladder dates are system-owned on Confirm sent.
@@ -3364,6 +3383,13 @@ $('contactQueueFollowFilter')&&$('contactQueueFollowFilter').addEventListener('c
   setContactQueueFollowFilter(($('contactQueueFollowFilter').value||''));
   renderContactQueueList();
 });
+$('contactQueueSentChannelField')&&$('contactQueueSentChannelField').addEventListener('change',()=>{
+  const checked=[...document.querySelectorAll('#contactQueueSentChannelField [data-cq-sent-ch]:checked')]
+    .map(el=>el.dataset.cqSentCh||'')
+    .filter(Boolean);
+  setContactQueueSentChannels(checked);
+  renderContactQueueList();
+});
 $('contactQueueSearch')&&$('contactQueueSearch').addEventListener('input',()=>{
   setContactQueueQuery($('contactQueueSearch').value||'');
   syncContactQueueSearchUi();
@@ -3397,10 +3423,14 @@ $('contactQueueMessageNext')&&$('contactQueueMessageNext').addEventListener('cli
     await openCompose(next, preferred);
   }catch(e){ toast(e.message,true); }
 });
-$('contactQueueClearReady')&&$('contactQueueClearReady').addEventListener('click',async()=>{
-  const ids=contactQueueReadyLeads().map(b=>b.id);
+async function demoteContactQueueIds(ids, label){
   if(!ids.length) return;
-  const ok=await uiConfirm({title:'Demote Ready list?', message:'Moves all Ready leads back to To contact prep (keeps channel + warm).', confirmLabel:'Demote all', danger:false});
+  const ok=await uiConfirm({
+    title:`Demote ${label}?`,
+    message:`Moves all ${label} leads back to To contact prep (keeps channel + warm).`,
+    confirmLabel:'Demote all',
+    danger:false,
+  });
   if(!ok) return;
   try{
     for(const id of ids){
@@ -3410,6 +3440,12 @@ $('contactQueueClearReady')&&$('contactQueueClearReady').addEventListener('click
     if(typeof B.loadPipeline==='function') B.loadPipeline().catch(()=>{});
     toast('Demoted to To contact');
   }catch(e){ toast(e.message,true); }
+}
+$('contactQueueClearReady')&&$('contactQueueClearReady').addEventListener('click',async()=>{
+  await demoteContactQueueIds(contactQueueReadyLeads().map(b=>b.id), 'Ready');
+});
+$('contactQueueClearLinedUp')&&$('contactQueueClearLinedUp').addEventListener('click',async()=>{
+  await demoteContactQueueIds(contactQueueLinedUpLeads().map(b=>b.id), 'Lined up');
 });
 $('dealsRefresh')&&$('dealsRefresh').addEventListener('click',()=>loadDeals().catch(e=>toast(e.message,true)));
 $('dealCreateBtn')&&$('dealCreateBtn').addEventListener('click',()=>sendPayLinkFlow().catch(e=>toast(e.message,true)));

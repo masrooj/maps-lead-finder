@@ -359,10 +359,12 @@
       <div class="queue-tabs queue-tabs-sticky" id="contactQueueTabs" role="tablist" aria-label="Contact queue views">
         <button type="button" role="tab" class="active" data-cq-tab="all" aria-selected="true">All <span class="tab-count" id="contactQueueAllCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="selected" aria-selected="false">To contact <span class="tab-count" id="contactQueueSelectedCount">0</span></button>
-        <button type="button" role="tab" data-cq-tab="ready" aria-selected="false">Ready to contact <span class="tab-count" id="contactQueueReadyCount">0</span></button>
+        <button type="button" role="tab" data-cq-tab="lined_up" aria-selected="false" title="Promoted but waiting — warm unlock / follow-back before send">Lined up <span class="tab-count" id="contactQueueLinedUpCount">0</span></button>
+        <button type="button" role="tab" data-cq-tab="ready" aria-selected="false" title="Unlocked — send cold message from here">Ready to contact <span class="tab-count" id="contactQueueReadyCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="contacted" aria-selected="false">Contacted <span class="tab-count" id="contactQueueContactedCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="plus3" aria-selected="false" title="Only when follow-up due date has passed">Follow-up +3 <span class="tab-count" id="contactQueuePlus3Count">0</span></button>
         <button type="button" role="tab" data-cq-tab="plus7" aria-selected="false" title="Only when follow-up due date has passed">Follow-up +7 <span class="tab-count" id="contactQueuePlus7Count">0</span></button>
+        <button type="button" role="tab" data-cq-tab="engaged" aria-selected="false">Engaged <span class="tab-count" id="contactQueueEngagedCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="booking" aria-selected="false">Has booking <span class="tab-count" id="contactQueueBookingCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="cannot" aria-selected="false">Can't contact <span class="tab-count" id="contactQueueCannotCount">0</span></button>
         <button type="button" role="tab" data-cq-tab="connected" aria-selected="false">Already connected <span class="tab-count" id="contactQueueConnectedCount">0</span></button>
@@ -397,6 +399,14 @@
             <option value="sent">Sent / waiting (not due yet)</option>
           </select>
         </div>
+        <div class="field" id="contactQueueSentChannelField" hidden>
+          <span class="sub" style="display:block;margin:0 0 6px">Sent via</span>
+          <div class="cq-sent-ch-filters" role="group" aria-label="Filter Contacted by sent channel">
+            <label class="flag"><input type="checkbox" data-cq-sent-ch="whatsapp"> WA</label>
+            <label class="flag"><input type="checkbox" data-cq-sent-ch="instagram"> IG</label>
+            <label class="flag"><input type="checkbox" data-cq-sent-ch="email"> Email</label>
+          </div>
+        </div>
         <div class="field">
           <label for="contactQueueMode">Ranking mode</label>
           <select id="contactQueueMode" aria-describedby="contactQueueDef"></select>
@@ -411,10 +421,14 @@
         <button type="button" class="queue-search-clear" id="contactQueueSearchClear" title="Clear search" aria-label="Clear search">✕</button>
       </div>
       <div class="bulkbar" id="contactQueueSelectedBar">
-        <span id="contactQueueSelectedHint">Prep channel + warm here — messaging is on Ready</span>
+        <span id="contactQueueSelectedHint">Prep channel + warm here — then Ready to contact (or Lined up while warming)</span>
+      </div>
+      <div class="bulkbar" id="contactQueueLinedUpBar">
+        <span id="contactQueueLinedUpHint">Lined up — waiting for warm unlock or follow-back before send</span>
+        <button type="button" id="contactQueueClearLinedUp" title="Demote all on this list back to To contact">Demote to To contact</button>
       </div>
       <div class="bulkbar" id="contactQueueReadyBar">
-        <span id="contactQueueReadyHint">Send messages from Ready only</span>
+        <span id="contactQueueReadyHint">Sendable now — Message next from here</span>
         <button type="button" class="primary" id="contactQueueMessageNext" disabled>Message next</button>
         <button type="button" id="contactQueueClearReady" title="Demote all on this list back to To contact">Demote to To contact</button>
       </div>

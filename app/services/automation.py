@@ -456,6 +456,93 @@ def messaging_gate_payload(
     }
 
 
+def is_lined_up_waiting(
+    db,
+    b: Business,
+    *,
+    wait: Optional[dict] = None,
+    gate: Optional[dict] = None,
+) -> bool:
+    """Promoted Ready but not sendable yet (warm wait / follow-back).
+
+    Daily IG soft-DM cap stays on Ready (same-day reset) — not Lined up.
+    """
+    if not bool(getattr(b, "ready_for_contact", False)):
+        return False
+    if _is_contacted_queue_state(b):
+        return False
+    if is_cannot_contact(b) or is_already_connected(b):
+        return False
+    if bool((getattr(b, "current_booking_software", None) or "").strip()):
+        return False
+    if bool(getattr(b, "ig_awaiting_follow_back", False)):
+        return True
+    wait_p = wait if wait is not None else ig_ready_wait_payload(db, b)
+    if wait_p.get("applies") and wait_p.get("unlocked") is False:
+        return True
+    gate_p = gate if gate is not None else messaging_gate_payload(db, b)
+    if gate_p.get("can_message") is False:
+        reason = str(gate_p.get("can_message_reason") or "").lower()
+        if "daily" in reason or "cap" in reason or "quota" in reason:
+            return False
+        return True
+    return False
+
+
+def contact_queue_tab_slug(
+    db,
+    b: Business,
+    *,
+    stage=None,
+    wait: Optional[dict] = None,
+    gate: Optional[dict] = None,
+) -> str:
+    """Mobile/web CQ tab id for this prospect (selected|lined_up|ready|…)."""
+    if is_already_connected(b):
+        return "connected"
+    if is_cannot_contact(b):
+        return "cannot"
+    if bool((getattr(b, "current_booking_software", None) or "").strip()):
+        return "booking"
+    slug = ""
+    if stage is not None:
+        slug = (getattr(stage, "slug", None) or "") or ""
+    elif getattr(b, "pipeline_stage_id", None):
+        st = db.get(PipelineStage, b.pipeline_stage_id)
+        slug = (st.slug if st else "") or ""
+    if slug == "engaged":
+        return "engaged"
+    if _is_contacted_queue_state(b):
+        return "contacted"
+    if bool(getattr(b, "ready_for_contact", False)):
+        return "lined_up" if is_lined_up_waiting(db, b, wait=wait, gate=gate) else "ready"
+    if bool(getattr(b, "marked_for_contact", False)):
+        return "selected"
+    return "all"
+
+
+def lined_up_payload(
+    db,
+    b: Business,
+    *,
+    stage=None,
+    wait: Optional[dict] = None,
+    gate: Optional[dict] = None,
+) -> dict:
+    """Fields mobile clients use to place a lead on Lined up vs Ready."""
+    wait_p = wait if wait is not None else ig_ready_wait_payload(db, b)
+    gate_p = gate if gate is not None else messaging_gate_payload(db, b)
+    lined = is_lined_up_waiting(db, b, wait=wait_p, gate=gate_p)
+    tab = contact_queue_tab_slug(db, b, stage=stage, wait=wait_p, gate=gate_p)
+    return {
+        "lined_up": lined,
+        "queue_tab": tab,
+        "can_message": bool(gate_p.get("can_message")),
+        "can_message_reason": gate_p.get("can_message_reason") or "",
+        "ig_ready_wait": wait_p,
+    }
+
+
 def set_ig_awaiting_follow_back(b: Business, awaiting: bool) -> None:
     b.ig_awaiting_follow_back = bool(awaiting)
     b.updated_at = _utcnow()
@@ -477,6 +564,7 @@ def promote_to_ready(db, b: Business, *, actor_id: Optional[int] = None) -> dict
     db.refresh(b)
     wait = ig_ready_wait_payload(db, b)
     gate = messaging_gate_payload(db, b)
+    lined = lined_up_payload(db, b, wait=wait, gate=gate)
     return {
         "ok": True,
         "ready_for_contact": True,
@@ -484,6 +572,8 @@ def promote_to_ready(db, b: Business, *, actor_id: Optional[int] = None) -> dict
         "ig_ready_at": wait.get("ig_ready_at") or "",
         "ig_ready_wait": wait,
         **gate,
+        "lined_up": lined["lined_up"],
+        "queue_tab": lined["queue_tab"],
     }
 
 
@@ -1116,6 +1206,53 @@ def on_marked_for_contact(db, b: Business, *, actor_id: Optional[int] = None) ->
     advance_at_least(db, b, "to_contact", actor_id=actor_id, note="Auto: marked for contact")
 
 
+def mark_for_contact(db, b: Business, *, actor_id: Optional[int] = None, marked: bool = True) -> dict:
+    """Discover / All → To contact (or unmark back to Discover). Mobile + web sales prefix."""
+    from app.services.cannot_contact import clear_cannot_contact
+
+    if marked:
+        clear_cannot_contact(b, rematch=False)
+        before = bool(getattr(b, "marked_for_contact", False))
+        b.marked_for_contact = True
+        b.ready_for_contact = False
+        clear_ig_ready_at(b)
+        b.updated_at = _utcnow()
+        if not before:
+            # on_marked_for_contact → advance_at_least commits the stage move
+            on_marked_for_contact(db, b, actor_id=actor_id)
+            db.add(
+                Activity(
+                    business_id=b.id,
+                    activity_type="marked",
+                    summary="Marked for To contact",
+                    created_by=actor_id,
+                )
+            )
+            db.commit()
+            db.refresh(b)
+        else:
+            db.commit()
+            db.refresh(b)
+        return {"ok": True, "marked_for_contact": True, "ready_for_contact": False}
+
+    b.marked_for_contact = False
+    b.ready_for_contact = False
+    b.outreach_channel = ""
+    clear_ig_ready_at(b)
+    b.updated_at = _utcnow()
+    db.add(
+        Activity(
+            business_id=b.id,
+            activity_type="unmarked",
+            summary="Removed from To contact",
+            created_by=actor_id,
+        )
+    )
+    db.commit()
+    db.refresh(b)
+    return {"ok": True, "marked_for_contact": False, "ready_for_contact": False}
+
+
 def on_discovery_saved(db, b: Business, *, actor_id: Optional[int] = None, painful_issue: str = "") -> None:
     # Discovery notes no longer auto-jump to Engaged (skips Contacted / +3/+7).
     # Pain still can nudge Qualified once already Engaged+.
@@ -1149,15 +1286,26 @@ def on_score_saved(db, b: Business, *, actor_id: Optional[int] = None) -> None:
             advance_at_least(db, b, "qualified", actor_id=actor_id, note=f"Auto: score {score} ≥ 7")
 
 
-def mark_engaged(db, b: Business, *, actor_id: Optional[int] = None, note: str = "") -> dict:
+def mark_engaged(
+    db,
+    b: Business,
+    *,
+    actor_id: Optional[int] = None,
+    note: str = "",
+    customer_response: str = "",
+) -> dict:
     """Explicit Engaged transition (reply / human signal) — not auto from discovery/score.
 
     Cancels open ladder follow-ups — Engaged leaves the cold/+3/+7 cadence.
+    Persists customer_response for the Contact queue Engaged tab.
     """
     if is_already_connected(b):
         raise ValueError("Already connected park — clear before Engaged")
     clear_cannot_contact(b, rematch=False)
     b.ig_awaiting_follow_back = False
+    reply = (customer_response or "").strip()[:5000]
+    if reply:
+        b.customer_response = reply
     cancel_open_follow_ups(db, b, commit=False)
     b.updated_at = _utcnow()
     moved = advance_at_least(
@@ -1167,18 +1315,28 @@ def mark_engaged(db, b: Business, *, actor_id: Optional[int] = None, note: str =
         actor_id=actor_id,
         note=(note or "Marked Engaged").strip()[:500] or "Marked Engaged",
     )
+    outcome_bits = []
+    if reply:
+        outcome_bits.append(f"reply: {reply[:400]}")
+    if (note or "").strip():
+        outcome_bits.append((note or "").strip()[:400])
     db.add(
         Activity(
             business_id=b.id,
             activity_type="stage",
             summary="Marked Engaged",
-            outcome=(note or "")[:500],
+            outcome=" · ".join(outcome_bits)[:500],
             created_by=actor_id,
         )
     )
     db.commit()
     db.refresh(b)
-    return {"ok": True, "stage_moved": moved, "engaged": True}
+    return {
+        "ok": True,
+        "stage_moved": moved,
+        "engaged": True,
+        "customer_response": getattr(b, "customer_response", "") or "",
+    }
 
 
 def on_proposal_sent(db, b: Business, *, actor_id: Optional[int] = None) -> None:
@@ -1468,14 +1626,21 @@ def rank_contact_queue(
             "ready_for_contact": bool(getattr(b, "ready_for_contact", False)),
             "contacted": bool(b.contacted),
         }
-        # Always keep can't-contact / Has booking / Ready / already-connected so tabs stay
-        # populated even when the active ranking mode filters to marked-only, etc.
+        # Always keep workflow tabs populated even when the active ranking mode
+        # filters by channel (otherwise Discover → To contact "disappears").
         has_booking = bool((getattr(b, "current_booking_software", None) or "").strip())
+        stage_slug = (stage.slug if stage else "") or ""
         keep_for_tab = (
             is_cannot_contact(b)
             or has_booking
             or is_already_connected(b)
             or bool(flags.get("ready_for_contact"))
+            or bool(flags.get("marked_for_contact"))
+            or bool(flags.get("contacted"))
+            or bool(flags.get("email_sent"))
+            or bool(flags.get("whatsapp_sent"))
+            or bool(flags.get("instagram_sent"))
+            or stage_slug == "engaged"
         )
         if not rm.match_filter(filt, ch=ch, b_flags=flags) and not keep_for_tab:
             continue
@@ -1523,6 +1688,9 @@ def rank_contact_queue(
             why.append(stage.name)
         why.extend(mode_tags)
         gate = messaging_gate_payload(db, b, wait_days=wait_days, tz_pair=tz_pair)
+        wait_p = gate.get("ig_ready_wait") or {}
+        lined = is_lined_up_waiting(db, b, wait=wait_p, gate=gate)
+        qtab = contact_queue_tab_slug(db, b, stage=stage, wait=wait_p, gate=gate)
         ranked.append(
             {
                 "id": b.id,
@@ -1540,8 +1708,12 @@ def rank_contact_queue(
                 "follow_up_kind": (getattr(b, "follow_up_kind", None) or "").strip(),
                 "follow_up_badge": follow_up_badge(b),
                 "contacted": bool(b.contacted),
+                "engaged": stage_slug == "engaged",
+                "lined_up": lined,
+                "queue_tab": qtab,
                 "opt_out": bool(b.opt_out),
                 "outcome": b.outcome or "",
+                "customer_response": (getattr(b, "customer_response", None) or "").strip(),
                 **cannot_contact_payload(b),
                 **already_connected_payload(b),
                 "ig_awaiting_follow_back": bool(getattr(b, "ig_awaiting_follow_back", False)),
@@ -1555,7 +1727,7 @@ def rank_contact_queue(
                 "instagram_sent": bool(b.instagram_sent),
                 **ig_warm_payload(b),
                 "ig_ready_at": b.ig_ready_at.isoformat() if getattr(b, "ig_ready_at", None) else "",
-                "ig_ready_wait": gate.get("ig_ready_wait") or {},
+                "ig_ready_wait": wait_p,
                 "can_message": gate.get("can_message"),
                 "can_message_reason": gate.get("can_message_reason") or "",
                 "last_contacted_at": b.last_contacted_at.isoformat() if getattr(b, "last_contacted_at", None) else "",

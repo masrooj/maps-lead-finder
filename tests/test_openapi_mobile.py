@@ -20,6 +20,8 @@ def test_openapi_has_bearer_and_feature_tags(client):
     assert "/api/auth/refresh" in paths
     assert "/api/sales/contact-queue" in paths
     assert "/api/sales/contact-queue/meta" in paths
+    assert "/api/sales/contact-queue/lined-up" in paths
+    assert "/api/sales/contact-queue/ready" in paths
     assert "/api/sales/dashboard/queues" in paths
     assert "/api/businesses" in paths
     assert "/api/stats" in paths
@@ -31,6 +33,8 @@ def test_openapi_has_bearer_and_feature_tags(client):
         "/api/sales/prospects/{business_id}/same-contact-siblings",
         "/api/sales/prospects/{business_id}/ig-awaiting-follow-back",
         "/api/sales/prospects/{business_id}/mark-engaged",
+        "/api/sales/prospects/{business_id}/mark-for-contact",
+        "/api/sales/prospects/bulk-mark-for-contact",
         "/api/sales/prospects/{business_id}/confirm-sent",
         "/api/sales/prospects/{business_id}/promote-ready",
         "/api/sales/prospects/{business_id}/ready-status",
@@ -40,6 +44,11 @@ def test_openapi_has_bearer_and_feature_tags(client):
         "/api/sales/templates/ensure-defaults",
     ):
         assert needed in paths, f"missing OpenAPI path {needed}"
+
+    cq_get = (paths.get("/api/sales/contact-queue") or {}).get("get") or {}
+    cq_params = {p.get("name") for p in (cq_get.get("parameters") or []) if isinstance(p, dict)}
+    assert "tab" in cq_params, cq_params
+    assert "sent_channels" in cq_params, cq_params
 
     # Public login has empty security
     login_post = paths["/api/login"].get("post") or {}
