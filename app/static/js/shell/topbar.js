@@ -6,6 +6,7 @@ export const PANEL_META = {
   dashboard: { title: 'Dashboard', sub: 'Queues, pipeline value, and cash collected' },
   leads: { title: 'Discover', sub: 'Find and contact prospects' },
   contactQueue: { title: 'Contact queue', sub: 'Ranked who to call next' },
+  geoGlance: { title: 'Markets', sub: 'Country · city contact counts at a glance' },
   pipeline: { title: 'Pipeline', sub: 'Stages (auto-advance + manual override)' },
   prospects: { title: 'Prospects', sub: 'Search your sales book' },
   tasks: { title: 'Tasks', sub: 'Follow-ups due and overdue' },

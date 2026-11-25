@@ -2526,6 +2526,94 @@ def sales_contact_queue_ready(
     )
 
 
+def _cq_is_discovered(lead: dict) -> bool:
+    """Mirror Discover fresh pool (not To contact / Contacted / parks)."""
+    if lead.get("archived") or lead.get("lost"):
+        return False
+    if lead.get("marked_for_contact"):
+        return False
+    if _cq_contacted_like(lead):
+        return False
+    if lead.get("has_booking") or lead.get("already_connected") or lead.get("cannot_contact"):
+        return False
+    return True
+
+
+_GEO_COUNT_BUCKETS = (
+    "discovered",
+    "selected",
+    "lined_up",
+    "ready",
+    "contacted",
+    "plus3",
+    "plus7",
+    "engaged",
+    "booking",
+    "cannot",
+    "connected",
+)
+
+
+@router.get("/contact-queue/geo-counts", tags=["pipeline"])
+def sales_contact_queue_geo_counts(
+    product_line: str = "STANDALONE",
+    limit: int = 5000,
+    mode: str = "",
+    _user: str = Depends(require_user),
+    db=Depends(get_db),
+):
+    """At-a-glance contact counts by country × city × Contact queue / Discover bucket.
+
+    Counts only — click-through uses the same tab filters as Contact queue.
+    """
+    data = _sales_contact_queue_payload(
+        db,
+        product_line=product_line,
+        limit=max(1, min(int(limit or 5000), 10000)),
+        mode=mode,
+    )
+    leads = data.get("leads") or []
+    cq_tabs = [b for b in _GEO_COUNT_BUCKETS if b != "discovered"]
+    zero = {b: 0 for b in _GEO_COUNT_BUCKETS}
+    by_geo: dict[tuple[str, str], dict[str, int]] = {}
+
+    for lead in leads:
+        country = (lead.get("country") or "").strip() or "—"
+        city = (lead.get("city") or "").strip() or "—"
+        key = (country, city)
+        row = by_geo.get(key)
+        if row is None:
+            row = dict(zero)
+            by_geo[key] = row
+        if _cq_is_discovered(lead):
+            row["discovered"] += 1
+        # Independent tab filters — same rules as Contact queue / mobile tab=…
+        for tab in cq_tabs:
+            if _filter_contact_queue_leads([lead], tab=tab):
+                row[tab] += 1
+
+    rows = []
+    totals = dict(zero)
+    for (country, city), counts in sorted(
+        by_geo.items(), key=lambda kv: (kv[0][0].lower(), kv[0][1].lower())
+    ):
+        if not any(counts.values()):
+            continue
+        item = {"country": country, "city": city, **counts}
+        rows.append(item)
+        for b in _GEO_COUNT_BUCKETS:
+            totals[b] += counts[b]
+
+    return {
+        "product_line": (product_line or "STANDALONE").upper(),
+        "mode": data.get("mode") or "",
+        "buckets": list(_GEO_COUNT_BUCKETS),
+        "rows": rows,
+        "totals": totals,
+        "sample_size": len(leads),
+    }
+
+
 @router.post("/prospects/auto-setup", tags=["pipeline"])
 def sales_auto_setup_prospects(_user: str = Depends(require_user), db=Depends(get_db)):
     """Backfill product_line, currency, stage, and follow-up tasks for all prospects."""

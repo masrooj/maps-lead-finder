@@ -36,7 +36,7 @@ import {
   renderContactQueueList, markContactQueueIds, markBookingIds, loadContactQueue,
   saveContactQueueMode, getContactQueuePick, clearContactQueuePick, setContactQueueTab,
   setContactQueueQuery, setContactQueueChannel, setContactQueueFollowFilter, setContactQueueSentChannels,
-  getContactQueueLocations
+  getContactQueueLocations, setContactQueueGeoFilter, navigateContactQueue
 } from '../panels/contact-queue.js';
 import {
   brandLogoAbsoluteUrl, emailSignaturePlain, withEmailSignature,
@@ -145,6 +145,7 @@ function setAppPanel(panel, opts){
     appointHive:'appoinHive', appointHIve:'appoinHive',
     discover:'leads', discovery:'leads',
     queue:'contactQueue', contact:'contactQueue',
+    markets:'geoGlance', geo:'geoGlance',
     comms:'activities', communication:'activities',
   };
   if(aliases[target]) target=aliases[target];
@@ -165,6 +166,23 @@ function setAppPanel(panel, opts){
     if(appPanel==='contactQueue' && ['all','selected','lined_up','ready','contacted','plus3','plus7','engaged','booking','cannot','connected'].includes(tabHint)){
       setContactQueueTab(tabHint);
     }
+  }
+  const cqGeoNav=appPanel==='contactQueue' && (o.country!=null || o.city!=null);
+  if(cqGeoNav){
+    setContactQueueGeoFilter(o.country, o.city);
+  }
+  if(appPanel==='leads' && (o.country!=null || o.city!=null || o.status!=null)){
+    const ctry=String(o.country||'').trim();
+    const cty=String(o.city||'').trim();
+    if(ctry){
+      if(!locations[ctry]) locations[ctry]=[];
+      if(cty && !(locations[ctry]||[]).includes(cty)) locations[ctry]=[...(locations[ctry]||[]), cty];
+    }
+    syncDiscoverLocation(ctry, cty);
+    viewMode='city';
+    document.querySelectorAll('[data-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.view==='city'));
+    if($('statusFilter')) $('statusFilter').value=o.status!=null?o.status:DISCOVER_STATUS;
+    updateViewHint();
   }
   if(o.moneyTab) moneyTab=o.moneyTab;
   if(o.commsTab) commsTab=o.commsTab;
@@ -206,7 +224,17 @@ function setAppPanel(panel, opts){
       .then(()=>renderPaylinksHost())
       .catch(e=>toast(e.message,true));
   } else if(appPanel==='leads'){
-    // HEAD did not reload Discover on nav; keep that — boot/filters own load().
+    // HEAD did not reload Discover on nav; keep that — except Markets glance deep-links.
+    if(o.country!=null || o.city!=null || o.status!=null){
+      Promise.resolve(typeof load==='function'?load():null).catch(e=>toast(e&&e.message?e.message:e,true));
+    }
+  } else if(cqGeoNav){
+    // Force scoped CQ load for Markets deep-links (avoid stale unscoped cache race).
+    Promise.resolve(navigateContactQueue({
+      tab: tabHint || undefined,
+      country: o.country,
+      city: o.city,
+    })).catch(e=>toast(e&&e.message?e.message:e,true));
   } else {
     const p = getPanel(appPanel);
     if(p && typeof p.refresh === 'function'){

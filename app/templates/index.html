@@ -31,6 +31,7 @@
       <div class="nav-label">Prospecting</div>
       <button type="button" class="active" data-app-panel="leads"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span><span class="nav-txt">Discover</span></button>
       <button type="button" data-app-panel="contactQueue"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span><span class="nav-txt">Contact queue</span></button>
+      <button type="button" data-app-panel="geoGlance"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/><path d="M8 6v12"/><path d="M14 6v12"/></svg></span><span class="nav-txt">Markets</span></button>
       <button type="button" data-app-panel="pipeline"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h6v12H4z"/><path d="M10 9h6v9h-6z"/><path d="M16 12h4v6h-4z"/></svg></span><span class="nav-txt">Pipeline</span></button>
       <button type="button" data-app-panel="prospects"><span class="nav-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><span class="nav-txt">Prospects</span></button>
     </div>
@@ -159,6 +160,20 @@
         <strong style="color:var(--text)">Why only ~60 leads after a big fetch?</strong>
         <p class="hint" style="margin:8px 0 0">Local + Docker use <em>Postgres</em> only. Discover filters by the selected city — pick the city you searched, or use Global queue. Use Fetch: <strong>All (scan city)</strong> for &gt;60 Places results.</p>
       </div>
+    </section>
+  </div>
+
+  <div class="panel-page hidden" id="geoGlancePanel">
+    <section class="panel card">
+      <div class="sectionhead">
+        <h2>Markets</h2>
+        <span id="geoGlanceNote">Country · city counts</span>
+        <div class="row-actions">
+          <button type="button" class="primary" id="geoGlanceRefresh">Refresh counts</button>
+        </div>
+      </div>
+      <p class="hint" style="margin:0 0 12px">At-a-glance contact counts by country and city. Click a number to open that Contact queue section (Discovered opens Discover) with the market filtered.</p>
+      <div id="geoGlanceTable" class="list-shell" style="min-height:160px"></div>
     </section>
   </div>
 

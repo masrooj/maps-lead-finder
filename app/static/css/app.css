@@ -619,6 +619,21 @@ label.file-btn input[type=file],label.pill input[type=file][hidden]{position:abs
 .queue-card span{display:block;color:var(--muted);font-size:12px;font-weight:650}
 .queue-card strong{font-size:24px;letter-spacing:-.03em;font-weight:800}
 .queue-card .kpi-hint{display:block;margin-top:6px;font-size:11px;color:var(--accent);opacity:.9}
+.geo-table-wrap{overflow:auto;-webkit-overflow-scrolling:touch;max-width:100%;border:1px solid var(--line-soft);border-radius:12px;background:rgba(11,19,36,.35)}
+.geo-table{width:100%;min-width:920px;border-collapse:collapse}
+.geo-table th,.geo-table td{padding:8px 6px;border-bottom:1px solid var(--line-soft);text-align:center;font-size:12px;vertical-align:middle}
+.geo-table thead th{color:var(--muted);font-weight:700;white-space:nowrap;background:rgba(22,33,54,.9);position:sticky;top:0;z-index:2;font-size:11px}
+.geo-table th.geo-place,.geo-table thead th:first-child,.geo-table tfoot th{text-align:left;position:sticky;left:0;background:rgba(16,24,43,.98);z-index:1;min-width:140px;box-shadow:1px 0 0 var(--line-soft)}
+.geo-table thead th:first-child{z-index:3;background:rgba(22,33,54,.98)}
+.geo-table tfoot th,.geo-table tfoot td{background:rgba(22,33,54,.55);font-weight:700}
+.geo-table tr:last-child td,.geo-table tr:last-child th{border-bottom:0}
+.geo-place-btn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;border:0;background:transparent;color:inherit;font:inherit;cursor:pointer;padding:2px 4px;border-radius:8px;text-align:left}
+.geo-place-btn:hover{background:rgba(126,162,255,.12)}
+.geo-place-btn strong{font-size:13px;font-weight:750}
+.geo-place-btn span{font-size:11px;color:var(--muted)}
+.geo-cell{min-width:44px;padding:6px 8px;border-radius:8px;border:1px solid var(--line-soft);background:#162136;color:var(--text);font:inherit;font-weight:750;cursor:pointer}
+.geo-cell:hover:not(:disabled){border-color:var(--accent);background:#1a2742}
+.geo-cell.is-zero,.geo-cell:disabled{opacity:.35;cursor:default;font-weight:600}
 .money-banner{margin:0 0 12px;padding:12px 14px;border-radius:12px;border:1px solid #7a5a20;background:#3a2a14;color:var(--amber);font-size:13px;line-height:1.45}
 .money-banner.hidden{display:none}
 .task-row{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px;border-bottom:1px solid var(--line-soft)}

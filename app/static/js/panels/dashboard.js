@@ -17,6 +17,8 @@ const PANEL_ALIASES={
   discovery:'leads',
   queue:'contactQueue',
   contact:'contactQueue',
+  markets:'geoGlance',
+  geo:'geoGlance',
   comms:'activities',
   communication:'activities',
 };
@@ -82,6 +84,7 @@ export async function loadDashboard(){
       :`Showing all STANDALONE leads (${filtered.total_leads||0}). Use filters above to narrow commercial views.`;
   }
   $('dashQueues').innerHTML=`
+    <button type="button" class="queue-card" data-goto="geoGlance" title="Open Markets glance"><span>Markets</span><strong style="font-size:16px">Geo counts</strong><span class="kpi-hint">→ Markets</span></button>
     <button type="button" class="queue-card" data-goto="contactQueue" title="Open Contact queue"><span>Contact queue</span><strong style="font-size:16px">Ranked</strong><span class="kpi-hint">→ Queue</span></button>
     <button type="button" class="queue-card" data-goto="tasks" title="Open Tasks"><span>Overdue tasks</span><strong>${q.overdue_count||0}</strong><span class="kpi-hint">→ Tasks</span></button>
     <button type="button" class="queue-card" data-goto="tasks" title="Open Tasks"><span>Due today</span><strong>${q.due_today_count||0}</strong><span class="kpi-hint">→ Tasks</span></button>

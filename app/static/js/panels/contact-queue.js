@@ -62,6 +62,75 @@ let contactQueueFollowFilter = '';
 let contactQueueSentChannels = new Set();
 let contactQueueLocations = {};
 let igDiscoverStarted = new Set();
+/** Pending country/city from Markets glance until loadContactQueue reads it. */
+let pendingCqGeo = null;
+/** Bump on each load so older in-flight requests cannot clobber a newer geo nav. */
+let cqLoadGen = 0;
+
+/** Apply geo filter for Contact queue navigation (Markets glance / deep-link). */
+export function setContactQueueGeoFilter(country, city) {
+  pendingCqGeo = {
+    country: String(country || '').trim(),
+    city: String(city || '').trim(),
+  };
+  // Do not write <select> here — that can race change-handlers / empty option lists.
+}
+
+/** Ensure deep-link country/city exist in the filter option map. */
+function seedContactQueueLocations(locations, country, city, leads) {
+  const out = {};
+  Object.entries(locations || {}).forEach(([c, cities]) => {
+    out[c] = [...(cities || [])];
+  });
+  (leads || []).forEach((b) => {
+    const c = String((b && b.country) || '').trim();
+    if (!c) return;
+    const y = String((b && b.city) || '').trim();
+    if (!out[c]) out[c] = [];
+    if (y && !out[c].includes(y)) out[c].push(y);
+  });
+  const ctry = String(country || '').trim();
+  const cty = String(city || '').trim();
+  if (ctry) {
+    if (!out[ctry]) out[ctry] = [];
+    if (cty && !out[ctry].includes(cty)) out[ctry].push(cty);
+  }
+  return out;
+}
+
+/**
+ * Markets / deep-link: set tab + geo, then fetch that scope directly (bypass list-cache).
+ * Avoids stale in-flight CQ loads wiping country/city selects.
+ */
+export async function navigateContactQueue(opts = {}) {
+  if (opts.tab) setContactQueueTab(opts.tab);
+  const country = String(opts.country ?? '').trim();
+  const city = String(opts.city ?? '').trim();
+  pendingCqGeo = { country, city };
+  const myGen = ++cqLoadGen;
+  const mode = ($('contactQueueMode') && $('contactQueueMode').value) || '';
+  const list = $('contactQueueList');
+  const pagerHost = list && ensurePagerHost(list, 'contactQueuePager');
+  if (list) {
+    list.innerHTML = listSkeletonHtml({ rows: 5, label: 'Loading contact queue…' });
+    if (pagerHost) pagerHost.innerHTML = '';
+  }
+  const qs = new URLSearchParams({ product_line: 'STANDALONE', limit: '0' });
+  if (mode) qs.set('mode', mode);
+  if (country) qs.set('country', country);
+  if (city) qs.set('city', city);
+  const data = await api('/api/sales/contact-queue?' + qs.toString());
+  await refreshIgOutreachQuota().catch(() => {});
+  if (myGen !== cqLoadGen) return;
+  pendingCqGeo = null;
+  const seeded = {
+    ...(data || {}),
+    locations: seedContactQueueLocations((data && data.locations) || {}, country, city, (data && data.leads) || []),
+  };
+  // Drop any cached unscoped/scoped entry so the next Refresh matches this nav.
+  invalidateListCache('all');
+  applyContactQueuePayload(seeded, country, city);
+}
 
 function cqLocalDay(){
   const d=new Date();
@@ -147,6 +216,8 @@ const CQ_TABS = new Set([
 
 export function setContactQueueTab(tab) {
   state.contactQueueTab = CQ_TABS.has(tab) ? tab : 'all';
+  // Update tab chrome immediately (don't wait for list render — deep-links need this).
+  try { syncContactQueueTabs(); } catch (_) { /* list may be empty */ }
   requestAnimationFrame(() => {
     scrollContactQueueTop();
     setTimeout(scrollContactQueueTop, 40);
@@ -346,18 +417,20 @@ export function fillContactQueueLocationFilters(locations, keepCountry, keepCity
   const countrySel=$('contactQueueCountry');
   const citySel=$('contactQueueCity');
   if(!countrySel||!citySel) return;
-  contactQueueLocations=locations||{};
+  const curCountry=keepCountry!=null?String(keepCountry):((countrySel.value||''));
+  const curCity=keepCity!=null?String(keepCity):((citySel.value||''));
+  contactQueueLocations=seedContactQueueLocations(locations||{}, curCountry, curCity, []);
   const countries=Object.keys(contactQueueLocations).sort((a,b)=>a.localeCompare(b));
-  const curCountry=keepCountry!=null?keepCountry:(countrySel.value||'');
   countrySel.innerHTML='<option value="">All countries</option>'+countries.map(c=>`<option value="${esc(c)}" ${c===curCountry?'selected':''}>${esc(c)}</option>`).join('');
-  if(curCountry && ![...countrySel.options].some(o=>o.value===curCountry)) countrySel.value='';
+  if(curCountry && [...countrySel.options].some(o=>o.value===curCountry)) countrySel.value=curCountry;
+  else if(curCountry) countrySel.value='';
   const activeCountry=countrySel.value;
   const cities=activeCountry
     ? (contactQueueLocations[activeCountry]||[]).slice().sort((a,b)=>a.localeCompare(b))
     : [...new Set(Object.values(contactQueueLocations).flat())].sort((a,b)=>a.localeCompare(b));
-  const curCity=keepCity!=null?keepCity:(citySel.value||'');
   citySel.innerHTML='<option value="">All cities</option>'+cities.map(c=>`<option value="${esc(c)}" ${c===curCity?'selected':''}>${esc(c)}</option>`).join('');
-  if(curCity && ![...citySel.options].some(o=>o.value===curCity)) citySel.value='';
+  if(curCity && [...citySel.options].some(o=>o.value===curCity)) citySel.value=curCity;
+  else if(curCity) citySel.value='';
 }
 
 export function contactQueueMatchQuery(b, q){
@@ -1383,7 +1456,8 @@ export async function markBookingIds(ids, hasBooking){
 
 function applyContactQueuePayload(data, country, city){
   fillContactQueueModes(data.modes||[], data.mode||'default');
-  fillContactQueueLocationFilters(data.locations||{}, country, city);
+  const locs=seedContactQueueLocations((data&&data.locations)||{}, country, city, (data&&data.leads)||[]);
+  fillContactQueueLocationFilters(locs, country, city);
   const scope=[country,city].filter(Boolean).join(' · ');
   if($('contactQueueDef')){
     $('contactQueueDef').textContent=(data.definition||'')
@@ -1407,8 +1481,13 @@ export async function loadContactQueue(opts={}){
   if(!opts.keepTab){ /* preserve tab when refreshing after mark */ }
   const force=!!opts.force;
   const mode=($('contactQueueMode')&&$('contactQueueMode').value)||'';
-  const country=($('contactQueueCountry')&&$('contactQueueCountry').value)||'';
-  const city=($('contactQueueCity')&&$('contactQueueCity').value)||'';
+  let country=($('contactQueueCountry')&&$('contactQueueCountry').value)||'';
+  let city=($('contactQueueCity')&&$('contactQueueCity').value)||'';
+  if(pendingCqGeo){
+    country=pendingCqGeo.country||'';
+    city=pendingCqGeo.city||'';
+  }
+  const myGen=++cqLoadGen;
   const cacheKey=`cq:STANDALONE:${mode||'default'}:${country}:${city}`;
   const metaParams={product_line:'STANDALONE'};
   if(mode) metaParams.mode=mode;
@@ -1437,7 +1516,15 @@ export async function loadContactQueue(opts={}){
   });
 
   await refreshIgOutreachQuota().catch(()=>{});
+  // Drop superseded in-flight loads (geo deep-link / double refresh).
+  if(myGen!==cqLoadGen) return;
   if(result.stale) return;
+  // Clear pending only after this generation wins — keeps a newer nav intact.
+  if(pendingCqGeo
+    && pendingCqGeo.country===(country||'')
+    && pendingCqGeo.city===(city||'')){
+    pendingCqGeo=null;
+  }
   applyContactQueuePayload(result.payload||{}, country, city);
 }
 

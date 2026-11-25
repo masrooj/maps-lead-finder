@@ -22,6 +22,7 @@ def test_openapi_has_bearer_and_feature_tags(client):
     assert "/api/sales/contact-queue/meta" in paths
     assert "/api/sales/contact-queue/lined-up" in paths
     assert "/api/sales/contact-queue/ready" in paths
+    assert "/api/sales/contact-queue/geo-counts" in paths
     assert "/api/sales/dashboard/queues" in paths
     assert "/api/businesses" in paths
     assert "/api/stats" in paths

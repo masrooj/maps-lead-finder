@@ -9,6 +9,7 @@ import './guide.js';
 import './dashboard.js';
 import './discover.js';
 import './contact-queue.js';
+import './geo-glance.js';
 import './pipeline.js';
 import './prospects.js';
 import './tasks.js';

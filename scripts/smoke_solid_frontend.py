@@ -156,6 +156,7 @@ def main() -> int:
         "dashboard",
         "leads",
         "contactQueue",
+        "geoGlance",
         "pipeline",
         "prospects",
         "tasks",
@@ -171,7 +172,7 @@ def main() -> int:
     ]:
         assert f'data-app-panel="{pid}"' in html, pid
         assert f'id="{pid}Panel"' in html, pid
-    print("PANELS_DOM_OK 16")
+    print("PANELS_DOM_OK 17")
 
     js = "\n".join(
         p.read_text(encoding="utf-8", errors="replace")

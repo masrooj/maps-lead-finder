@@ -9,6 +9,7 @@ export const PANEL_OWNERSHIP = {
   dashboard: 'dashboard',
   leads: 'leads',
   contactQueue: 'contactQueue',
+  geoGlance: 'geoGlance',
   pipeline: 'pipeline',
   prospects: 'prospects',
   tasks: 'tasks',
