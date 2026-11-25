@@ -299,8 +299,14 @@ def sales_dashboard_queues(
 ):
     """Light notification/bell counts — no pipeline/monitor/payment scans."""
     from app.services.metrics import notification_queues_bundle
+    from app.services.read_cache import TTL_QUEUES_S, get_or_set
 
-    return notification_queues_bundle(db, product_line=product_line.upper())
+    pl = product_line.upper()
+    return get_or_set(
+        f"queues:{pl}",
+        TTL_QUEUES_S,
+        lambda: notification_queues_bundle(db, product_line=pl),
+    )
 
 
 @router.get("/providers", tags=["money"])
@@ -975,11 +981,18 @@ def sales_bulk_mark_for_contact(
     ids = [int(i) for i in (body.ids or []) if i is not None]
     if not ids:
         raise HTTPException(422, "Select at least one lead.")
+    from app.services.pipeline import stages_by_ids
+
     rows = db.scalars(select(Business).where(Business.id.in_(ids))).all()
+    stages_by_id = stages_by_ids(db, [b.pipeline_stage_id for b in rows])
     results = []
     for b in rows:
         mark_for_contact(db, b, actor_id=actor.id if actor else None, marked=bool(body.marked))
-        stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+        stage = stages_by_id.get(b.pipeline_stage_id) if b.pipeline_stage_id else None
+        if b.pipeline_stage_id and stage is None:
+            stage = db.get(PipelineStage, b.pipeline_stage_id)
+            if stage:
+                stages_by_id[stage.id] = stage
         results.append(prospect_sales_dict(b, stage, db=db))
     return {"ok": True, "updated": len(results), "marked": bool(body.marked), "prospects": results}
 
@@ -2057,7 +2070,7 @@ def sales_prospects(
     db=Depends(get_db),
 ):
     from app.services.authz import can_view_business, get_user_by_email
-    from app.models import PipelineStage
+    from app.services.pipeline import stages_by_ids
 
     actor = get_user_by_email(db, _user)
     stmt = select(Business).where(or_(Business.archived.is_(False), Business.archived.is_(None)))
@@ -2076,9 +2089,11 @@ def sales_prospects(
         for b in db.scalars(stmt.order_by(Business.updated_at.desc()).limit(min(limit, 2000))).all()
         if can_view_business(actor, b)
     ]
+
+    stages_by_id = stages_by_ids(db, [b.pipeline_stage_id for b in rows])
     out = []
     for b in rows:
-        stage = db.get(PipelineStage, b.pipeline_stage_id) if b.pipeline_stage_id else None
+        stage = stages_by_id.get(b.pipeline_stage_id) if b.pipeline_stage_id else None
         out.append(prospect_sales_dict(b, stage))
     return {"prospects": out, "sample_size": len(out), "total": int(total)}
 
@@ -2230,13 +2245,23 @@ def sales_contact_queue_meta(
 ):
     """Cheap count + max_updated_at fingerprint for client list-cache gating."""
     from app.services.automation import contact_queue_meta
+    from app.services.read_cache import TTL_CQ_META_S, get_or_set
 
-    return contact_queue_meta(
-        db,
-        product_line=product_line.upper(),
-        mode=(mode or "").strip() or None,
-        country=(country or "").strip() or None,
-        city=(city or "").strip() or None,
+    pl = product_line.upper()
+    mode_s = (mode or "").strip()
+    country_s = (country or "").strip()
+    city_s = (city or "").strip()
+    key = f"cqmeta:{pl}:{mode_s or 'default'}:{country_s}:{city_s}"
+    return get_or_set(
+        key,
+        TTL_CQ_META_S,
+        lambda: contact_queue_meta(
+            db,
+            product_line=pl,
+            mode=mode_s or None,
+            country=country_s or None,
+            city=city_s or None,
+        ),
     )
 
 
@@ -2432,16 +2457,48 @@ def _sales_contact_queue_payload(
     tab: str = "",
     sent_channels: str = "",
 ) -> dict:
-    from app.services.automation import rank_contact_queue
+    """Ranked CQ payload. Unscoped results share a TTL cache with geo-counts (web+mobile)."""
+    import copy
 
-    data = rank_contact_queue(
-        db,
-        product_line=product_line.upper(),
-        limit=limit,
-        mode=(mode or "").strip() or None,
-        country=(country or "").strip() or None,
-        city=(city or "").strip() or None,
-    )
+    from app.services.automation import rank_contact_queue
+    from app.services.read_cache import TTL_CQ_UNIVERSE_S, get_or_set
+
+    pl = product_line.upper()
+    mode_s = (mode or "").strip()
+    country_s = (country or "").strip()
+    city_s = (city or "").strip()
+    mode_arg = mode_s or None
+
+    if not country_s and not city_s:
+        # Shared universe: always rank full set (limit<=0); slice after cache hit.
+        cache_key = f"cquniverse:{pl}:{mode_s or 'default'}"
+
+        def _load():
+            return rank_contact_queue(
+                db,
+                product_line=pl,
+                limit=0,
+                mode=mode_arg,
+                country=None,
+                city=None,
+            )
+
+        data = copy.deepcopy(get_or_set(cache_key, TTL_CQ_UNIVERSE_S, _load))
+        lim = int(limit or 0)
+        if lim > 0:
+            leads = data.get("leads") or []
+            if len(leads) > lim:
+                data = {**data, "leads": leads[:lim], "sample_size": lim}
+    else:
+        data = rank_contact_queue(
+            db,
+            product_line=pl,
+            limit=limit,
+            mode=mode_arg,
+            country=country_s or None,
+            city=city_s or None,
+        )
+
     tab_f = (tab or "").strip().lower()
     sent_f = (sent_channels or "").strip()
     if tab_f or sent_f:
@@ -3801,7 +3858,8 @@ def be_put_won_policy(body: BeWonPolicyBody, _user: str = Depends(require_user),
 
 @router.get("/prospects/{business_id}/stage-history", tags=["pipeline"])
 def sales_stage_history(business_id: int, _user: str = Depends(require_user), db=Depends(get_db)):
-    from app.models import PipelineStage, StageHistory
+    from app.models import StageHistory
+    from app.services.pipeline import stages_by_ids
 
     b = db.get(Business, business_id)
     if not b:
@@ -3809,10 +3867,17 @@ def sales_stage_history(business_id: int, _user: str = Depends(require_user), db
     rows = db.scalars(
         select(StageHistory).where(StageHistory.business_id == business_id).order_by(StageHistory.id.desc()).limit(100)
     ).all()
+    stage_ids = []
+    for h in rows:
+        if h.from_stage_id:
+            stage_ids.append(h.from_stage_id)
+        if h.to_stage_id:
+            stage_ids.append(h.to_stage_id)
+    stages_map = stages_by_ids(db, stage_ids)
     out = []
     for h in rows:
-        fr = db.get(PipelineStage, h.from_stage_id) if h.from_stage_id else None
-        to = db.get(PipelineStage, h.to_stage_id) if h.to_stage_id else None
+        fr = stages_map.get(h.from_stage_id) if h.from_stage_id else None
+        to = stages_map.get(h.to_stage_id) if h.to_stage_id else None
         out.append(
             {
                 "id": h.id,

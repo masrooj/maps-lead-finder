@@ -130,7 +130,7 @@ def resolve_outbound_failure(db, failure_id: int) -> Optional[BeOutboundFailure]
 
 def timeline_be_items(db, business_id: int) -> list[dict]:
     """BE inbox + stage history fragments for unified timeline."""
-    from app.models import PipelineStage, StageHistory
+    from app.models import StageHistory
 
     items = []
     for ev in db.scalars(
@@ -155,14 +155,26 @@ def timeline_be_items(db, business_id: int) -> list[dict]:
                 else "",
             }
         )
-    for h in db.scalars(
-        select(StageHistory)
-        .where(StageHistory.business_id == business_id)
-        .order_by(StageHistory.id.desc())
-        .limit(100)
-    ).all():
-        fr = db.get(PipelineStage, h.from_stage_id) if h.from_stage_id else None
-        to = db.get(PipelineStage, h.to_stage_id) if h.to_stage_id else None
+    from app.services.pipeline import stages_by_ids
+
+    hist_rows = list(
+        db.scalars(
+            select(StageHistory)
+            .where(StageHistory.business_id == business_id)
+            .order_by(StageHistory.id.desc())
+            .limit(100)
+        ).all()
+    )
+    stage_ids = []
+    for h in hist_rows:
+        if h.from_stage_id:
+            stage_ids.append(h.from_stage_id)
+        if h.to_stage_id:
+            stage_ids.append(h.to_stage_id)
+    stages_map = stages_by_ids(db, stage_ids)
+    for h in hist_rows:
+        fr = stages_map.get(h.from_stage_id) if h.from_stage_id else None
+        to = stages_map.get(h.to_stage_id) if h.to_stage_id else None
         items.append(
             {
                 "source": "stage",

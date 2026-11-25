@@ -688,10 +688,21 @@ def follow_up_badge(b: Business) -> dict:
 
 
 def _setting_value(db, key: str, default: str = "") -> str:
-    row = db.scalar(select(AppSetting).where(AppSetting.key == key))
-    if not row or row.value is None:
+    """Read AppSetting with short process TTL to avoid repeat SELECTs (Prisma ops)."""
+    from app.services.read_cache import TTL_APP_SETTING_S, get_or_set
+
+    cache_key = f"appsetting:{key}"
+
+    def _load():
+        row = db.scalar(select(AppSetting).where(AppSetting.key == key))
+        if not row or row.value is None:
+            return None
+        return str(row.value)
+
+    cached = get_or_set(cache_key, TTL_APP_SETTING_S, _load)
+    if cached is None:
         return default
-    return str(row.value)
+    return cached
 
 
 def ig_soft_dm_daily_cap(db) -> int:

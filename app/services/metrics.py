@@ -114,79 +114,89 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
     tomorrow = today + timedelta(days=1)
     week = today + timedelta(days=7)
 
-    overdue_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(Task)
-            .where(Task.status == "open", Task.due_at.is_not(None), Task.due_at < today)
-        )
-        or 0
+    # Single SQL statement (5 scalar subqueries) — was five separate COUNT round-trips.
+    overdue_sq = (
+        select(func.count())
+        .select_from(Task)
+        .where(Task.status == "open", Task.due_at.is_not(None), Task.due_at < today)
+        .scalar_subquery()
     )
-    due_today_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(Task)
-            .where(
-                Task.status == "open",
-                Task.due_at.is_not(None),
-                Task.due_at >= today,
-                Task.due_at < tomorrow,
-            )
+    due_today_sq = (
+        select(func.count())
+        .select_from(Task)
+        .where(
+            Task.status == "open",
+            Task.due_at.is_not(None),
+            Task.due_at >= today,
+            Task.due_at < tomorrow,
         )
-        or 0
+        .scalar_subquery()
     )
-    due_soon_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(Task)
-            .where(
-                Task.status == "open",
-                Task.due_at.is_not(None),
-                Task.due_at >= tomorrow,
-                Task.due_at < week,
-            )
+    due_soon_sq = (
+        select(func.count())
+        .select_from(Task)
+        .where(
+            Task.status == "open",
+            Task.due_at.is_not(None),
+            Task.due_at >= tomorrow,
+            Task.due_at < week,
         )
-        or 0
+        .scalar_subquery()
     )
-
-    no_next_action_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(Business)
-            .where(
-                or_(Business.archived.is_(False), Business.archived.is_(None)),
-                or_(Business.lost.is_(False), Business.lost.is_(None)),
-                or_(Business.next_action == "", Business.next_action.is_(None)),
-            )
+    no_next_sq = (
+        select(func.count())
+        .select_from(Business)
+        .where(
+            or_(Business.archived.is_(False), Business.archived.is_(None)),
+            or_(Business.lost.is_(False), Business.lost.is_(None)),
+            or_(Business.next_action == "", Business.next_action.is_(None)),
         )
-        or 0
+        .scalar_subquery()
     )
-
-    to_contact = (
-        db.scalar(
-            select(func.count())
-            .select_from(Business)
-            .where(
-                Business.archived.is_(False),
-                Business.lost.is_(False),
-                Business.opt_out.is_(False),
-                Business.marked_for_contact.is_(True),
-                Business.contacted.is_(False),
-            )
+    to_contact_sq = (
+        select(func.count())
+        .select_from(Business)
+        .where(
+            Business.archived.is_(False),
+            Business.lost.is_(False),
+            Business.opt_out.is_(False),
+            Business.marked_for_contact.is_(True),
+            Business.contacted.is_(False),
         )
-        or 0
+        .scalar_subquery()
     )
-
+    open_inv_sq = (
+        select(func.count())
+        .select_from(Invoice)
+        .where(Invoice.status == "open", Invoice.is_test_mode.is_(False))
+        .scalar_subquery()
+    )
+    count_row = db.execute(
+        select(overdue_sq, due_today_sq, due_soon_sq, no_next_sq, to_contact_sq, open_inv_sq)
+    ).one()
+    overdue_count = int(count_row[0] or 0)
+    due_today_count = int(count_row[1] or 0)
+    due_soon_count = int(count_row[2] or 0)
+    no_next_action_count = int(count_row[3] or 0)
+    to_contact = int(count_row[4] or 0)
+    open_invoice_sample = int(count_row[5] or 0)
     # Pipeline Follow-up columns (synced with Contacted +3/+7 passed)
     from app.services.follow_up_reminders import due_follow_up_leads
-    from app.services.automation import follow_up_target_slug, ig_ready_wait_payload
+    from app.services.automation import (
+        follow_up_target_slug,
+        ig_ready_wait_days,
+        is_lined_up_waiting,
+        messaging_gate_payload,
+        _timezone_for_quota,
+    )
 
     due_leads = due_follow_up_leads(db, limit=2000)
     follow_up_3 = sum(1 for b in due_leads if follow_up_target_slug(b) == "follow_up_3")
     follow_up_7 = sum(1 for b in due_leads if follow_up_target_slug(b) == "follow_up_7")
 
-    # Ready / Lined up split — notify sendable vs waiting
-    from app.services.automation import is_lined_up_waiting
+    # Hoist settings once — avoid AppSetting SELECTs per Ready lead.
+    wait_days = ig_ready_wait_days(db)
+    tz_pair = _timezone_for_quota(db)
 
     ready_rows = db.scalars(
         select(Business)
@@ -202,8 +212,9 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
     ready_unlocked = 0
     lined_up = 0
     for rb in ready_rows:
-        wait = ig_ready_wait_payload(db, rb)
-        if is_lined_up_waiting(db, rb, wait=wait):
+        gate = messaging_gate_payload(db, rb, wait_days=wait_days, tz_pair=tz_pair)
+        wait = gate.get("ig_ready_wait") or {}
+        if is_lined_up_waiting(db, rb, wait=wait, gate=gate):
             lined_up += 1
         elif wait.get("can_message", True) and wait.get("unlocked", True) is not False:
             ready_unlocked += 1
@@ -269,6 +280,7 @@ def task_queues(db, day: Optional[datetime] = None) -> dict:
         "follow_up_email_reminders_enabled": email_on,
         "follow_up_push_reminders_enabled": push_on,
         "notifications_note": note,
+        "_open_invoice_count": open_invoice_sample,
     }
 
 
@@ -282,9 +294,11 @@ def open_invoice_count(db, *, include_test: bool = False) -> int:
 def notification_queues_bundle(db, product_line: str = "STANDALONE") -> dict:
     """Bell/notifications payload without full dashboard scans."""
     _ = product_line  # reserved for future product-line-scoped queue filters
+    queues = task_queues(db)
+    sample = int(queues.pop("_open_invoice_count", 0) or 0)
     return {
-        "queues": task_queues(db),
-        "invoiced_outstanding": {"sample_size": open_invoice_count(db)},
+        "queues": queues,
+        "invoiced_outstanding": {"sample_size": sample},
     }
 
 
@@ -334,11 +348,14 @@ def filtered_prospect_stats(db, product_line: str, filters: Optional[dict] = Non
     if date_to:
         q = q.where(Business.created_at <= date_to)
 
+    from app.services.pipeline import stages_by_ids
+
     prospects = list(db.scalars(q).all())
     ids = [p.id for p in prospects]
+    stages_map = stages_by_ids(db, [p.pipeline_stage_id for p in prospects])
     stage_counts: dict[str, int] = {}
     for p in prospects:
-        stage = db.get(PipelineStage, p.pipeline_stage_id) if p.pipeline_stage_id else None
+        stage = stages_map.get(p.pipeline_stage_id) if p.pipeline_stage_id else None
         slug = (stage.slug if stage else "unstaged") or "unstaged"
         stage_counts[slug] = stage_counts.get(slug, 0) + 1
 

@@ -13,7 +13,8 @@ if DATABASE_URL.lower().startswith("sqlite:"):
 
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True,
+    # pool_pre_ping issues SELECT 1 per checkout — billed as a Prisma operation.
+    pool_pre_ping=False,
     pool_size=5,
     max_overflow=5,
     pool_recycle=300,

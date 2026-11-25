@@ -310,6 +310,27 @@ async def _static_asset_revalidate(request: Request, call_next):
 
 
 @app.middleware("http")
+async def _invalidate_read_caches_on_mutation(request: Request, call_next):
+    """Drop hot-read TTL caches after successful mutating API calls (web + mobile)."""
+    response = await call_next(request)
+    if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
+        return response
+    if response.status_code >= 400:
+        return response
+    path = request.url.path or ""
+    if (
+        path.startswith("/api/sales/")
+        or path.startswith("/api/businesses/")
+        or path.startswith("/api/cron/follow-up")
+        or path.startswith("/api/cron/unpaid")
+    ):
+        from app.services.read_cache import invalidate_queue_caches
+
+        invalidate_queue_caches()
+    return response
+
+
+@app.middleware("http")
 async def _degraded_db_gate(request: Request, call_next):
     """When boot failed to reach Postgres, keep health/static alive and surface a system page."""
     path = request.url.path or ""
@@ -1536,16 +1557,27 @@ def home(request: Request):
         return f.read()
 
 
+_health_db_ping_at = 0.0
+_HEALTH_DB_PING_TTL_S = 60.0
+
+
 @app.get("/api/health", tags=["system"])
 def health():
+    import time as _time
+
+    global _health_db_ping_at
     payload = boot_state.as_public_dict()
     payload["service"] = "appointhive-sales-os"
     if not boot_state.db_ready:
         return JSONResponse(payload, status_code=503)
-    # Live ping so a mid-flight outage shows up even if boot succeeded.
+    # Throttle live ping — SELECT 1 is a billed Prisma op; uptime probes must not burn the quota.
+    now = _time.monotonic()
+    if now - _health_db_ping_at < _HEALTH_DB_PING_TTL_S:
+        return payload
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
+        _health_db_ping_at = now
     except Exception as exc:
         issue = set_boot_issue(exc)
         payload = boot_state.as_public_dict()
@@ -1843,156 +1875,163 @@ def stats(
     day: str = "",
     _user: str = Depends(require_login),
 ):
-    with SessionLocal() as db:
-        today = parse_day_start(day or None)
-        tomorrow = today + timedelta(days=1)
-        base = businesses_query(
-            db, country=country, city=city, category=category, scope=scope, status="all", day=day
-        ).subquery()
+    from app.services.read_cache import TTL_STATS_S, get_or_set
 
-        def _truthy(col):
-            return col.is_(True)
+    cache_key = f"stats:{country}|{city}|{category}|{scope}|{day}"
 
-        def _falsey(col):
-            return or_(col.is_(False), col.is_(None))
+    def _load_stats():
+        with SessionLocal() as db:
+            today = parse_day_start(day or None)
+            tomorrow = today + timedelta(days=1)
+            base = businesses_query(
+                db, country=country, city=city, category=category, scope=scope, status="all", day=day
+            ).subquery()
 
-        booking_empty = or_(
-            base.c.current_booking_software.is_(None),
-            base.c.current_booking_software == "",
-        )
-        not_archived = or_(base.c.archived.is_(False), base.c.archived.is_(None))
+            def _truthy(col):
+                return col.is_(True)
 
-        agg = db.execute(
-            select(
-                func.count(),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (and_(_falsey(base.c.contacted), _falsey(base.c.lost)), 1),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (and_(_truthy(base.c.contacted), _falsey(base.c.lost)), 1),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ),
-                func.coalesce(func.sum(case((_truthy(base.c.lost), 1), else_=0)), 0),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (and_(_truthy(base.c.marked_for_contact), not_archived), 1),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                and_(
-                                    _truthy(base.c.marked_for_contact),
-                                    _falsey(base.c.contacted),
-                                    _falsey(base.c.lost),
-                                    not_archived,
-                                ),
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                and_(
-                                    _falsey(base.c.marked_for_contact),
-                                    _falsey(base.c.contacted),
-                                    _falsey(base.c.lost),
-                                    booking_empty,
-                                    not_archived,
-                                ),
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                and_(
-                                    base.c.next_follow_up_at.is_not(None),
-                                    base.c.next_follow_up_at < tomorrow,
-                                    _falsey(base.c.lost),
-                                    not_archived,
-                                ),
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ),
-                func.coalesce(
-                    func.sum(
-                        case(
-                            (
-                                and_(
-                                    base.c.next_follow_up_at.is_not(None),
-                                    base.c.next_follow_up_at < today,
-                                    _falsey(base.c.lost),
-                                    not_archived,
-                                ),
-                                1,
-                            ),
-                            else_=0,
-                        )
-                    ),
-                    0,
-                ),
-                func.max(base.c.updated_at),
+            def _falsey(col):
+                return or_(col.is_(False), col.is_(None))
+
+            booking_empty = or_(
+                base.c.current_booking_software.is_(None),
+                base.c.current_booking_software == "",
             )
-        ).one()
+            not_archived = or_(base.c.archived.is_(False), base.c.archived.is_(None))
 
-        global_queue = (
-            db.scalar(
-                select(func.count()).select_from(
-                    businesses_query(db, status="queue", scope="global").subquery()
+            agg = db.execute(
+                select(
+                    func.count(),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (and_(_falsey(base.c.contacted), _falsey(base.c.lost)), 1),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (and_(_truthy(base.c.contacted), _falsey(base.c.lost)), 1),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ),
+                    func.coalesce(func.sum(case((_truthy(base.c.lost), 1), else_=0)), 0),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (and_(_truthy(base.c.marked_for_contact), not_archived), 1),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    and_(
+                                        _truthy(base.c.marked_for_contact),
+                                        _falsey(base.c.contacted),
+                                        _falsey(base.c.lost),
+                                        not_archived,
+                                    ),
+                                    1,
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    and_(
+                                        _falsey(base.c.marked_for_contact),
+                                        _falsey(base.c.contacted),
+                                        _falsey(base.c.lost),
+                                        booking_empty,
+                                        not_archived,
+                                    ),
+                                    1,
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    and_(
+                                        base.c.next_follow_up_at.is_not(None),
+                                        base.c.next_follow_up_at < tomorrow,
+                                        _falsey(base.c.lost),
+                                        not_archived,
+                                    ),
+                                    1,
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ),
+                    func.coalesce(
+                        func.sum(
+                            case(
+                                (
+                                    and_(
+                                        base.c.next_follow_up_at.is_not(None),
+                                        base.c.next_follow_up_at < today,
+                                        _falsey(base.c.lost),
+                                        not_archived,
+                                    ),
+                                    1,
+                                ),
+                                else_=0,
+                            )
+                        ),
+                        0,
+                    ),
+                    func.max(base.c.updated_at),
                 )
-            )
-            or 0
-        )
-        max_updated = agg[9]
-        max_iso = ""
-        if max_updated is not None:
-            aware = ensure_aware(max_updated) if max_updated else None
-            max_iso = aware.isoformat() if aware else ""
+            ).one()
 
-        return {
-            "total": int(agg[0] or 0),
-            "fresh": int(agg[6] or 0),
-            "uncontacted": int(agg[1] or 0),
-            "contacted": int(agg[2] or 0),
-            "lost": int(agg[3] or 0),
-            "marked": int(agg[4] or 0),
-            "queue": int(agg[5] or 0),
-            "due": int(agg[7] or 0),
-            "overdue": int(agg[8] or 0),
-            "global_queue": int(global_queue),
-            "max_updated_at": max_iso,
-        }
+            global_queue = (
+                db.scalar(
+                    select(func.count()).select_from(
+                        businesses_query(db, status="queue", scope="global").subquery()
+                    )
+                )
+                or 0
+            )
+            max_updated = agg[9]
+            max_iso = ""
+            if max_updated is not None:
+                aware = ensure_aware(max_updated) if max_updated else None
+                max_iso = aware.isoformat() if aware else ""
+
+            return {
+                "total": int(agg[0] or 0),
+                "fresh": int(agg[6] or 0),
+                "uncontacted": int(agg[1] or 0),
+                "contacted": int(agg[2] or 0),
+                "lost": int(agg[3] or 0),
+                "marked": int(agg[4] or 0),
+                "queue": int(agg[5] or 0),
+                "due": int(agg[7] or 0),
+                "overdue": int(agg[8] or 0),
+                "global_queue": int(global_queue),
+                "max_updated_at": max_iso,
+            }
+
+    return get_or_set(cache_key, TTL_STATS_S, _load_stats)
 
 
 @app.get("/api/categories", tags=["discover"])

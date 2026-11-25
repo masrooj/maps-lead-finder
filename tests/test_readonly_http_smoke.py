@@ -33,7 +33,7 @@ UNSAFE_GET_PATHS = {
 # Proven read-only for DB (SELECT / file / in-memory only). Auth noted separately.
 SAFE_GET_PATHS = {
     "/": "serves index.html; no DB when boot_state.db_ready",
-    "/api/health": "SELECT 1 ping; may flip in-memory boot_state only",
+    "/api/health": "Throttled SELECT 1 (60s); may flip in-memory boot_state only",
     "/api/me": "SELECT users row",
     "/api/migrations": "SELECT schema_migrations",
     "/api/locations": "static locations.json",

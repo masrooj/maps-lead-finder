@@ -30,6 +30,17 @@ def stage_by_id(db, stage_id: int) -> Optional[PipelineStage]:
     return db.get(PipelineStage, stage_id)
 
 
+def stages_by_ids(db, stage_ids) -> dict[int, PipelineStage]:
+    """One SELECT for many stage ids — avoids per-row db.get(PipelineStage) N+1."""
+    ids = {int(i) for i in (stage_ids or []) if i is not None}
+    if not ids:
+        return {}
+    return {
+        s.id: s
+        for s in db.scalars(select(PipelineStage).where(PipelineStage.id.in_(ids))).all()
+    }
+
+
 def list_stages(db, product_line: str = "STANDALONE") -> list[PipelineStage]:
     return list(
         db.scalars(
@@ -38,7 +49,6 @@ def list_stages(db, product_line: str = "STANDALONE") -> list[PipelineStage]:
             .order_by(PipelineStage.sort_order)
         ).all()
     )
-
 
 def init_new_prospect(db, b: Business, *, lead_source: str = "google_places") -> None:
     """Set Sales OS defaults on a newly created business row."""
