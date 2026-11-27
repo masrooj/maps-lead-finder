@@ -275,8 +275,12 @@
       </select>
       <button type="button" id="refreshBtn">Refresh</button>
       <button type="button" id="enrichBtn" title="Find email & social from websites">Enrich contacts</button>
-      <button type="button" id="scanBookingBtn" title="Website + Google Places reservable (same Maps API key) → Has booking or To contact">Scan booking</button>
-      <button type="button" id="mapsVerifyBtn" hidden title="Optional local Playwright only — Vercel uses Scan booking">Verify Maps booking</button>
+      <div class="discover-scan" role="group" aria-label="Scan booking">
+        <button type="button" class="primary" id="scanBookingBtn" title="Website + Places reservable → Has booking or To contact">Scan booking</button>
+        <span class="discover-scan-meta" id="scanBookingMeta" title="Change in Settings → Discover · Scan booking">up to 60</span>
+        <button type="button" class="ghost" id="scanBookingSettingsBtn" title="Open scan limit settings">Limits</button>
+        <button type="button" id="mapsVerifyBtn" hidden title="Optional local Playwright only — Vercel uses Scan booking">Verify Maps</button>
+      </div>
       <div class="spacer"></div>
       <label class="file-btn" for="importFile">Import CSV<input type="file" id="importFile" accept=".csv,text/csv" hidden></label>
       <button type="button" id="exportBtn">Export filtered</button>
@@ -556,9 +560,15 @@
   </div>
 
   <div class="panel-page hidden" id="settingsPanel">
-    <section class="panel card">
-      <div class="sectionhead"><h2>Settings</h2><button type="button" id="settingsRefresh">Refresh</button></div>
-      <div class="queue-tabs" id="settingsTabs" role="tablist" aria-label="Settings sections" style="margin-bottom:14px">
+    <section class="panel card settings-shell">
+      <div class="sectionhead settings-hero">
+        <div>
+          <h2>Settings</h2>
+          <p class="settings-lede">Owner controls for outreach, Discover scan, team, and branding. Changes apply to web and mobile APIs.</p>
+        </div>
+        <button type="button" id="settingsRefresh">Refresh</button>
+      </div>
+      <div class="queue-tabs settings-tabs" id="settingsTabs" role="tablist" aria-label="Settings sections">
         <button type="button" class="active" data-settings-tab="general" role="tab" aria-selected="true">General</button>
         <button type="button" data-settings-tab="team" role="tab" aria-selected="false">Team</button>
         <button type="button" data-settings-tab="ranking" role="tab" aria-selected="false">Ranking</button>
@@ -567,153 +577,286 @@
       </div>
 
       <div class="settings-pane" id="settingsGeneralPane" data-settings-pane="general">
-        <div class="queue-grid" id="settingsMeta"></div>
-        <h3 class="panel-title">Product line</h3>
-        <div class="field" style="max-width:420px;margin-top:8px">
-          <label class="flag"><input type="checkbox" id="saasEnabledToggle"> Enable SaaS pipeline</label>
-          <p class="hint">When off, Pipeline still lists SaaS stages in API but UI defaults to Standalone. Standalone history is untouched.</p>
-          <button type="button" class="primary" id="saveSaasFlag">Save SaaS flag</button>
+        <div class="settings-stack">
+          <div class="queue-grid settings-meta" id="settingsMeta"></div>
+
+          <article class="settings-card" id="settingsProductCard">
+            <header class="settings-card-head">
+              <h3>Product line</h3>
+              <p>Pipeline defaults for Standalone vs SaaS.</p>
+            </header>
+            <div class="settings-card-body">
+              <label class="flag settings-flag"><input type="checkbox" id="saasEnabledToggle"> Enable SaaS pipeline</label>
+              <p class="hint">When off, UI defaults to Standalone. Standalone history is untouched.</p>
+              <div class="settings-actions">
+                <button type="button" class="primary" id="saveSaasFlag">Save SaaS flag</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="settings-card" id="settingsWonCard">
+            <header class="settings-card-head">
+              <h3>AppointHive Won policy</h3>
+              <p>Payment events update financials only unless auto-Won is on. Owner only.</p>
+            </header>
+            <div class="settings-card-body settings-checks">
+              <label class="flag settings-flag"><input type="checkbox" id="wonAutoOnPaid"> Auto-Won when AppointHive marks fully paid</label>
+              <label class="flag settings-flag"><input type="checkbox" id="wonRequireFullyPaid" checked> Require fully paid (partial ≠ Won)</label>
+              <label class="flag settings-flag"><input type="checkbox" id="wonRequireAgreement"> Require agreement accepted</label>
+              <label class="flag settings-flag"><input type="checkbox" id="wonRequireMilestone"> Require initial milestone paid</label>
+              <div class="settings-actions">
+                <button type="button" class="primary" id="saveWonPolicy">Save Won policy</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="settings-card" id="settingsIgCard">
+            <header class="settings-card-head">
+              <h3>Instagram soft DM</h3>
+              <p>Daily Confirm sent cap and Ready wait (calendar days in Settings timezone).</p>
+            </header>
+            <div class="settings-card-body">
+              <div class="settings-fields-2">
+                <div class="field">
+                  <label for="igSoftDmDailyCap">IG soft DMs per day</label>
+                  <input type="number" id="igSoftDmDailyCap" min="0" max="100" step="1" value="8">
+                </div>
+                <div class="field">
+                  <label for="igReadyWaitDays">IG Ready wait (days)</label>
+                  <input type="number" id="igReadyWaitDays" min="0" max="14" step="1" value="1">
+                </div>
+              </div>
+              <p class="hint">Wait starts when an IG lead moves to Ready — soft ask unlocks after N days.</p>
+              <div class="settings-actions">
+                <button type="button" class="primary" id="saveIgSoftDmCap">Save IG soft DM settings</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="settings-card settings-card-accent" id="settingsScanBookingCard">
+            <header class="settings-card-head">
+              <div>
+                <h3>Discover · Scan booking</h3>
+                <p>How many fresh leads one Scan run processes. Website HTML + Places <code>reservable</code> (same Google Maps API key).</p>
+              </div>
+              <span class="settings-pill">Discover</span>
+            </header>
+            <div class="settings-card-body">
+              <div class="settings-fields-2">
+                <div class="field">
+                  <label for="scanBookingLimit">Max leads per scan</label>
+                  <input type="number" id="scanBookingLimit" min="1" max="200" step="1" value="60" aria-describedby="scanBookingLimitHint">
+                  <span class="hint" id="scanBookingLimitHint">1–200 · default 60</span>
+                </div>
+                <div class="field">
+                  <label for="scanBookingChunk">Batch size (per request)</label>
+                  <input type="number" id="scanBookingChunk" min="1" max="50" step="1" value="8" aria-describedby="scanBookingChunkHint">
+                  <span class="hint" id="scanBookingChunkHint">1–50 · default 8 · stays ≤ max</span>
+                </div>
+              </div>
+              <p class="hint">Higher limits take longer on Vercel — keep batch size small.</p>
+              <div class="settings-actions">
+                <button type="button" class="primary" id="saveScanBookingLimits">Save scan limits</button>
+                <button type="button" class="ghost" id="settingsGotoDiscoverScan">Open Discover</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="settings-card" id="settingsRemindersCard">
+            <header class="settings-card-head">
+              <h3>Follow-up reminders</h3>
+              <p>Off by default. Email needs SMTP + daily cron; browser push needs OS permission.</p>
+            </header>
+            <div class="settings-card-body settings-checks">
+              <label class="flag settings-flag"><input type="checkbox" id="followUpEmailReminders"> Email digest reminders</label>
+              <label class="flag settings-flag"><input type="checkbox" id="followUpPushReminders"> Browser push reminders</label>
+              <div class="settings-actions">
+                <button type="button" class="primary" id="saveFollowUpReminders">Save reminder settings</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="settings-card" id="settingsOpsCard">
+            <header class="settings-card-head">
+              <h3>Data tools</h3>
+              <p>One-shot ops for prospects, ladder backfill, and currency normalize.</p>
+            </header>
+            <div class="settings-card-body settings-ops">
+              <div class="settings-ops-row">
+                <div>
+                  <strong>Prospect auto-setup</strong>
+                  <p class="hint">Assign product line, currency, stage, and follow-up tasks when missing.</p>
+                </div>
+                <button type="button" class="primary" id="autoSetupProspectsBtn">Run auto-setup</button>
+              </div>
+              <div class="settings-ops-row">
+                <div>
+                  <strong>Legacy Contacted → +3</strong>
+                  <p class="hint">Move already-due Contacted cards into Follow-up +3 and seed Day 3 / Day 7 templates.</p>
+                </div>
+                <button type="button" class="primary" id="backfillDuePlus3Btn">Move due → +3</button>
+              </div>
+              <div class="settings-ops-block">
+                <strong>Currency</strong>
+                <p class="hint">Default for new prospects is <strong>USD</strong>. Bulk-convert source → target. Per-prospect overrides stay on the drawer Sales tab.</p>
+                <div class="settings-fields-2">
+                  <div class="field">
+                    <label for="currencyNormalizeFrom">From</label>
+                    <select id="currencyNormalizeFrom" aria-label="Source currency">
+                      <option value="ALL">All currencies</option>
+                      <option value="AUD" selected>AUD (+ blank)</option>
+                      <option value="USD">USD (+ blank)</option>
+                      <option value="EUR">EUR (+ blank)</option>
+                      <option value="GBP">GBP (+ blank)</option>
+                      <option value="NZD">NZD (+ blank)</option>
+                      <option value="CAD">CAD (+ blank)</option>
+                      <option value="AED">AED (+ blank)</option>
+                      <option value="SAR">SAR (+ blank)</option>
+                      <option value="SGD">SGD (+ blank)</option>
+                      <option value="INR">INR (+ blank)</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="currencyNormalizeTo">To</label>
+                    <select id="currencyNormalizeTo" aria-label="Target currency">
+                      <option value="USD" selected>USD</option>
+                      <option value="AUD">AUD</option>
+                      <option value="EUR">EUR</option>
+                      <option value="GBP">GBP</option>
+                      <option value="NZD">NZD</option>
+                      <option value="CAD">CAD</option>
+                      <option value="AED">AED</option>
+                      <option value="SAR">SAR</option>
+                      <option value="SGD">SGD</option>
+                      <option value="INR">INR</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="settings-actions">
+                  <button type="button" class="primary" id="normalizeCurrencyBtn">Bulk convert currencies</button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="settings-card" id="settingsBrandCard">
+            <header class="settings-card-head">
+              <h3>Email signature &amp; brand</h3>
+              <p>Used in compose / mailto and invoice View/PDF.</p>
+            </header>
+            <div class="settings-card-body">
+              <div class="field">
+                <label for="emailSignatureText">Signature text</label>
+                <textarea id="emailSignatureText" rows="4" placeholder="AppointHive&#10;Sales team" aria-label="Email signature text" class="settings-signature"></textarea>
+              </div>
+              <label class="flag settings-flag">
+                <input type="checkbox" id="emailSignatureIncludeLogo" checked>
+                Include brand logo under the signature
+              </label>
+              <div class="settings-actions">
+                <button type="button" class="primary" id="emailSignatureSave">Save signature</button>
+              </div>
+              <p class="hint settings-preview-label">Preview</p>
+              <pre id="emailSignaturePreview" class="settings-preview"></pre>
+              <div class="settings-logo-row">
+                <label class="file-btn" for="brandLogoFile">Choose logo<input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden aria-label="Upload logo"></label>
+                <span class="hint" id="brandLogoFileName">No file chosen</span>
+                <button type="button" id="brandLogoClear">Remove logo</button>
+              </div>
+              <img id="brandLogoPreview" class="brand-logo-preview hidden" alt="Brand logo preview">
+            </div>
+          </article>
         </div>
-        <h3 class="panel-title">AppointHive Won policy</h3>
-        <p class="hint" style="margin-top:0">Payment events update financial snapshots only unless auto-Won is enabled. Owner only.</p>
-        <div class="fields" style="max-width:520px;margin-top:8px">
-          <label class="flag"><input type="checkbox" id="wonAutoOnPaid"> Auto-Won when AppointHive marks fully paid</label>
-          <label class="flag"><input type="checkbox" id="wonRequireFullyPaid" checked> Require fully paid (partial ≠ Won)</label>
-          <label class="flag"><input type="checkbox" id="wonRequireAgreement"> Require agreement accepted</label>
-          <label class="flag"><input type="checkbox" id="wonRequireMilestone"> Require initial milestone paid</label>
-          <button type="button" class="primary" id="saveWonPolicy" style="margin-top:8px">Save Won policy</button>
-        </div>
-        <h3 class="panel-title">Instagram soft DM</h3>
-        <p class="hint" style="margin-top:0">Daily Confirm sent cap and Ready wait (calendar days in Settings timezone). Wait starts when you move an IG lead to Ready — soft ask unlocks after N days. Soft DM cap already exists; wait is IG-only.</p>
-        <div class="fields" style="max-width:320px;margin-top:8px">
-          <div class="field">
-            <label for="igSoftDmDailyCap">IG soft DMs per day</label>
-            <input type="number" id="igSoftDmDailyCap" min="0" max="100" step="1" value="8">
-          </div>
-          <div class="field">
-            <label for="igReadyWaitDays">IG Ready wait (days)</label>
-            <input type="number" id="igReadyWaitDays" min="0" max="14" step="1" value="1">
-          </div>
-          <button type="button" class="primary" id="saveIgSoftDmCap" style="margin-top:4px">Save IG soft DM settings</button>
-        </div>
-        <h3 class="panel-title">Follow-up reminders</h3>
-        <p class="hint" style="margin-top:0">Off by default. Email needs SMTP + daily <code>POST /api/cron/follow-up-reminders</code>. Browser push uses the OS notification permission when the app is open.</p>
-        <div class="fields" style="max-width:520px;margin-top:8px">
-          <label class="flag"><input type="checkbox" id="followUpEmailReminders"> Email digest reminders</label>
-          <label class="flag"><input type="checkbox" id="followUpPushReminders"> Browser push reminders</label>
-          <button type="button" class="primary" id="saveFollowUpReminders" style="margin-top:8px">Save reminder settings</button>
-        </div>
-        <h3 class="panel-title">Prospect auto-setup</h3>
-        <p class="hint" style="margin-top:0">Assign product line, currency, pipeline stage, and follow-up tasks for leads missing Sales OS fields.</p>
-        <button type="button" class="primary" id="autoSetupProspectsBtn">Run auto-setup now</button>
-        <h3 class="panel-title">Legacy Contacted → +3</h3>
-        <p class="hint" style="margin-top:0">One-shot for live data: move already-due Contacted cards into Follow-up +3 and seed missing Day 3 / Day 7 follow-up templates (skips +7 / ladder-complete). Then work Contact queue → <strong>Follow-up +3</strong> / <strong>Follow-up +7</strong> tabs.</p>
-        <button type="button" class="primary" id="backfillDuePlus3Btn">Move due Contacted → +3 (+ seed templates)</button>
-        <h3 class="panel-title">Currency</h3>
-        <p class="hint" style="margin-top:0">Default for new prospects is <strong>USD</strong>. Bulk-convert any source currency (or all) to a target. Per-prospect overrides stay in the drawer <strong>Sales</strong> tab → Currency.</p>
-        <div class="fields filter-bar" style="margin:0 0 10px;max-width:520px">
-          <div class="field">
-            <label for="currencyNormalizeFrom">From</label>
-            <select id="currencyNormalizeFrom" aria-label="Source currency">
-              <option value="ALL">All currencies</option>
-              <option value="AUD" selected>AUD (+ blank)</option>
-              <option value="USD">USD (+ blank)</option>
-              <option value="EUR">EUR (+ blank)</option>
-              <option value="GBP">GBP (+ blank)</option>
-              <option value="NZD">NZD (+ blank)</option>
-              <option value="CAD">CAD (+ blank)</option>
-              <option value="AED">AED (+ blank)</option>
-              <option value="SAR">SAR (+ blank)</option>
-              <option value="SGD">SGD (+ blank)</option>
-              <option value="INR">INR (+ blank)</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="currencyNormalizeTo">To</label>
-            <select id="currencyNormalizeTo" aria-label="Target currency">
-              <option value="USD" selected>USD</option>
-              <option value="AUD">AUD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-              <option value="NZD">NZD</option>
-              <option value="CAD">CAD</option>
-              <option value="AED">AED</option>
-              <option value="SAR">SAR</option>
-              <option value="SGD">SGD</option>
-              <option value="INR">INR</option>
-            </select>
-          </div>
-        </div>
-        <button type="button" class="primary" id="normalizeCurrencyBtn">Bulk convert currencies</button>
-        <h3 class="panel-title">Email signature</h3>
-        <p class="hint" style="margin-top:0">Appended to compose / mailto / Zoho. Loaded and saved via <code>/api/sales/email-signature</code> (session or Bearer).</p>
-        <div class="fields" style="margin:0 0 12px;max-width:560px">
-          <div class="field">
-            <label for="emailSignatureText">Signature text</label>
-            <textarea id="emailSignatureText" rows="4" placeholder="AppointHive&#10;Sales team" aria-label="Email signature text" style="min-height:96px;width:100%;resize:vertical"></textarea>
-          </div>
-          <label class="check-row" style="display:flex;align-items:center;gap:8px;margin:8px 0">
-            <input type="checkbox" id="emailSignatureIncludeLogo" checked>
-            <span>Include brand logo under the signature</span>
-          </label>
-          <div class="crud-toolbar" style="margin:0">
-            <button type="button" class="primary" id="emailSignatureSave">Save signature</button>
-          </div>
-          <p class="hint" style="margin:10px 0 4px">Preview</p>
-          <pre id="emailSignaturePreview" class="hint" style="white-space:pre-wrap;margin:0;padding:10px;border:1px solid var(--border, #ddd);border-radius:8px;background:var(--surface-2, #f7f7f8);max-width:560px"></pre>
-        </div>
-        <h3 class="panel-title">Brand logo (email &amp; invoices)</h3>
-        <p class="hint" style="margin-top:0">Used in email signatures and invoice View/PDF. Stored under uploads.</p>
-        <div class="crud-toolbar" style="margin:0">
-          <label class="file-btn" for="brandLogoFile">Choose logo<input type="file" id="brandLogoFile" accept="image/png,image/jpeg,image/webp,image/svg+xml" hidden aria-label="Upload logo"></label>
-          <span class="hint" id="brandLogoFileName">No file chosen</span>
-          <button type="button" id="brandLogoClear">Remove logo</button>
-        </div>
-        <img id="brandLogoPreview" class="brand-logo-preview hidden" alt="Brand logo preview">
       </div>
 
       <div class="settings-pane hidden" id="settingsTeamPane" data-settings-pane="team">
-        <h3 class="panel-title">Users</h3>
-        <p class="hint" style="margin-top:0">Owner / Sales / Viewer. Set passwords so each person can sign in with their email.</p>
-        <div class="crud-toolbar">
-          <button type="button" class="primary" id="userAddBtn">Add user</button>
+        <div class="settings-stack">
+          <article class="settings-card">
+            <header class="settings-card-head">
+              <h3>Users</h3>
+              <p>Owner / Sales / Viewer. Set passwords so each person can sign in with their email.</p>
+            </header>
+            <div class="settings-card-body">
+              <div class="settings-actions">
+                <button type="button" class="primary" id="userAddBtn">Add user</button>
+              </div>
+              <div id="usersTerritories" class="hint">Loading…</div>
+            </div>
+          </article>
+          <article class="settings-card">
+            <header class="settings-card-head">
+              <h3>Territories</h3>
+              <p>Country scopes for ownership. Auto-assign unowned prospects into a territory.</p>
+            </header>
+            <div class="settings-card-body">
+              <div class="settings-actions">
+                <button type="button" class="primary" id="territoryAddBtn">Add territory</button>
+              </div>
+              <div id="territoriesPanel" class="hint">Loading…</div>
+            </div>
+          </article>
         </div>
-        <div id="usersTerritories" class="hint">Loading…</div>
-        <h3 class="panel-title">Territories</h3>
-        <p class="hint" style="margin-top:0">Country scopes for ownership. Auto-assign unowned prospects into a territory.</p>
-        <div class="crud-toolbar">
-          <button type="button" class="primary" id="territoryAddBtn">Add territory</button>
-        </div>
-        <div id="territoriesPanel" class="hint">Loading…</div>
       </div>
 
       <div class="settings-pane hidden" id="settingsRankingPane" data-settings-pane="ranking">
-        <h3 class="panel-title">Contact queue ranking modes</h3>
-        <p class="hint" style="margin-top:0">CRUD filter/boost presets (not hardcoded). Edit with Yes / No / Any for each channel flag — no JSON required.</p>
-        <div class="crud-toolbar">
-          <button type="button" class="primary" id="rankingModeAddBtn">Add ranking mode</button>
-          <button type="button" id="rankingModesRefresh">Refresh</button>
+        <div class="settings-stack">
+          <article class="settings-card">
+            <header class="settings-card-head">
+              <h3>Contact queue ranking modes</h3>
+              <p>CRUD filter/boost presets. Edit with Yes / No / Any — no JSON required.</p>
+            </header>
+            <div class="settings-card-body">
+              <div class="settings-actions">
+                <button type="button" class="primary" id="rankingModeAddBtn">Add ranking mode</button>
+                <button type="button" id="rankingModesRefresh">Refresh</button>
+              </div>
+              <div id="rankingModesPanel" class="hint">Loading…</div>
+            </div>
+          </article>
         </div>
-        <div id="rankingModesPanel" class="hint">Loading…</div>
       </div>
 
       <div class="settings-pane hidden" id="settingsJobsPane" data-settings-pane="jobs">
-        <h3 class="panel-title">Background jobs</h3>
-        <p class="hint" style="margin-top:0">Enrich selected Discover leads in batches (avoids long request timeouts).</p>
-        <button type="button" id="enrichJobBtn">Start enrich job for starred / selected</button>
-        <h3 class="panel-title">Audit (Owner)</h3>
-        <p class="hint" style="margin-top:0">Recent Owner/ops actions. Cron: <code>POST /api/cron/unpaid-invoices</code> · <code>POST /api/cron/follow-up-reminders</code> with header <code>X-Cron-Secret</code> (or Owner session when secret unset). Follow-up cron always promotes Pipeline +3/+7; email digest only when enabled in Follow-up reminders + SMTP.</p>
-        <div class="sales-table-wrap" style="max-height:360px"><table class="sales-table" id="auditTable"><thead><tr><th>When</th><th>Action</th><th>Entity</th></tr></thead><tbody></tbody></table></div>
+        <div class="settings-stack">
+          <article class="settings-card">
+            <header class="settings-card-head">
+              <h3>Background jobs</h3>
+              <p>Enrich selected Discover leads in batches (avoids long request timeouts).</p>
+            </header>
+            <div class="settings-card-body">
+              <div class="settings-actions">
+                <button type="button" id="enrichJobBtn">Start enrich job for starred / selected</button>
+              </div>
+            </div>
+          </article>
+          <article class="settings-card">
+            <header class="settings-card-head">
+              <h3>Audit (Owner)</h3>
+              <p>Recent Owner/ops actions. Cron: <code>POST /api/cron/unpaid-invoices</code> · <code>POST /api/cron/follow-up-reminders</code>.</p>
+            </header>
+            <div class="settings-card-body">
+              <div class="sales-table-wrap settings-audit"><table class="sales-table" id="auditTable"><thead><tr><th>When</th><th>Action</th><th>Entity</th></tr></thead><tbody></tbody></table></div>
+            </div>
+          </article>
+        </div>
       </div>
 
       <div class="settings-pane hidden" id="settingsViewsPane" data-settings-pane="views">
-        <h3 class="panel-title">Saved views</h3>
-        <p class="hint" style="margin-top:0">Name the current Discover / pipeline filters so you can re-apply them later.</p>
-        <div class="crud-toolbar">
-          <input id="savedViewName" placeholder="Name this filter set" aria-label="Saved view name">
-          <button type="button" class="primary" id="saveViewBtn">Save view</button>
+        <div class="settings-stack">
+          <article class="settings-card">
+            <header class="settings-card-head">
+              <h3>Saved views</h3>
+              <p>Name the current Discover / pipeline filters so you can re-apply them later.</p>
+            </header>
+            <div class="settings-card-body">
+              <div class="settings-view-row">
+                <input id="savedViewName" placeholder="Name this filter set" aria-label="Saved view name">
+                <button type="button" class="primary" id="saveViewBtn">Save view</button>
+              </div>
+              <div id="savedViewsList" class="hint">Loading…</div>
+            </div>
+          </article>
         </div>
-        <div id="savedViewsList" class="hint">Loading…</div>
       </div>
     </section>
   </div>

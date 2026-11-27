@@ -254,6 +254,34 @@ def places_reservable(place_id: str, *, api_key: Optional[str] = None, timeout: 
     return bool(data.get("reservable"))
 
 
+def scan_booking_limits(db=None) -> dict[str, int]:
+    """Owner-configurable Discover Scan caps (AppSetting). Defaults: limit 60, chunk 8."""
+    limit, chunk = 60, 8
+    if db is not None:
+        try:
+            from sqlalchemy import select
+            from app.models import AppSetting
+
+            rows = {
+                r.key: r.value
+                for r in db.scalars(
+                    select(AppSetting).where(
+                        AppSetting.key.in_(("scan_booking_limit", "scan_booking_chunk"))
+                    )
+                ).all()
+            }
+            if rows.get("scan_booking_limit"):
+                limit = int(str(rows["scan_booking_limit"]).strip())
+            if rows.get("scan_booking_chunk"):
+                chunk = int(str(rows["scan_booking_chunk"]).strip())
+        except Exception:
+            pass
+    limit = max(1, min(200, int(limit or 60)))
+    chunk = max(1, min(50, int(chunk or 8)))
+    chunk = min(chunk, limit)
+    return {"limit": limit, "chunk": chunk}
+
+
 def detect_booking_for_business(
     b,
     *,

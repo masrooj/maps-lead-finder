@@ -1825,6 +1825,8 @@ _SETTINGS_PUT_ALLOW = frozenset(
         "tax_label_AU",
         "ig_soft_dm_daily_cap",
         "ig_ready_wait_days",
+        "scan_booking_limit",
+        "scan_booking_chunk",
         "follow_up_reminders.email_enabled",
         "follow_up_reminders.push_enabled",
     }
@@ -1858,6 +1860,22 @@ def sales_put_setting(key: str, value: str, _user: str = Depends(require_user), 
             raise HTTPException(422, "ig_ready_wait_days must be an integer 0–14") from e
         if n < 0 or n > 14:
             raise HTTPException(422, "ig_ready_wait_days must be an integer 0–14")
+        store_value = str(n)
+    if key == "scan_booking_limit":
+        try:
+            n = int(str(value).strip())
+        except (TypeError, ValueError) as e:
+            raise HTTPException(422, "scan_booking_limit must be an integer 1–200") from e
+        if n < 1 or n > 200:
+            raise HTTPException(422, "scan_booking_limit must be an integer 1–200")
+        store_value = str(n)
+    if key == "scan_booking_chunk":
+        try:
+            n = int(str(value).strip())
+        except (TypeError, ValueError) as e:
+            raise HTTPException(422, "scan_booking_chunk must be an integer 1–50") from e
+        if n < 1 or n > 50:
+            raise HTTPException(422, "scan_booking_chunk must be an integer 1–50")
         store_value = str(n)
     if key in ("follow_up_reminders.email_enabled", "follow_up_reminders.push_enabled"):
         store_value = "true" if str(value).strip().lower() in ("1", "true", "yes", "on") else "false"

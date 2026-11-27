@@ -105,6 +105,7 @@ def test_scan_booking_no_website_to_contact(auth_client):
 
 
 def test_scan_booking_skips_non_fresh(auth_client):
+    auth_client.put("/api/sales/settings/scan_booking_limit?value=60")
     marked = _seed(
         place_id="scan/marked-1",
         name="Already Marked",

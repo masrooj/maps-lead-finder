@@ -2161,8 +2161,8 @@ class ScanBookingRequest(BaseModel):
     ids: list[int] = Field(default_factory=list)
     country: str = ""
     city: str = ""
-    limit: int = Field(default=60, ge=1, le=60)
-    chunk: int = Field(default=8, ge=1, le=60)
+    limit: Optional[int] = Field(default=None, ge=1, le=200)
+    chunk: Optional[int] = Field(default=None, ge=1, le=50)
 
 
 @app.post("/api/businesses/scan-booking", tags=["discover"])
@@ -2170,6 +2170,7 @@ def scan_booking(payload: ScanBookingRequest, _user: str = Depends(require_login
     """Scan fresh Discover leads for booking (website + Places reservable).
 
     Uses existing GOOGLE_MAPS_API_KEY for Places — no separate Maps flag.
+    Per-request size capped by Settings ``scan_booking_limit`` / ``scan_booking_chunk``.
     Hit → park Has booking. Miss / no website → mark To contact.
     Mobile + web (cookie or Bearer).
     """
@@ -2178,18 +2179,24 @@ def scan_booking(payload: ScanBookingRequest, _user: str = Depends(require_login
         detect_booking_for_business,
         is_fresh_discover_business,
         park_has_booking,
+        scan_booking_limits,
     )
     from app.services.automation import mark_for_contact
 
-    limit = min(int(payload.limit or 60), 60)
-    ids = [int(i) for i in (payload.ids or []) if i is not None][:limit]
     country = (payload.country or "").strip()
     city = (payload.city or "").strip()
 
     scanned = has_booking_n = to_contact_n = skipped = failed = 0
     results: list[dict] = []
+    caps: dict = {"limit": 60, "chunk": 8}
 
     with SessionLocal() as db:
+        caps = scan_booking_limits(db)
+        ceiling = int(caps["limit"])
+        req_limit = int(payload.limit) if payload.limit is not None else ceiling
+        limit = max(1, min(ceiling, req_limit, 200))
+        ids = [int(i) for i in (payload.ids or []) if i is not None][:limit]
+
         actor = get_user_by_email(db, _user)
         actor_id = actor.id if actor else None
 
@@ -2249,6 +2256,8 @@ def scan_booking(payload: ScanBookingRequest, _user: str = Depends(require_login
         "skipped": skipped,
         "failed": failed,
         "results": results,
+        "limit": limit,
+        "caps": caps,
     }
 
 

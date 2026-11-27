@@ -828,6 +828,11 @@ async function loadSettings(){
     const waitParsed=parseInt(waitRaw,10);
     if($('igReadyWaitDays')) $('igReadyWaitDays').value=String(Number.isFinite(waitParsed)&&waitParsed>=0&&waitParsed<=14?waitParsed:1);
     const s=settingsPayload.settings||{};
+    const scanLim=parseInt(s.scan_booking_limit,10);
+    const scanChunk=parseInt(s.scan_booking_chunk,10);
+    if($('scanBookingLimit')) $('scanBookingLimit').value=String(Number.isFinite(scanLim)&&scanLim>=1&&scanLim<=200?scanLim:60);
+    if($('scanBookingChunk')) $('scanBookingChunk').value=String(Number.isFinite(scanChunk)&&scanChunk>=1&&scanChunk<=50?scanChunk:8);
+    if(typeof B.refreshScanBookingMeta==='function') B.refreshScanBookingMeta(s);
     const truthy=(raw)=>{
       const v=String(raw??'').trim().toLowerCase();
       return v==='1'||v==='true'||v==='yes'||v==='on';

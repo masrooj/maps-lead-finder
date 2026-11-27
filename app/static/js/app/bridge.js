@@ -22,6 +22,7 @@ export const B = {
   loadBeCatalog: null,
   loadMoney: null,
   reloadDiscover: null,
+  refreshScanBookingMeta: null,
   markBookingIds: null,
   loadPipeline: null,
   moveProspectStage: null,

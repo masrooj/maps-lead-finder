@@ -25,6 +25,22 @@ function settingTruthy(raw) {
   return v === '1' || v === 'true' || v === 'yes' || v === 'on';
 }
 
+export function paintScanBookingLimitFields(settings) {
+  const s = settings || {};
+  const lim = parseInt(s.scan_booking_limit, 10);
+  const chunk = parseInt(s.scan_booking_chunk, 10);
+  if ($('scanBookingLimit')) {
+    $('scanBookingLimit').value = String(
+      Number.isFinite(lim) && lim >= 1 && lim <= 200 ? lim : 60
+    );
+  }
+  if ($('scanBookingChunk')) {
+    $('scanBookingChunk').value = String(
+      Number.isFinite(chunk) && chunk >= 1 && chunk <= 50 ? chunk : 8
+    );
+  }
+}
+
 export async function loadIgSoftDmCapSetting() {
   try {
     const data = await api('/api/sales/settings');
@@ -42,11 +58,15 @@ export async function loadIgSoftDmCapSetting() {
       );
     }
     const s = data.settings || {};
+    paintScanBookingLimitFields(s);
     if ($('followUpEmailReminders')) {
       $('followUpEmailReminders').checked = settingTruthy(s['follow_up_reminders.email_enabled']);
     }
     if ($('followUpPushReminders')) {
       $('followUpPushReminders').checked = settingTruthy(s['follow_up_reminders.push_enabled']);
+    }
+    if (typeof B.refreshScanBookingMeta === 'function') {
+      B.refreshScanBookingMeta(s);
     }
   } catch (_) { /* settings may be owner-gated elsewhere */ }
 }
@@ -120,6 +140,36 @@ function wireSettingsOnce() {
       if ($('igReadyWaitDays')) $('igReadyWaitDays').value = String(waitN);
       await refreshIgOutreachQuota().catch(() => {});
       toast(`IG soft DM saved (cap ${n}, Ready wait ${waitN}d)`);
+    } catch (e) {
+      toast(e.message, true);
+    }
+  });
+
+  $('settingsGotoDiscoverScan') && $('settingsGotoDiscoverScan').addEventListener('click', () => {
+    if (typeof B.setAppPanel === 'function') B.setAppPanel('leads');
+  });
+
+  $('saveScanBookingLimits') && $('saveScanBookingLimits').addEventListener('click', async () => {
+    try {
+      let lim = parseInt($('scanBookingLimit') ? $('scanBookingLimit').value : '60', 10);
+      let chunk = parseInt($('scanBookingChunk') ? $('scanBookingChunk').value : '8', 10);
+      if (Number.isNaN(lim) || lim < 1 || lim > 200) {
+        toast('Max leads per scan must be 1–200', true);
+        return;
+      }
+      if (Number.isNaN(chunk) || chunk < 1 || chunk > 50) {
+        toast('Batch size must be 1–50', true);
+        return;
+      }
+      if (chunk > lim) chunk = lim;
+      await api(`/api/sales/settings/scan_booking_limit?value=${encodeURIComponent(String(lim))}`, { method: 'PUT' });
+      await api(`/api/sales/settings/scan_booking_chunk?value=${encodeURIComponent(String(chunk))}`, { method: 'PUT' });
+      if ($('scanBookingLimit')) $('scanBookingLimit').value = String(lim);
+      if ($('scanBookingChunk')) $('scanBookingChunk').value = String(chunk);
+      if (typeof B.refreshScanBookingMeta === 'function') {
+        B.refreshScanBookingMeta({ scan_booking_limit: String(lim), scan_booking_chunk: String(chunk) });
+      }
+      toast(`Scan limits saved · max ${lim} · batch ${chunk}`);
     } catch (e) {
       toast(e.message, true);
     }

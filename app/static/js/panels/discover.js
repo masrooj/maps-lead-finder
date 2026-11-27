@@ -16,6 +16,31 @@ import { registerPanel } from './registry.js';
 import { B } from '../app/bridge.js';
 
 let scanBookingRunning = false;
+let scanBookingCaps = { limit: 60, chunk: 8 };
+
+export function refreshScanBookingMeta(settings) {
+  const s = settings || {};
+  const lim = parseInt(s.scan_booking_limit, 10);
+  const chunk = parseInt(s.scan_booking_chunk, 10);
+  if (Number.isFinite(lim) && lim >= 1 && lim <= 200) scanBookingCaps.limit = lim;
+  if (Number.isFinite(chunk) && chunk >= 1 && chunk <= 50) scanBookingCaps.chunk = chunk;
+  if (scanBookingCaps.chunk > scanBookingCaps.limit) scanBookingCaps.chunk = scanBookingCaps.limit;
+  const meta = $('scanBookingMeta');
+  if (meta) {
+    meta.textContent = `up to ${scanBookingCaps.limit}`;
+    meta.title = `Max ${scanBookingCaps.limit} leads · batch ${scanBookingCaps.chunk} · change in Settings`;
+  }
+}
+
+export async function loadScanBookingCaps() {
+  try {
+    const data = await api('/api/sales/settings');
+    refreshScanBookingMeta((data && data.settings) || {});
+  } catch (_) {
+    refreshScanBookingMeta({});
+  }
+  return { ...scanBookingCaps };
+}
 
 export const panelId = 'leads';
 
@@ -136,7 +161,7 @@ export const setDiscoverCannotContact = markDiscoverCannotContact;
 export async function scanBookingFreshLeads(opts = {}) {
   const country = String(opts.country || '').trim();
   const city = String(opts.city || '').trim();
-  const ids = [...new Set((opts.ids || []).map(Number).filter(Boolean))];
+  let ids = [...new Set((opts.ids || []).map(Number).filter(Boolean))];
   const scopeLabel = country || city
     ? [country, city].filter(Boolean).join(' · ')
     : 'all locations';
@@ -146,9 +171,16 @@ export async function scanBookingFreshLeads(opts = {}) {
     return null;
   }
 
+  await loadScanBookingCaps();
+  const maxLeads = scanBookingCaps.limit;
+  const chunk = scanBookingCaps.chunk;
+  if (ids.length > maxLeads) ids = ids.slice(0, maxLeads);
+
   const ok = await uiConfirm({
     title: 'Scan booking',
-    message: `Scan fresh leads in ${scopeLabel}? Booking → Has booking · else → To contact`,
+    message: ids.length
+      ? `Scan ${ids.length} selected fresh lead${ids.length === 1 ? '' : 's'} in ${scopeLabel}?\nBooking → Has booking · else → To contact\n(Limit ${maxLeads} · batch ${chunk} — Settings)`
+      : `Scan up to ${maxLeads} fresh leads in ${scopeLabel}?\nBooking → Has booking · else → To contact\n(Batch ${chunk} — change Limits in Settings)`,
     confirmLabel: 'Scan booking',
   });
   if (!ok) return null;
@@ -157,7 +189,6 @@ export async function scanBookingFreshLeads(opts = {}) {
   const btn = $('scanBookingBtn');
   if (btn) btn.disabled = true;
 
-  const chunk = 8;
   let scanned = 0;
   let hasBooking = 0;
   let toContact = 0;
@@ -187,26 +218,28 @@ export async function scanBookingFreshLeads(opts = {}) {
         failed += data.failed || 0;
       }
     } else {
-      // Server picks fresh pool by country/city (or all). One request per chunk of limit.
+      let remaining = maxLeads;
       let guard = 0;
-      while (guard < 20) {
+      const maxBatches = Math.max(1, Math.ceil(maxLeads / chunk) + 2);
+      while (remaining > 0 && guard < maxBatches) {
         guard += 1;
-        const label = `Scanning batch ${guard}… (${scanned} scanned)`;
+        const batch = Math.min(chunk, remaining);
+        const label = `Scanning… ${scanned}/${maxLeads}`;
         if (btn) btn.textContent = label;
         if (typeof opts.onProgress === 'function') opts.onProgress(label);
         const data = await api('/api/businesses/scan-booking', {
           method: 'POST',
-          body: { country, city, limit: chunk },
+          body: { country, city, limit: batch },
         });
-        const n = (data.scanned || 0) + (data.skipped || 0);
-        scanned += data.scanned || 0;
+        const got = data.scanned || 0;
+        scanned += got;
         hasBooking += data.has_booking || 0;
         toContact += data.to_contact || 0;
         skipped += data.skipped || 0;
         failed += data.failed || 0;
-        // Fresh pool shrinks as we mark/park; stop when a batch finds nothing actionable.
-        if (!(data.scanned || 0) || n === 0) break;
-        if ((data.scanned || 0) < chunk) break;
+        remaining -= got;
+        if (!got) break;
+        if (got < batch) break;
       }
     }
 
@@ -230,20 +263,41 @@ export async function scanBookingFreshLeads(opts = {}) {
   }
 }
 
-/** Bind Discover toolbar Scan booking button (country/city from DOM). */
+/** Bind Discover toolbar Scan booking controls (country/city from DOM). */
 export function bindScanBookingButton(getRowsIds) {
   const btn = $('scanBookingBtn');
-  if (!btn || btn.dataset.bound === '1') return;
-  btn.dataset.bound = '1';
-  btn.addEventListener('click', async () => {
-    const country = ($('country') && $('country').value || '').trim();
-    const city = ($('city') && $('city').value || '').trim();
-    let ids = [];
-    if (typeof getRowsIds === 'function') {
-      ids = getRowsIds() || [];
-    }
-    await scanBookingFreshLeads({ country, city, ids });
-  });
+  if (btn && btn.dataset.bound !== '1') {
+    btn.dataset.bound = '1';
+    btn.addEventListener('click', async () => {
+      const country = ($('country') && $('country').value || '').trim();
+      const city = ($('city') && $('city').value || '').trim();
+      let ids = [];
+      if (typeof getRowsIds === 'function') {
+        ids = getRowsIds() || [];
+      }
+      await scanBookingFreshLeads({ country, city, ids });
+    });
+  }
+  const limitsBtn = $('scanBookingSettingsBtn');
+  if (limitsBtn && limitsBtn.dataset.bound !== '1') {
+    limitsBtn.dataset.bound = '1';
+    limitsBtn.addEventListener('click', () => {
+      if (typeof B.setAppPanel === 'function') B.setAppPanel('settings');
+      if (typeof B.setSettingsTab === 'function') B.setSettingsTab('general');
+      else {
+        const tab = document.querySelector('#settingsTabs [data-settings-tab="general"]');
+        if (tab) tab.click();
+      }
+      setTimeout(() => {
+        const card = $('settingsScanBookingCard');
+        const el = $('scanBookingLimit');
+        if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (el && el.focus) el.focus();
+      }, 160);
+    });
+  }
+  loadScanBookingCaps().catch(() => {});
+  B.refreshScanBookingMeta = refreshScanBookingMeta;
 }
 
 async function tickJobUntilDone(jobId) {
