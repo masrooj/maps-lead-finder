@@ -400,7 +400,13 @@ async def start_sales_job(request: Request, _user: str = Depends(require_user), 
         body = {}
     jt = str((body or {}).get("job_type") or "noop")
     payload = (body or {}).get("payload") or {}
-    if jt not in ("unpaid_invoice_followups", "enrich_batch", "noop"):
+    if jt not in (
+        "unpaid_invoice_followups",
+        "enrich_batch",
+        "noop",
+        "maps_booking_verify",
+        "outreach_batch",
+    ):
         raise HTTPException(422, "Unsupported job_type")
     job = create_job(db, jt, payload=payload if isinstance(payload, dict) else {})
     return {"id": job.id, "status": job.status, "job_type": job.job_type}

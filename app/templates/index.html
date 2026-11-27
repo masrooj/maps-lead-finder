@@ -275,6 +275,8 @@
       </select>
       <button type="button" id="refreshBtn">Refresh</button>
       <button type="button" id="enrichBtn" title="Find email & social from websites">Enrich contacts</button>
+      <button type="button" id="scanBookingBtn" title="Website + Google Places reservable (same Maps API key) → Has booking or To contact">Scan booking</button>
+      <button type="button" id="mapsVerifyBtn" hidden title="Optional local Playwright only — Vercel uses Scan booking">Verify Maps booking</button>
       <div class="spacer"></div>
       <label class="file-btn" for="importFile">Import CSV<input type="file" id="importFile" accept=".csv,text/csv" hidden></label>
       <button type="button" id="exportBtn">Export filtered</button>
@@ -368,6 +370,7 @@
       <div class="sectionhead">
         <h2>Contact queue</h2>
         <div class="action-stack">
+          <button type="button" id="outreachBatchBtn" title="To contact → IG warm queue or WA Ready (no auto-send)">Automate outreach</button>
           <button type="button" class="primary" id="contactQueueRefresh">Refresh ranking</button>
         </div>
       </div>

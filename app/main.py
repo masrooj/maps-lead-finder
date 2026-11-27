@@ -46,6 +46,7 @@ from app.services.auth_tokens import (
     rotate_refresh,
     verify_access_token,
 )
+from app.services.geo_timezone import guess_timezone
 from app.services.cannot_contact import (
     CANNOT_VIA,
     apply_cannot_contact,
@@ -1137,6 +1138,7 @@ def business_dict(b: Business, db=None) -> dict:
         "linked_prospect_id": getattr(b, "linked_prospect_id", None),
         "be_installation_id": getattr(b, "be_installation_id", None) or "",
         "current_booking_software": getattr(b, "current_booking_software", None) or "",
+        "timezone": (getattr(b, "timezone", None) or "").strip() or guess_timezone(getattr(b, "country", None), getattr(b, "city", None)),
     }
     if db is not None:
         from app.services.automation import ig_ready_wait_payload
@@ -1565,9 +1567,20 @@ _HEALTH_DB_PING_TTL_S = 60.0
 def health():
     import time as _time
 
+    from app.services.maps_booking_verify import maps_verify_enabled
+
     global _health_db_ping_at
     payload = boot_state.as_public_dict()
     payload["service"] = "appointhive-sales-os"
+    # Capabilities for UI (Vercel live: maps_verify false; Scan booking always ok).
+    payload["capabilities"] = {
+        "scan_booking": True,
+        "maps_verify": maps_verify_enabled(),
+        "outreach_batch": True,
+        "host": "vercel" if os.getenv("VERCEL", "").strip() else (
+            "docker" if os.getenv("RUNNING_IN_DOCKER", "").strip() in ("1", "true", "yes") else "local"
+        ),
+    }
     if not boot_state.db_ready:
         return JSONResponse(payload, status_code=503)
     # Throttle live ping — SELECT 1 is a billed Prisma op; uptime probes must not burn the quota.
@@ -1794,6 +1807,8 @@ def search(payload: dict, _user: str = Depends(require_login)):
                     b.primary_type = primary_type
                 if editorial:
                     b.editorial_summary = editorial
+                if not (getattr(b, "timezone", None) or "").strip():
+                    b.timezone = guess_timezone(country, city)
                 b.updated_at = utcnow()
             else:
                 b = Business(place_id=place_id)
@@ -1802,6 +1817,8 @@ def search(payload: dict, _user: str = Depends(require_login)):
                 b.name = name
                 b.country = country
                 b.city = city
+                if not (getattr(b, "timezone", None) or "").strip():
+                    b.timezone = guess_timezone(country, city)
                 b.category = category
                 b.search_labels = category
                 b.address = p.get("formattedAddress", "")
@@ -2138,6 +2155,101 @@ def enrich_one(business_id: int, force: bool = False, _user: str = Depends(requi
         db.commit()
         db.refresh(b)
         return {"changed": changed, "business": business_dict(b)}
+
+
+class ScanBookingRequest(BaseModel):
+    ids: list[int] = Field(default_factory=list)
+    country: str = ""
+    city: str = ""
+    limit: int = Field(default=60, ge=1, le=60)
+    chunk: int = Field(default=8, ge=1, le=60)
+
+
+@app.post("/api/businesses/scan-booking", tags=["discover"])
+def scan_booking(payload: ScanBookingRequest, _user: str = Depends(require_login)):
+    """Scan fresh Discover leads for booking (website + Places reservable).
+
+    Uses existing GOOGLE_MAPS_API_KEY for Places — no separate Maps flag.
+    Hit → park Has booking. Miss / no website → mark To contact.
+    Mobile + web (cookie or Bearer).
+    """
+    from app.services.authz import get_user_by_email
+    from app.services.booking_detect import (
+        detect_booking_for_business,
+        is_fresh_discover_business,
+        park_has_booking,
+    )
+    from app.services.automation import mark_for_contact
+
+    limit = min(int(payload.limit or 60), 60)
+    ids = [int(i) for i in (payload.ids or []) if i is not None][:limit]
+    country = (payload.country or "").strip()
+    city = (payload.city or "").strip()
+
+    scanned = has_booking_n = to_contact_n = skipped = failed = 0
+    results: list[dict] = []
+
+    with SessionLocal() as db:
+        actor = get_user_by_email(db, _user)
+        actor_id = actor.id if actor else None
+
+        if ids:
+            rows = db.scalars(select(Business).where(Business.id.in_(ids))).all()
+            by_id = {b.id: b for b in rows}
+            ordered = [by_id[i] for i in ids if i in by_id]
+        else:
+            stmt = businesses_query(
+                db,
+                country=country,
+                city=city,
+                status="fresh",
+                scope="city" if (country or city) else "global",
+            )
+            ordered = list(db.scalars(stmt.limit(limit)).all())
+
+        for b in ordered:
+            if not is_fresh_discover_business(b):
+                skipped += 1
+                continue
+            if country and (b.country or "") != country:
+                skipped += 1
+                continue
+            if city and (b.city or "") != city:
+                skipped += 1
+                continue
+
+            scanned += 1
+            try:
+                detected = detect_booking_for_business(b)
+                if detected.get("has_booking"):
+                    label = park_has_booking(b, str(detected.get("software_name") or "Has booking"))
+                    src = detected.get("source") or "detect"
+                    log_activity(db, b.id, "booking_scan", note=f"booking_scan: {label} ({src})")
+                    has_booking_n += 1
+                    results.append(business_dict(b))
+                else:
+                    mark_for_contact(db, b, actor_id=actor_id, marked=True)
+                    log_activity(
+                        db,
+                        b.id,
+                        "booking_scan",
+                        note="booking_scan: no booking → to contact",
+                    )
+                    to_contact_n += 1
+                    results.append(business_dict(b))
+            except Exception:
+                failed += 1
+
+        db.commit()
+
+    return {
+        "scanned": scanned,
+        "has_booking": has_booking_n,
+        "to_contact": to_contact_n,
+        "skipped": skipped,
+        "failed": failed,
+        "results": results,
+    }
 
 
 class CannotContactBody(BaseModel):

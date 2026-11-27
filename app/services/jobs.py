@@ -117,6 +117,142 @@ def tick_job(db, job_id: int) -> dict[str, Any]:
             "done": job.status == "done",
         }
 
+    if job.job_type == "maps_booking_verify":
+        # v2: Playwright Maps Reserve/Book verify — 1–3 leads per tick.
+        from app.models import Business
+        from app.services.maps_booking_verify import (
+            apply_maps_verify_to_business,
+            verify_maps_booking,
+        )
+
+        ids = list(payload.get("business_ids") or [])
+        if not ids:
+            # Resolve fresh-ish leads with Maps URL from country/city
+            country = str(payload.get("country") or "").strip()
+            city = str(payload.get("city") or "").strip()
+            limit = max(1, min(50, int(payload.get("limit") or 25)))
+            stmt = select(Business).where(
+                Business.google_maps_url.is_not(None),
+                Business.google_maps_url != "",
+            )
+            if country:
+                stmt = stmt.where(Business.country == country)
+            if city:
+                stmt = stmt.where(Business.city == city)
+            ids = [int(b.id) for b in db.scalars(stmt.limit(limit)).all()]
+            payload["business_ids"] = ids
+            job.payload_json = json.dumps(payload)
+
+        start = int(cursor.get("offset") or 0)
+        batch = ids[start : start + 2]
+        stats = cursor.get("stats") or {
+            "parked": 0,
+            "to_contact": 0,
+            "skipped": 0,
+            "errors": 0,
+        }
+        park_only = bool(payload.get("park_only_on_confirmed", True))
+        runner = None
+        if payload.get("mock_results") and isinstance(payload["mock_results"], dict):
+            mock_map = {str(k): v for k, v in payload["mock_results"].items()}
+
+            def runner(url: str):
+                # Match by business in this batch via URL equality fallback
+                for bid in batch:
+                    b = db.get(Business, int(bid))
+                    if b and (b.google_maps_url or "") == url:
+                        raw = mock_map.get(str(bid)) or mock_map.get(url)
+                        if raw:
+                            return raw
+                return {"status": "uncertain", "evidence": "mock_miss"}
+
+        for bid in batch:
+            b = db.get(Business, int(bid))
+            if not b:
+                stats["skipped"] = int(stats.get("skipped") or 0) + 1
+                continue
+            try:
+                verify = verify_maps_booking(
+                    b.google_maps_url or "",
+                    runner=runner,
+                    park_only_on_confirmed=park_only,
+                )
+                action = apply_maps_verify_to_business(db, b, verify)
+                if action == "parked":
+                    stats["parked"] = int(stats.get("parked") or 0) + 1
+                elif action == "to_contact":
+                    stats["to_contact"] = int(stats.get("to_contact") or 0) + 1
+                else:
+                    stats["skipped"] = int(stats.get("skipped") or 0) + 1
+            except Exception:
+                stats["errors"] = int(stats.get("errors") or 0) + 1
+        cursor["offset"] = start + len(batch)
+        cursor["stats"] = stats
+        job.cursor_json = json.dumps(cursor)
+        if start + len(batch) >= len(ids):
+            job.status = "done"
+        job.updated_at = _utcnow()
+        db.commit()
+        return {
+            "id": job.id,
+            "status": job.status,
+            "stats": stats,
+            "offset": cursor["offset"],
+            "total": len(ids),
+            "done": job.status == "done",
+        }
+
+    if job.job_type == "outreach_batch":
+        # v2+: channel + WA promote Ready (IG stays for human warm).
+        from app.models import Business
+        from app.services.outreach_batch import process_outreach_lead, select_outreach_batch_ids
+
+        ids = list(payload.get("business_ids") or [])
+        if not ids:
+            ids = select_outreach_batch_ids(
+                db,
+                country=str(payload.get("country") or ""),
+                city=str(payload.get("city") or ""),
+                limit=int(payload.get("limit") or 25),
+            )
+            payload["business_ids"] = ids
+            job.payload_json = json.dumps(payload)
+
+        start = int(cursor.get("offset") or 0)
+        batch = ids[start : start + 10]
+        stats = cursor.get("stats") or {
+            "instagram_warm": 0,
+            "whatsapp_ready": 0,
+            "email_ready": 0,
+            "skipped": 0,
+        }
+        for bid in batch:
+            b = db.get(Business, int(bid))
+            if not b:
+                stats["skipped"] = int(stats.get("skipped") or 0) + 1
+                continue
+            out = process_outreach_lead(db, b)
+            action = out.get("action") or "skipped"
+            if action in stats:
+                stats[action] = int(stats.get(action) or 0) + 1
+            else:
+                stats["skipped"] = int(stats.get("skipped") or 0) + 1
+        cursor["offset"] = start + len(batch)
+        cursor["stats"] = stats
+        job.cursor_json = json.dumps(cursor)
+        if start + len(batch) >= len(ids):
+            job.status = "done"
+        job.updated_at = _utcnow()
+        db.commit()
+        return {
+            "id": job.id,
+            "status": job.status,
+            "stats": stats,
+            "offset": cursor["offset"],
+            "total": len(ids),
+            "done": job.status == "done",
+        }
+
     if job.job_type == "noop":
         job.status = "done"
         job.updated_at = _utcnow()

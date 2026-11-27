@@ -1536,6 +1536,66 @@ export async function saveContactQueueMode(){
   await loadContactQueue({keepTab:true, force:true});
 }
 
+/** v2+: To contact → IG warm queue or WA/email Ready (human still sends). */
+export async function runOutreachBatchAssist(opts={}){
+  const country=String(opts.country||(($('contactQueueCountry')&&$('contactQueueCountry').value)||'')).trim();
+  const city=String(opts.city||(($('contactQueueCity')&&$('contactQueueCity').value)||'')).trim();
+  const form=await uiForm({
+    title:'Automate outreach',
+    message:'Sets channel on To contact leads. Instagram stays for warm; WhatsApp/email promote to Ready. Does not send messages.',
+    confirmLabel:'Run',
+    fields:[
+      {name:'limit', label:'Limit', type:'number', value:String(opts.limit||25), required:true},
+    ],
+  });
+  if(!form) return null;
+  const limit=Math.max(1, Math.min(100, Number(form.limit)||25));
+  const btn=$('outreachBatchBtn');
+  if(btn) btn.disabled=true;
+  try{
+    const job=await api('/api/sales/jobs',{
+      method:'POST',
+      body:{
+        job_type:'outreach_batch',
+        payload:{country, city, limit},
+      },
+    });
+    let tick=await api('/api/jobs/'+job.id+'/tick',{method:'POST', body:{}});
+    let guard=0;
+    while(!tick.done && guard<50){
+      guard+=1;
+      tick=await api('/api/jobs/'+job.id+'/tick',{method:'POST', body:{}});
+    }
+    const s=tick.stats||{};
+    toast(
+      `Outreach: ${s.whatsapp_ready||0} WA Ready · ${s.instagram_warm||0} IG warm · ${s.email_ready||0} email · ${s.skipped||0} skipped`,
+    );
+    await loadContactQueue({keepTab:true, force:true});
+    // Compose assist: open first Ready WA/email lead if bridge is wired.
+    const ready=(state.contactQueueLeads||[]).find(b=>b.ready_for_contact && (b.outreach_channel==='whatsapp'||b.outreach_channel==='email'));
+    if(ready){
+      if(typeof B.openCompose==='function'){
+        try{ B.openCompose(ready); }catch(_){}
+      }else if(ready.outreach_channel==='whatsapp' && typeof B.openWhatsAppChat==='function'){
+        try{ B.openWhatsAppChat(ready); }catch(_){}
+      }
+    }
+    return tick;
+  }catch(e){
+    toast(e.message||String(e), true);
+    return null;
+  }finally{
+    if(btn) btn.disabled=false;
+  }
+}
+
+export function bindOutreachBatchButton(){
+  const btn=$('outreachBatchBtn');
+  if(!btn || btn.dataset.bound==='1') return;
+  btn.dataset.bound='1';
+  btn.addEventListener('click',()=>runOutreachBatchAssist().catch(e=>toast(e.message,true)));
+}
+
 
 registerPanel({ id: 'contactQueue', refresh: async () => { await loadContactQueue({force:true}); } });
 

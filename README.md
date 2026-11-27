@@ -79,7 +79,13 @@ To stop containers without deleting the saved PostgreSQL volume, run `docker com
    - `BLOB_READ_WRITE_TOKEN` = Vercel Blob store token (demo uploads; prefer Blob — S3 not required)
    - Stripe/PayPal keys = **optional** (Owner confirm works without them)
 4. Deploy. If you change environment variables later, redeploy.
-5. Check `https://YOUR-PROJECT.vercel.app/api/health`, then open the site's root URL, sign in with `hello@appointhive.com`, and test searching, updating contact status, refreshing, and exporting CSV.
+5. Check `https://YOUR-PROJECT.vercel.app/api/health`, then open the site's root URL, sign in with `hello@appointhive.com`, and test searching, Scan booking, Contact queue, and mobile Bearer APIs.
+
+### What works on Vercel live (mobile + web)
+- Discover **Scan booking** — website HTML + Places `reservable` via your existing `GOOGLE_MAPS_API_KEY` (no extra Maps flag) → Has booking or To contact
+- `POST /api/businesses/scan-booking` — same for mobile (cookie or Bearer)
+- Contact queue **Automate outreach** + `POST /api/sales/jobs` (`outreach_batch`)
+- Optional Playwright Maps click UI is local-only (hidden on Vercel); live booking detect is Scan booking
 
 ## C. Important: local and production data are separate
 

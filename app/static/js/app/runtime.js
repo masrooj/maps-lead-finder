@@ -36,7 +36,7 @@ import {
   renderContactQueueList, markContactQueueIds, markBookingIds, loadContactQueue,
   saveContactQueueMode, getContactQueuePick, clearContactQueuePick, setContactQueueTab,
   setContactQueueQuery, setContactQueueChannel, setContactQueueFollowFilter, setContactQueueSentChannels,
-  getContactQueueLocations, setContactQueueGeoFilter, navigateContactQueue
+  getContactQueueLocations, setContactQueueGeoFilter, navigateContactQueue, bindOutreachBatchButton
 } from '../panels/contact-queue.js';
 import {
   brandLogoAbsoluteUrl, emailSignaturePlain, withEmailSignature,
@@ -52,7 +52,7 @@ import {
 import { bindDashKpis, loadDashboard } from '../panels/dashboard.js';
 import { loadReports, renderBars } from '../panels/reports.js';
 import { loadTasks, renderTasksList, createTaskFlow } from '../panels/tasks.js';
-import { DISCOVER_STATUS, isFreshDiscoverLead, resolveDiscoverStatus, toggleDiscoverMark, setDiscoverBooking } from '../panels/discover.js';
+import { DISCOVER_STATUS, isFreshDiscoverLead, resolveDiscoverStatus, toggleDiscoverMark, setDiscoverBooking, bindScanBookingButton, bindMapsVerifyButton } from '../panels/discover.js';
 import { canMessageLead } from '../features/lead-workflow.js';
 import { bulkMarkForContact } from '../features/already-connected.js';
 import { loadDemos, renderDemosTable, loadDemoAssets, addDemoAssetFlow, uploadDemoAssetFile, createDemoFlow } from '../panels/demos.js';
@@ -3221,6 +3221,25 @@ $('enrichBtn').addEventListener('click',()=>{
   const ids=selectedIds.size?[...selectedIds].map(Number):rowsData.filter(b=>b.website&&(!firstEmail(b)||!(b.social_links&&Object.keys(b.social_links).length))).map(b=>b.id);
   enrichIds(ids.length?ids:rowsData.map(b=>b.id));
 });
+bindScanBookingButton(()=>{
+  // Prefer selected fresh rows; else let server pick by country/city (empty ids).
+  if(selectedIds.size){
+    return [...selectedIds].map(Number).filter(id=>{
+      const row=rowsData.find(x=>String(x.id)===String(id));
+      return row&&isFreshDiscoverLead(row);
+    });
+  }
+  return [];
+});
+bindMapsVerifyButton(()=>{
+  if(selectedIds.size){
+    return [...selectedIds].map(Number).filter(id=>{
+      const row=rowsData.find(x=>String(x.id)===String(id));
+      return row&&(row.google_maps_url||'').trim();
+    });
+  }
+  return rowsData.filter(b=>(b.google_maps_url||'').trim()&&isFreshDiscoverLead(b)).map(b=>b.id).slice(0,25);
+});
 // Event delegation so nav clicks always work after redeploy / re-render
 ($('appNav')||$('sidebar'))&&($('appNav')||$('sidebar')).addEventListener('click',e=>{
   const btn=e.target&&e.target.closest&&e.target.closest('[data-app-panel]');
@@ -3388,6 +3407,7 @@ $('paySetupTabs')&&$('paySetupTabs').addEventListener('click',e=>{
 $('settingsRefresh')&&$('settingsRefresh').addEventListener('click',()=>loadSettings().catch(e=>toast(e.message,true)));
 document.querySelectorAll('#settingsTabs [data-settings-tab]').forEach(btn=>btn.addEventListener('click',()=>setSettingsTab(btn.dataset.settingsTab)));
 $('contactQueueRefresh')&&$('contactQueueRefresh').addEventListener('click',()=>loadContactQueue({keepTab:true, force:true}).catch(e=>toast(e.message,true)));
+bindOutreachBatchButton();
 $('contactQueueMode')&&$('contactQueueMode').addEventListener('change',()=>loadContactQueue({keepTab:true, force:true}).catch(e=>toast(e.message,true)));
 $('contactQueueCountry')&&$('contactQueueCountry').addEventListener('change',()=>{
   if($('contactQueueCity')) $('contactQueueCity').value='';
